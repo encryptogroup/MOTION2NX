@@ -79,3 +79,13 @@ void aesni_mmo_single(const void* round_keys, void* input);
 // The output is xored into `output`.
 void aesni_bmr_dkc(const void* round_keys, const void* key_a, const void* key_b,
                    std::uint64_t gate_id, std::size_t num_parties, void* output);
+
+// Vectorized implementation of the \hat{MMO} construction providing circular
+// correlation robustness from https://eprint.iacr.org/2019/074:
+//   \hat{MMO}_\sigma^\pi(x) := \pi(\sigma(x)) \oplus \sigma(x)
+//
+void aesni_fixed_key_mmo_hat_batch_4(const void* round_keys_in, void* input);
+void aesni_fixed_key_for_half_gates_batch_2(const void* round_keys_in, const void* hash_key,
+                                            std::size_t index, void* input);
+void aesni_fixed_key_for_half_gates_batch_4(const void* round_keys_in, const void* hash_key,
+                                            std::size_t index, void* input);

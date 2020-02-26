@@ -148,7 +148,7 @@ void aesni_ctr_stream_blocks_128(const void* round_keys_in, std::uint64_t* count
 }
 
 void aesni_ctr_stream_blocks_128_unaligned(const void* round_keys_in, std::uint64_t* counter_in,
-                                 void* output_in, std::size_t num_blocks) {
+                                           void* output_in, std::size_t num_blocks) {
   // almost the same code as in `aesni_ctr_stream_blocks_128_unaligned`
 
   alignas(16) std::array<__m128i, aes_num_round_keys_128> round_keys;
@@ -345,4 +345,89 @@ void aesni_bmr_dkc(const void* round_keys_in, const void* key_a, const void* key
     __m128i tmp = mixed_keys ^ _mm_set_epi64x(gate_id, party_id);
     out[party_id] ^= aesni_xor_encrypt(round_keys, tmp);
   }
+}
+
+static __m128i sigma(__m128i x) {
+  // \sigma from https://eprint.iacr.org/2019/074
+  // Sections 7.3 and 8.1
+
+  // mask = 1^64 || 0^64
+  const __m128i mask = _mm_set_epi64x(0xffffffffffffffff, 0);
+
+  // swap left and right halves
+  const __m128i tmp = _mm_shuffle_epi32(x, 0b01'00'11'10);
+
+  return tmp ^ _mm_and_si128(x, mask);
+}
+
+// Vectorized implementation of the \hat{MMO} construction providing circular
+// correlation robustness
+inline void aesni_fixed_key_mmo_hat_batch_4(const void* round_keys_in, void* input) {
+  alignas(16) std::array<__m128i, aes_num_round_keys_128> round_keys;
+  alignas(16) std::array<__m128i, 4> wb_1;
+  alignas(16) std::array<__m128i, 4> wb_2;
+
+  auto input_ptr = reinterpret_cast<__m128i*>(input);
+
+  // compute wb_1 <- \sigma(x)
+  for (std::size_t j = 0; j < 4; ++j) wb_1[j] = sigma(input_ptr[j]);
+
+  // copy the round keys onto the stack
+  // -> compiler will put them into registers
+  std::copy(reinterpret_cast<__m128i*>(__builtin_assume_aligned(round_keys_in, aes_block_size)),
+            reinterpret_cast<__m128i*>(__builtin_assume_aligned(round_keys_in, aes_block_size)) +
+                aes_num_round_keys_128,
+            round_keys.data());
+
+  // compute wb_2 <- \pi(\sigma(x))
+  for (std::size_t j = 0; j < 4; ++j) wb_2[j] = _mm_xor_si128(wb_1[j], round_keys[0]);
+  for (std::size_t j = 0; j < 4; ++j) wb_2[j] = _mm_aesenc_si128(wb_2[j], round_keys[1]);
+  for (std::size_t j = 0; j < 4; ++j) wb_2[j] = _mm_aesenc_si128(wb_2[j], round_keys[2]);
+  for (std::size_t j = 0; j < 4; ++j) wb_2[j] = _mm_aesenc_si128(wb_2[j], round_keys[3]);
+  for (std::size_t j = 0; j < 4; ++j) wb_2[j] = _mm_aesenc_si128(wb_2[j], round_keys[4]);
+  for (std::size_t j = 0; j < 4; ++j) wb_2[j] = _mm_aesenc_si128(wb_2[j], round_keys[5]);
+  for (std::size_t j = 0; j < 4; ++j) wb_2[j] = _mm_aesenc_si128(wb_2[j], round_keys[6]);
+  for (std::size_t j = 0; j < 4; ++j) wb_2[j] = _mm_aesenc_si128(wb_2[j], round_keys[7]);
+  for (std::size_t j = 0; j < 4; ++j) wb_2[j] = _mm_aesenc_si128(wb_2[j], round_keys[8]);
+  for (std::size_t j = 0; j < 4; ++j) wb_2[j] = _mm_aesenc_si128(wb_2[j], round_keys[9]);
+  for (std::size_t j = 0; j < 4; ++j) wb_2[j] = _mm_aesenclast_si128(wb_2[j], round_keys[10]);
+
+  // store \pi(\sigma(x)) ^ \sigma(x)
+  for (std::size_t j = 0; j < 4; ++j) input_ptr[j] = _mm_xor_si128(wb_2[j], wb_1[j]);
+}
+
+void aesni_fixed_key_for_half_gates_batch_4(const void* round_keys_in, const void* hash_key,
+                                            std::size_t index, void* input) {
+  alignas(16) std::array<__m128i, 4> wb_1;
+  auto input_ptr = reinterpret_cast<__m128i*>(input);
+  auto hash_key_ptr = reinterpret_cast<const __m128i*>(hash_key);
+
+  wb_1[0] = _mm_set_epi64x(0, index << 1);
+  wb_1[1] = _mm_set_epi64x(0, (index << 1) + 1);
+  wb_1[2] = _mm_set_epi64x(0, index << 1);
+  wb_1[3] = _mm_set_epi64x(0, (index << 1) + 1);
+
+  for (std::size_t j = 0; j < 4; ++j) wb_1[j] = _mm_xor_si128(wb_1[j], input_ptr[j]);
+  for (std::size_t j = 0; j < 4; ++j) wb_1[j] = _mm_xor_si128(wb_1[j], *hash_key_ptr);
+
+  aesni_fixed_key_mmo_hat_batch_4(round_keys_in, wb_1.data());
+
+  for (std::size_t j = 0; j < 4; ++j) input_ptr[j] = wb_1[j];
+}
+
+void aesni_fixed_key_for_half_gates_batch_2(const void* round_keys_in, const void* hash_key,
+                                            std::size_t index, void* input) {
+  alignas(16) std::array<__m128i, 4> wb_1;
+  auto input_ptr = reinterpret_cast<__m128i*>(input);
+  auto hash_key_ptr = reinterpret_cast<const __m128i*>(hash_key);
+
+  wb_1[0] = _mm_set_epi64x(0, index << 1);
+  wb_1[1] = _mm_set_epi64x(0, (index << 1) + 1);
+
+  for (std::size_t j = 0; j < 2; ++j) wb_1[j] = _mm_xor_si128(wb_1[j], input_ptr[j]);
+  for (std::size_t j = 0; j < 2; ++j) wb_1[j] = _mm_xor_si128(wb_1[j], *hash_key_ptr);
+
+  aesni_fixed_key_mmo_hat_batch_4(round_keys_in, wb_1.data());
+
+  for (std::size_t j = 0; j < 2; ++j) input_ptr[j] = wb_1[j];
 }
