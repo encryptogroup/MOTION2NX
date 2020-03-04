@@ -23,6 +23,7 @@ add_library(motion
         crypto/blake2b.cpp
         crypto/bmr_provider.cpp
         crypto/curve25519/mycurve25519.cpp
+        crypto/garbling/half_gates.cpp
         crypto/motion_base_provider.cpp
         crypto/multiplication_triple/mt_provider.cpp
         crypto/multiplication_triple/sb_provider.cpp
