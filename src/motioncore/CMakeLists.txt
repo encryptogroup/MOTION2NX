@@ -3,6 +3,7 @@ add_library(motion
         algorithm/tree.cpp
         base/backend.cpp
         base/configuration.cpp
+        base/gate_register.cpp
         base/party.cpp
         base/register.cpp
         communication/base_ot_message.cpp
