@@ -156,6 +156,7 @@ enum class MPCProtocol : unsigned int {
   BMR,
   ArithmeticConstant,
   BooleanConstant,
+  Yao,
   Invalid  // for checking whether the value is valid
 };
 
