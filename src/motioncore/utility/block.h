@@ -213,6 +213,15 @@ struct block128_vector {
     return result;
   }
 
+  // xor all blocks in this vector with the same block
+  block128_vector operator^(const block128_t& single_block) const {
+    block128_vector result(size());
+    std::transform(std::begin(block_vector), std::end(block_vector),
+                   std::begin(result.block_vector),
+                   [single_block](auto a) { return a ^ single_block; });
+    return result;
+  }
+
   // set this vector to zero
   void set_to_zero() {
     auto start =
