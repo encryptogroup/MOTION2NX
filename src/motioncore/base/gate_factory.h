@@ -22,8 +22,12 @@
 
 #pragma once
 
+#include <limits>
 #include <memory>
 #include <vector>
+
+#include "utility/bit_vector.h"
+#include "utility/reusable_future.h"
 
 namespace ENCRYPTO {
 enum class PrimitiveOperationType : std::uint8_t;
@@ -32,15 +36,28 @@ enum class PrimitiveOperationType : std::uint8_t;
 namespace MOTION {
 
 class NewWire;
+constexpr std::size_t ALL_PARTIES = std::numeric_limits<std::size_t>::max();
+using WireVector = std::vector<std::shared_ptr<NewWire>>;
+using BitValues = std::vector<ENCRYPTO::BitVector<>>;
 
 class GateFactory {
  public:
-  virtual std::vector<std::shared_ptr<NewWire>> make_unary_gate(
-      ENCRYPTO::PrimitiveOperationType op, const std::vector<std::shared_ptr<NewWire>>&) const = 0;
+  virtual std::pair<ENCRYPTO::ReusableFiberPromise<BitValues>, WireVector>
+  make_boolean_input_gate_my(std::size_t input_owner, std::size_t num_wires,
+                             std::size_t num_simd) = 0;
 
-  virtual std::vector<std::shared_ptr<NewWire>> make_binary_gate(
-      ENCRYPTO::PrimitiveOperationType op, const std::vector<std::shared_ptr<NewWire>>&,
-      const std::vector<std::shared_ptr<NewWire>>&) const = 0;
+  virtual WireVector make_boolean_input_gate_other(std::size_t input_owner, std::size_t num_wires,
+                                                   std::size_t num_simd) = 0;
+
+  virtual ENCRYPTO::ReusableFiberFuture<BitValues> make_boolean_output_gate_my(
+      std::size_t output_owner, const WireVector&) = 0;
+
+  virtual void make_boolean_output_gate_other(std::size_t output_owner, const WireVector&) = 0;
+
+  virtual WireVector make_unary_gate(ENCRYPTO::PrimitiveOperationType op, const WireVector&) = 0;
+
+  virtual WireVector make_binary_gate(ENCRYPTO::PrimitiveOperationType op, const WireVector&,
+                                      const WireVector&) = 0;
 };
 
 }  // namespace MOTION
