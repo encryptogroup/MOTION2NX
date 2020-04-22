@@ -23,6 +23,8 @@
 #include "crypto/aes/aesni_primitives.h"
 #include "half_gates.h"
 
+namespace MOTION::Crypto::garbling {
+
 HalfGateGarbler::HalfGateGarbler()
     : offset_(ENCRYPTO::block128_t::make_random()), hash_key_(ENCRYPTO::block128_t::make_random()) {
   reinterpret_cast<ENCRYPTO::block128_t*>(round_keys_.data())->set_to_random();
@@ -30,13 +32,13 @@ HalfGateGarbler::HalfGateGarbler()
   offset_.byte_array[0] |= std::byte(1);  // LSB needs to be 1 for freeXOR
 }
 
-HalfGatePublicData HalfGateGarbler::get_public_data() const {
+HalfGatePublicData HalfGateGarbler::get_public_data() const noexcept {
   return {hash_key_, *reinterpret_cast<const ENCRYPTO::block128_t*>(round_keys_.data())};
 }
 
-ENCRYPTO::block128_t HalfGateGarbler::get_offset() const { return offset_; }
+ENCRYPTO::block128_t HalfGateGarbler::get_offset() const noexcept { return offset_; }
 
-void HalfGateGarbler::garble_and(ENCRYPTO::block128_t& key_c, half_gate_t& garbled_table,
+void HalfGateGarbler::garble_and(ENCRYPTO::block128_t& key_c, ENCRYPTO::block128_t* garbled_table,
                                  std::size_t index, const ENCRYPTO::block128_t& key_a,
                                  const ENCRYPTO::block128_t& key_b) const {
   // TODO: avoid the jumps
@@ -68,16 +70,15 @@ void HalfGateGarbler::garble_and(ENCRYPTO::block128_t& key_c, half_gate_t& garbl
 }
 
 void HalfGateGarbler::batch_garble_and(ENCRYPTO::block128_vector& key_cs,
-                                       std::vector<half_gate_t>& garbled_tables,
+                                       ENCRYPTO::block128_t* garbled_tables,
                                        std::size_t start_index,
                                        const ENCRYPTO::block128_vector& key_as,
                                        const ENCRYPTO::block128_vector& key_bs) const {
   assert(key_as.size() == key_bs.size());
   std::size_t num_gates = key_as.size();
   key_cs.resize(num_gates);
-  garbled_tables.resize(num_gates);
   for (std::size_t i = 0; i < num_gates; ++i) {
-    garble_and(key_cs[i], garbled_tables[i], start_index + i, key_as[i], key_bs[i]);
+    garble_and(key_cs[i], &garbled_tables[2 * i], start_index + i, key_as[i], key_bs[i]);
   }
 }
 
@@ -87,8 +88,9 @@ HalfGateEvaluator::HalfGateEvaluator(const HalfGatePublicData& public_data)
   aesni_key_expansion_128(round_keys_.data());
 }
 
-void HalfGateEvaluator::evaluate_and(ENCRYPTO::block128_t& key_c, const half_gate_t& garbled_table,
-                                     std::size_t index, const ENCRYPTO::block128_t& key_a,
+void HalfGateEvaluator::evaluate_and(ENCRYPTO::block128_t& key_c,
+                                     const ENCRYPTO::block128_t* garbled_table, std::size_t index,
+                                     const ENCRYPTO::block128_t& key_a,
                                      const ENCRYPTO::block128_t& key_b) const {
   // TODO: avoid the jumps
 
@@ -105,16 +107,17 @@ void HalfGateEvaluator::evaluate_and(ENCRYPTO::block128_t& key_c, const half_gat
 }
 
 void HalfGateEvaluator::batch_evaluate_and(ENCRYPTO::block128_vector& key_cs,
-                                           const std::vector<half_gate_t>& garbled_tables,
+                                           const ENCRYPTO::block128_t* garbled_tables,
                                            std::size_t start_index,
                                            const ENCRYPTO::block128_vector& key_as,
                                            const ENCRYPTO::block128_vector& key_bs) const {
   std::size_t num_gates = key_as.size();
   assert(key_as.size() == num_gates);
   assert(key_bs.size() == num_gates);
-  assert(garbled_tables.size() == num_gates);
   key_cs.resize(num_gates);
   for (std::size_t i = 0; i < num_gates; ++i) {
-    evaluate_and(key_cs[i], garbled_tables[i], start_index + i, key_as[i], key_bs[i]);
+    evaluate_and(key_cs[i], &garbled_tables[2 * i], start_index + i, key_as[i], key_bs[i]);
   }
 }
+
+}  // namespace MOTION::Crypto::garbling

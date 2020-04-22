@@ -28,6 +28,8 @@
 
 #include "crypto/garbling/half_gates.h"
 
+using namespace MOTION::Crypto::garbling;
+
 TEST(half_gates, garble_eval) {
   HalfGateGarbler garbler;
   HalfGateEvaluator evaluator(garbler.get_public_data());
@@ -38,23 +40,22 @@ TEST(half_gates, garble_eval) {
   const std::size_t index = 42;
 
   ENCRYPTO::block128_t key_c_original;
-  half_gate_t garbled_table;
+  std::array<ENCRYPTO::block128_t, 2> garbled_table;
 
-  garbler.garble_and(key_c_original, garbled_table, index, key_a, key_b);
+  garbler.garble_and(key_c_original, garbled_table.data(), index, key_a, key_b);
 
   ENCRYPTO::block128_t key_c;
 
-  evaluator.evaluate_and(key_c, garbled_table, index, key_a, key_b);
+  evaluator.evaluate_and(key_c, garbled_table.data(), index, key_a, key_b);
   EXPECT_EQ(key_c, key_c_original);
-  evaluator.evaluate_and(key_c, garbled_table, index, key_a ^ offset, key_b);
+  evaluator.evaluate_and(key_c, garbled_table.data(), index, key_a ^ offset, key_b);
   EXPECT_EQ(key_c, key_c_original);
-  evaluator.evaluate_and(key_c, garbled_table, index, key_a, key_b ^ offset);
+  evaluator.evaluate_and(key_c, garbled_table.data(), index, key_a, key_b ^ offset);
   EXPECT_EQ(key_c, key_c_original);
 
-  evaluator.evaluate_and(key_c, garbled_table, index, key_a ^ offset, key_b ^ offset);
+  evaluator.evaluate_and(key_c, garbled_table.data(), index, key_a ^ offset, key_b ^ offset);
   EXPECT_EQ(key_c, key_c_original ^ offset);
 }
-
 
 TEST(half_gates, batch_garble_eval) {
   HalfGateGarbler garbler;
@@ -67,9 +68,9 @@ TEST(half_gates, batch_garble_eval) {
   const std::size_t index = 42;
 
   ENCRYPTO::block128_vector key_cs_original(size);
-  std::vector<half_gate_t> garbled_tables(size);
+  ENCRYPTO::block128_vector garbled_tables(2 * size);
 
-  garbler.batch_garble_and(key_cs_original, garbled_tables, index, key_as, key_bs);
+  garbler.batch_garble_and(key_cs_original, garbled_tables.data(), index, key_as, key_bs);
 
   ENCRYPTO::block128_vector key_cs(size);
 
@@ -82,7 +83,7 @@ TEST(half_gates, batch_garble_eval) {
     if (dist(gen_b) == 1) key_bs[i] ^= offset;
   }
 
-  evaluator.batch_evaluate_and(key_cs, garbled_tables, index, key_as, key_bs);
+  evaluator.batch_evaluate_and(key_cs, garbled_tables.data(), index, key_as, key_bs);
   gen_a.seed(0x61);
   gen_b.seed(0x62);
 

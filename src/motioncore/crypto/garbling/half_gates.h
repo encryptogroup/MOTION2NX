@@ -25,21 +25,25 @@
 #include "crypto/aes/aesni_primitives.h"
 #include "utility/block.h"
 
+namespace MOTION::Crypto::garbling {
+
 struct HalfGatePublicData {
   ENCRYPTO::block128_t hash_key;
   ENCRYPTO::block128_t aes_key;
 };
 
 using half_gate_t = std::array<ENCRYPTO::block128_t, 2>;
+constexpr std::size_t half_gate_block_size = 2;
 
 class HalfGateGarbler {
  public:
   HalfGateGarbler();
-  HalfGatePublicData get_public_data() const;
-  ENCRYPTO::block128_t get_offset() const;
-  void garble_and(ENCRYPTO::block128_t& key_c, half_gate_t& garbled_table, std::size_t index,
-                  const ENCRYPTO::block128_t& key_a, const ENCRYPTO::block128_t& key_b) const;
-  void batch_garble_and(ENCRYPTO::block128_vector& key_c, std::vector<half_gate_t>& garbled_table,
+  HalfGatePublicData get_public_data() const noexcept;
+  ENCRYPTO::block128_t get_offset() const noexcept;
+  void garble_and(ENCRYPTO::block128_t& key_c, ENCRYPTO::block128_t* garbled_table,
+                  std::size_t index, const ENCRYPTO::block128_t& key_a,
+                  const ENCRYPTO::block128_t& key_b) const;
+  void batch_garble_and(ENCRYPTO::block128_vector& key_c, ENCRYPTO::block128_t* garbled_table,
                         std::size_t index, const ENCRYPTO::block128_vector& key_a,
                         const ENCRYPTO::block128_vector& key_b) const;
 
@@ -53,11 +57,11 @@ class HalfGateEvaluator {
  public:
   HalfGateEvaluator(const HalfGatePublicData& public_data);
 
-  void evaluate_and(ENCRYPTO::block128_t& key_c, const half_gate_t& garbled_table,
+  void evaluate_and(ENCRYPTO::block128_t& key_c, const ENCRYPTO::block128_t* garbled_table,
                     std::size_t index, const ENCRYPTO::block128_t& key_a,
                     const ENCRYPTO::block128_t& key_b) const;
   void batch_evaluate_and(ENCRYPTO::block128_vector& key_c,
-                          const std::vector<half_gate_t>& garbled_table, std::size_t index,
+                          const ENCRYPTO::block128_t* garbled_table, std::size_t index,
                           const ENCRYPTO::block128_vector& key_a,
                           const ENCRYPTO::block128_vector& key_b) const;
 
@@ -65,3 +69,5 @@ class HalfGateEvaluator {
   ENCRYPTO::block128_t hash_key_;
   alignas(aes_block_size) std::array<std::byte, aes_round_keys_size_128> round_keys_;
 };
+
+}  // namespace MOTION::Crypto::garbling
