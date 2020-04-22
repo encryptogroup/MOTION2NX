@@ -41,6 +41,7 @@ class YaoWire : public NewWire, public ENCRYPTO::enable_wait_setup {
   void set_setup_ready();
   void wait_setup() const;
   ENCRYPTO::block128_vector& get_keys() { return keys_; };
+  const ENCRYPTO::block128_vector& get_keys() const { return keys_; };
 
  private:
   // holds the the zero keys or the active keys for the garbler and evaluator,

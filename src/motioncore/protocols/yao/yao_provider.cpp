@@ -23,13 +23,114 @@
 #include "yao_provider.h"
 
 #include <fmt/format.h>
+#include <memory>
 
 #include "base/gate_register.h"
 #include "communication/communication_layer.h"
+#include "communication/fbs_headers/yao_message_generated.h"
+#include "communication/message.h"
+#include "communication/message_handler.h"
+#include "crypto/garbling/half_gates.h"
 #include "gate.h"
+#include "utility/constants.h"
+#include "utility/logger.h"
 #include "utility/typedefs.h"
 
 namespace MOTION::proto::yao {
+
+struct YaoMessageHandler : public Communication::MessageHandler {
+  YaoMessageHandler(std::shared_ptr<Logger> logger);
+  void received_message(std::size_t, std::vector<std::uint8_t> &&raw_message) override;
+
+  ENCRYPTO::ReusableFiberPromise<Crypto::garbling::HalfGatePublicData> hg_public_data_promise_;
+  ENCRYPTO::ReusableFiberFuture<Crypto::garbling::HalfGatePublicData> hg_public_data_future_;
+  std::unordered_map<
+      std::size_t,
+      std::pair<std::size_t, ENCRYPTO::ReusableFiberPromise<ENCRYPTO::block128_vector>>>
+      blocks_promises_;
+  std::unordered_map<std::size_t,
+                     std::pair<std::size_t, ENCRYPTO::ReusableFiberPromise<ENCRYPTO::BitVector<>>>>
+      bits_promises_;
+  std::shared_ptr<Logger> logger_;
+};
+
+YaoMessageHandler::YaoMessageHandler(std::shared_ptr<Logger> logger)
+    : hg_public_data_future_(hg_public_data_promise_.get_future()), logger_(logger) {}
+
+void YaoMessageHandler::received_message([[maybe_unused]] std::size_t party_id,
+                                         std::vector<std::uint8_t> &&raw_message) {
+  assert(!raw_message.empty());
+  flatbuffers::Verifier verifier(raw_message.data(), raw_message.size());
+  auto message = Communication::GetMessage(raw_message.data());
+  if (!message->Verify(verifier)) {
+    throw std::runtime_error("received malformed Message");
+    // TODO: log and drop instead
+  }
+  auto message_type = message->message_type();
+  switch (message_type) {
+    case Communication::MessageType::YaoSetup: {
+      flatbuffers::Verifier verifier(message->payload()->data(), message->payload()->size());
+      auto setup_message =
+          flatbuffers::GetRoot<MOTION::Communication::YaoSetupMessage>(message->payload()->data());
+      if (!setup_message->Verify(verifier)) {
+        throw std::runtime_error("received malformed YaoSetupMessage");
+        // TODO: log and drop instead
+      }
+      Crypto::garbling::HalfGatePublicData public_data;
+      public_data.aes_key.load_from_memory(
+              reinterpret_cast<const std::byte *>(setup_message->aes_key()->data()));
+      public_data.hash_key.load_from_memory(
+              reinterpret_cast<const std::byte *>(setup_message->hash_key()->data()));
+      try {
+        hg_public_data_promise_.set_value(std::move(public_data));
+      } catch (std::future_error &e) {
+        // TODO: log and drop instead
+        throw std::runtime_error(
+            fmt::format("received second YaoSetupMessage from party {}: {}", party_id, e.what()));
+      }
+      break;
+    }
+    case Communication::MessageType::YaoGate: {
+      flatbuffers::Verifier verifier(message->payload()->data(), message->payload()->size());
+      auto gate_message =
+          flatbuffers::GetRoot<MOTION::Communication::YaoGateMessage>(message->payload()->data());
+      if (!gate_message->Verify(verifier)) {
+        throw std::runtime_error("received malformed YaoGateMessage");
+        // TODO: log and drop instead
+      }
+      auto gate_id = gate_message->gate_id();
+      auto payload = gate_message->payload();
+      if (auto it = blocks_promises_.find(gate_id); it != blocks_promises_.end()) {
+        auto &[num_blocks, promise] = it->second;
+        if (payload->size() == num_blocks * 16) {
+          promise.set_value(ENCRYPTO::block128_vector(num_blocks, payload->data()));
+        } else if (logger_) {
+          logger_->LogError(fmt::format(
+              "received YaoGateMessage for gate {} of size {} while expecting size {}, dropping",
+              gate_id, payload->size(), num_blocks * 16));
+        }
+      } else if (auto it = bits_promises_.find(gate_id); it != bits_promises_.end()) {
+        auto &[num_bits, promise] = it->second;
+        auto num_bytes = (num_bits + 7) / 8;
+        if (payload->size() == num_bytes) {
+          promise.set_value(ENCRYPTO::BitVector(payload->data(), num_bits));
+        } else if (logger_) {
+          logger_->LogError(fmt::format(
+              "received YaoGateMessage for gate {} of size {} while expecting size {}, dropping",
+              gate_id, payload->size(), num_bytes));
+        }
+      } else {
+        logger_->LogError(
+            fmt::format("received unexpected YaoGateMessage for gate {}, dropping", gate_id));
+      }
+      break;
+    }
+    default: {
+      assert(false);
+      break;
+    }
+  }
+}
 
 YaoProvider::YaoProvider(Communication::CommunicationLayer &communication_layer,
                          GateRegister &gate_register,
@@ -38,13 +139,27 @@ YaoProvider::YaoProvider(Communication::CommunicationLayer &communication_layer,
     : communication_layer_(communication_layer),
       gate_register_(gate_register),
       ot_provider_(ot_provider),
-      logger_(logger) {
+      hg_garbler_(nullptr),
+      hg_evaluator_(nullptr),
+      message_handler_(std::make_unique<YaoMessageHandler>(logger)),
+      my_id_(communication_layer_.get_my_id()),
+      role_((my_id_ == 0) ? Role::garbler : Role::evaluator),
+      setup_ran_(false),
+      logger_(std::move(logger)) {
   if (communication_layer.get_num_parties() != 2) {
     throw std::logic_error("Yao is a two party protocol");
   }
-  auto my_id = communication_layer_.get_my_id();
-  role_ = (my_id == 0) ? Role::garbler : Role::evaluator;
+  if (role_ == Role::garbler) {
+    communication_layer_.register_message_handler([this](auto) { return message_handler_; },
+                                                  {Communication::MessageType::YaoGate});
+  } else {
+    communication_layer_.register_message_handler(
+        [this](auto) { return message_handler_; },
+        {Communication::MessageType::YaoSetup, Communication::MessageType::YaoGate});
+  }
 }
+
+YaoProvider::~YaoProvider() = default;
 
 static YaoWireVector cast_wires(std::vector<std::shared_ptr<NewWire>> wires) {
   YaoWireVector result(wires.size());
@@ -57,8 +172,88 @@ static std::vector<std::shared_ptr<NewWire>> cast_wires(YaoWireVector &&wires) {
   return std::vector<std::shared_ptr<NewWire>>(std::begin(wires), std::end(wires));
 }
 
+std::pair<ENCRYPTO::ReusableFiberPromise<BitValues>, WireVector>
+YaoProvider::make_boolean_input_gate_my(std::size_t input_owner, std::size_t num_wires,
+                                        std::size_t num_simd) {
+  if (input_owner != my_id_) {
+    throw std::logic_error("trying to create input gate for wrong party");
+  }
+  YaoWireVector output;
+  ENCRYPTO::ReusableFiberPromise<std::vector<ENCRYPTO::BitVector<>>> promise;
+  auto gate_id = gate_register_.get_next_gate_id();
+  std::unique_ptr<detail::BasicYaoInputGate> gate;
+  if (role_ == Role::garbler) {
+    gate = std::make_unique<YaoInputGateGarbler>(gate_id, *this, num_wires, num_simd,
+                                                 promise.get_future());
+  } else {
+    gate = std::make_unique<YaoInputGateEvaluator>(gate_id, *this, num_wires, num_simd,
+                                                   promise.get_future());
+  }
+  output = gate->get_output_wires();
+  gate_register_.register_gate(std::move(gate));
+  return {std::move(promise), cast_wires(std::move(output))};
+}
+
+WireVector YaoProvider::make_boolean_input_gate_other(std::size_t input_owner,
+                                                      std::size_t num_wires, std::size_t num_simd) {
+  if (input_owner == my_id_) {
+    throw std::logic_error("trying to create input gate for wrong party");
+  }
+  YaoWireVector output;
+  auto gate_id = gate_register_.get_next_gate_id();
+  std::unique_ptr<detail::BasicYaoInputGate> gate;
+  if (role_ == Role::garbler) {
+    gate = std::make_unique<YaoInputGateGarbler>(gate_id, *this, num_wires, num_simd);
+  } else {
+    gate = std::make_unique<YaoInputGateEvaluator>(gate_id, *this, num_wires, num_simd);
+  }
+  output = gate->get_output_wires();
+  gate_register_.register_gate(std::move(gate));
+  return cast_wires(std::move(output));
+}
+
+ENCRYPTO::ReusableFiberFuture<BitValues> YaoProvider::make_boolean_output_gate_my(
+    std::size_t output_owner, const WireVector &in) {
+  if (output_owner == 1 - my_id_) {
+    throw std::logic_error("trying to create output gate for wrong party");
+  }
+  auto output_recipient =
+      (output_owner == ALL_PARTIES) ? OutputRecipient::both : static_cast<OutputRecipient>(my_id_);
+  auto gate_id = gate_register_.get_next_gate_id();
+  auto input = cast_wires(in);
+  std::unique_ptr<detail::BasicYaoOutputGate> gate;
+  if (role_ == Role::garbler) {
+    gate =
+        std::make_unique<YaoOutputGateGarbler>(gate_id, *this, std::move(input), output_recipient);
+  } else {
+    gate = std::make_unique<YaoOutputGateEvaluator>(gate_id, *this, std::move(input),
+                                                    output_recipient);
+  }
+  auto future = gate->get_output_future();
+  gate_register_.register_gate(std::move(gate));
+  return future;
+}
+
+void YaoProvider::make_boolean_output_gate_other(std::size_t output_owner, const WireVector &in) {
+  if (output_owner != 1 - my_id_) {
+    throw std::logic_error("trying to create output gate for wrong party");
+  }
+  auto output_recipient = static_cast<OutputRecipient>(1 - my_id_);
+  auto gate_id = gate_register_.get_next_gate_id();
+  auto input = cast_wires(in);
+  std::unique_ptr<detail::BasicYaoOutputGate> gate;
+  if (role_ == Role::garbler) {
+    gate =
+        std::make_unique<YaoOutputGateGarbler>(gate_id, *this, std::move(input), output_recipient);
+  } else {
+    gate = std::make_unique<YaoOutputGateEvaluator>(gate_id, *this, std::move(input),
+                                                    output_recipient);
+  }
+  gate_register_.register_gate(std::move(gate));
+}
+
 std::vector<std::shared_ptr<NewWire>> YaoProvider::make_unary_gate(
-    ENCRYPTO::PrimitiveOperationType op, const std::vector<std::shared_ptr<NewWire>> &in_a) const {
+    ENCRYPTO::PrimitiveOperationType op, const std::vector<std::shared_ptr<NewWire>> &in_a) {
   auto input_a = cast_wires(in_a);
   YaoWireVector output;
 
@@ -75,7 +270,7 @@ std::vector<std::shared_ptr<NewWire>> YaoProvider::make_unary_gate(
 
 std::vector<std::shared_ptr<NewWire>> YaoProvider::make_binary_gate(
     ENCRYPTO::PrimitiveOperationType op, const std::vector<std::shared_ptr<NewWire>> &in_a,
-    const std::vector<std::shared_ptr<NewWire>> &in_b) const {
+    const std::vector<std::shared_ptr<NewWire>> &in_b) {
   auto input_a = cast_wires(in_a);
   auto input_b = cast_wires(in_b);
   YaoWireVector output;
@@ -94,85 +289,195 @@ std::vector<std::shared_ptr<NewWire>> YaoProvider::make_binary_gate(
   return cast_wires(std::move(output));
 }
 
-YaoWireVector YaoProvider::make_inv_gate(YaoWireVector &&in_a) const {
+YaoWireVector YaoProvider::make_inv_gate(YaoWireVector &&in_a) {
   YaoWireVector output;
   auto gate_id = gate_register_.get_next_gate_id();
+  std::unique_ptr<detail::BasicYaoUnaryGate> gate;
   if (role_ == Role::garbler) {
-    auto gate = std::make_unique<YaoINVGateGarbler>(gate_id, *this, std::move(in_a));
-    output = gate->get_output_wires();
-    gate_register_.register_gate(std::move(gate));
+    gate = std::make_unique<YaoINVGateGarbler>(gate_id, *this, std::move(in_a));
   } else {
-    auto gate = std::make_unique<YaoINVGateEvaluator>(gate_id, *this, std::move(in_a));
-    output = gate->get_output_wires();
-    gate_register_.register_gate(std::move(gate));
+    gate = std::make_unique<YaoINVGateEvaluator>(gate_id, *this, std::move(in_a));
   }
+  output = gate->get_output_wires();
+  gate_register_.register_gate(std::move(gate));
   return output;
 }
 
-YaoWireVector YaoProvider::make_xor_gate(YaoWireVector &&in_a, YaoWireVector &&in_b) const {
+YaoWireVector YaoProvider::make_xor_gate(YaoWireVector &&in_a, YaoWireVector &&in_b) {
   YaoWireVector output;
   auto gate_id = gate_register_.get_next_gate_id();
+  std::unique_ptr<detail::BasicYaoBinaryGate> gate;
   if (role_ == Role::garbler) {
-    auto gate =
-        std::make_unique<YaoXORGateGarbler>(gate_id, *this, std::move(in_a), std::move(in_b));
-    output = gate->get_output_wires();
-    gate_register_.register_gate(std::move(gate));
+    gate = std::make_unique<YaoXORGateGarbler>(gate_id, *this, std::move(in_a), std::move(in_b));
   } else {
-    auto gate =
-        std::make_unique<YaoXORGateEvaluator>(gate_id, *this, std::move(in_a), std::move(in_b));
-    output = gate->get_output_wires();
-    gate_register_.register_gate(std::move(gate));
+    gate = std::make_unique<YaoXORGateEvaluator>(gate_id, *this, std::move(in_a), std::move(in_b));
   }
+  output = gate->get_output_wires();
+  gate_register_.register_gate(std::move(gate));
   return output;
 }
 
-YaoWireVector YaoProvider::make_and_gate(YaoWireVector &&in_a, YaoWireVector &&in_b) const {
+YaoWireVector YaoProvider::make_and_gate(YaoWireVector &&in_a, YaoWireVector &&in_b) {
   YaoWireVector output;
   auto gate_id = gate_register_.get_next_gate_id();
+  std::unique_ptr<detail::BasicYaoBinaryGate> gate;
   if (role_ == Role::garbler) {
-    auto gate =
-        std::make_unique<YaoANDGateGarbler>(gate_id, *this, std::move(in_a), std::move(in_b));
-    output = gate->get_output_wires();
-    gate_register_.register_gate(std::move(gate));
+    gate = std::make_unique<YaoANDGateGarbler>(gate_id, *this, std::move(in_a), std::move(in_b));
   } else {
-    auto gate =
-        std::make_unique<YaoANDGateEvaluator>(gate_id, *this, std::move(in_a), std::move(in_b));
-    output = gate->get_output_wires();
-    gate_register_.register_gate(std::move(gate));
+    gate = std::make_unique<YaoANDGateEvaluator>(gate_id, *this, std::move(in_a), std::move(in_b));
   }
+  output = gate->get_output_wires();
+  gate_register_.register_gate(std::move(gate));
   return output;
 }
 
-void YaoProvider::setup() noexcept {
-  global_offset_.set_to_random();
-  // The first bit of the key is the permutation bit which needs to be
-  // different for the zero and one keys.  So we have to set the corresponding
-  // bit of the global offset to 1.
-  *global_offset_.data() |= std::byte(0x01);
+static flatbuffers::FlatBufferBuilder build_yao_setup_message(
+    const ENCRYPTO::block128_t &aes_key, const ENCRYPTO::block128_t &hash_key) {
+  flatbuffers::FlatBufferBuilder builder;
+  auto aes_vector =
+      builder.CreateVector(reinterpret_cast<const std::uint8_t *>(aes_key.data()), aes_key.size());
+  auto hash_vector = builder.CreateVector(reinterpret_cast<const std::uint8_t *>(hash_key.data()),
+                                          hash_key.size());
+  auto root = Communication::CreateYaoSetupMessage(builder, aes_vector, hash_vector);
+  builder.Finish(root);
+  return Communication::BuildMessage(Communication::MessageType::YaoSetup,
+                                     builder.GetBufferPointer(), builder.GetSize());
 }
 
-void YaoProvider::send_keys_message(std::size_t gate_id, ENCRYPTO::block128_vector&& message) const {
-  // TODO
-}
-void YaoProvider::send_bits_message(std::size_t gate_id, ENCRYPTO::BitVector<>&& message) const {
-  // TODO
-}
-void YaoProvider::send_bits_message(std::size_t gate_id, const ENCRYPTO::BitVector<>& message) const {
-  // TODO
+ENCRYPTO::block128_t YaoProvider::get_global_offset() const {
+  if (role_ == Role::evaluator) {
+    throw std::logic_error("global offset is unknown to evaluator");
+  }
+  if (!setup_ran_) {
+    throw std::logic_error("setup phase not executed, global offset is not set yet");
+  }
+  assert(hg_garbler_);
+  return hg_garbler_->get_offset();
 }
 
-void YaoProvider::create_garbled_tables(const ENCRYPTO::block128_vector &keys_a,
+void YaoProvider::setup() {
+  if (setup_ran_) {
+    throw std::logic_error("YaoProvider::setup already ran");
+  }
+  if (role_ == Role::garbler) {
+    hg_garbler_ = std::make_unique<Crypto::garbling::HalfGateGarbler>();
+    auto public_data = hg_garbler_->get_public_data();
+    communication_layer_.broadcast_message(
+        build_yao_setup_message(public_data.aes_key, public_data.hash_key));
+  } else {
+    auto public_data = message_handler_->hg_public_data_future_.get();
+    hg_evaluator_ = std::make_unique<Crypto::garbling::HalfGateEvaluator>(public_data);
+  }
+  setup_ran_ = true;
+}
+
+static flatbuffers::FlatBufferBuilder build_yao_gate_message(std::size_t gate_id,
+                                                             const std::uint8_t *message,
+                                                             std::size_t size) {
+  flatbuffers::FlatBufferBuilder builder;
+  auto vector = builder.CreateVector(message, size);
+  auto root = Communication::CreateYaoGateMessage(builder, gate_id, vector);
+  builder.Finish(root);
+  return Communication::BuildMessage(Communication::MessageType::YaoGate,
+                                     builder.GetBufferPointer(), builder.GetSize());
+}
+
+static flatbuffers::FlatBufferBuilder build_yao_gate_message(
+    std::size_t gate_id, const ENCRYPTO::block128_vector &message) {
+  return build_yao_gate_message(
+      gate_id, reinterpret_cast<const std::uint8_t *>(message.data()->data()), message.byte_size());
+}
+
+static flatbuffers::FlatBufferBuilder build_yao_gate_message(std::size_t gate_id,
+                                                             const ENCRYPTO::BitVector<> &message) {
+  const auto &vector = message.GetData();
+  return build_yao_gate_message(gate_id, reinterpret_cast<const std::uint8_t *>(vector.data()),
+                                vector.size());
+}
+void YaoProvider::send_blocks_message(std::size_t gate_id,
+                                      ENCRYPTO::block128_vector &&message) const {
+  communication_layer_.broadcast_message(build_yao_gate_message(gate_id, message));
+}
+
+void YaoProvider::send_bits_message(std::size_t gate_id, ENCRYPTO::BitVector<> &&message) const {
+  send_bits_message(gate_id, message);
+}
+
+void YaoProvider::send_bits_message(std::size_t gate_id,
+                                    const ENCRYPTO::BitVector<> &message) const {
+  communication_layer_.broadcast_message(build_yao_gate_message(gate_id, message));
+}
+
+ENCRYPTO::ReusableFiberFuture<ENCRYPTO::block128_vector> YaoProvider::register_for_blocks_message(
+    std::size_t gate_id, std::size_t num_blocks) {
+  auto &mh = *message_handler_;
+  {
+    auto it = mh.bits_promises_.find(gate_id);
+    if (it != mh.bits_promises_.end()) {
+      throw std::logic_error(
+          fmt::format("tried to register twice for yao message for gate {}", gate_id));
+    }
+  }
+  ENCRYPTO::ReusableFiberPromise<ENCRYPTO::block128_vector> promise;
+  auto future = promise.get_future();
+  auto [_, success] =
+      mh.blocks_promises_.insert({gate_id, std::make_pair(num_blocks, std::move(promise))});
+  if (!success) {
+    throw std::logic_error(
+        fmt::format("tried to register twice for yao message for gate {}", gate_id));
+  }
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    if (logger_) {
+      logger_->LogTrace(
+          fmt::format("Gate {}: registered for blocks message of size {}", gate_id, num_blocks));
+    }
+  }
+  return future;
+}
+
+ENCRYPTO::ReusableFiberFuture<ENCRYPTO::BitVector<>> YaoProvider::register_for_bits_message(
+    std::size_t gate_id, std::size_t num_bits) {
+  auto &mh = *message_handler_;
+  {
+    auto it = mh.blocks_promises_.find(gate_id);
+    if (it != mh.blocks_promises_.end()) {
+      throw std::logic_error(
+          fmt::format("tried to register twice for yao message for gate {}", gate_id));
+    }
+  }
+  ENCRYPTO::ReusableFiberPromise<ENCRYPTO::BitVector<>> promise;
+  auto future = promise.get_future();
+  auto [_, success] =
+      mh.bits_promises_.insert({gate_id, std::make_pair(num_bits, std::move(promise))});
+  if (!success) {
+    throw std::logic_error(
+        fmt::format("tried to register twice for yao message for gate {}", gate_id));
+  }
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    if (logger_) {
+      logger_->LogTrace(
+          fmt::format("Gate {}: registered for bits message of size {}", gate_id, num_bits));
+    }
+  }
+  return future;
+}
+
+void YaoProvider::create_garbled_tables(std::size_t gate_id,
+                                        const ENCRYPTO::block128_vector &keys_a,
                                         const ENCRYPTO::block128_vector &keys_b,
-                                        ENCRYPTO::block128_vector &tables,
+                                        ENCRYPTO::block128_t *tables,
                                         ENCRYPTO::block128_vector &keys_out) const noexcept {
-  // TODO
+  assert(hg_garbler_);
+  hg_garbler_->batch_garble_and(keys_out, tables, gate_id, keys_a, keys_b);
 }
 
-void YaoProvider::evaluate_garbled_tables(const ENCRYPTO::block128_vector &keys_a,
+void YaoProvider::evaluate_garbled_tables(std::size_t gate_id,
+                                          const ENCRYPTO::block128_vector &keys_a,
                                           const ENCRYPTO::block128_vector &keys_b,
-                                          const ENCRYPTO::block128_vector &tables,
+                                          const ENCRYPTO::block128_t *tables,
                                           ENCRYPTO::block128_vector &keys_out) const noexcept {
-  // TODO
+  assert(hg_evaluator_);
+  hg_evaluator_->batch_evaluate_and(keys_out, tables, gate_id, keys_a, keys_b);
 }
 
 }  // namespace MOTION::proto::yao

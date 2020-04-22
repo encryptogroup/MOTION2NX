@@ -51,65 +51,90 @@ namespace Communication {
 class CommunicationLayer;
 }
 
+namespace Crypto::garbling {
+class HalfGateGarbler;
+class HalfGateEvaluator;
+}  // namespace Crypto::garbling
+
 namespace proto::yao {
+
+enum class OutputRecipient : std::uint8_t { garbler, evaluator, both };
 
 class YaoWire;
 using YaoWireVector = std::vector<std::shared_ptr<YaoWire>>;
 
-class YaoProvider : public GateFactory {
-  enum class Role { garbler, evaluator };
+struct YaoMessageHandler;
 
+class YaoProvider : public GateFactory {
  public:
+  enum class Role { garbler, evaluator };
+  struct my_input_t {};
+
   YaoProvider(Communication::CommunicationLayer&, GateRegister&,
               ENCRYPTO::ObliviousTransfer::OTProvider&, std::shared_ptr<Logger>);
+  ~YaoProvider();
 
-  std::pair<ENCRYPTO::ReusablePromise<ENCRYPTO::BitVector<>>, std::vector<std::shared_ptr<NewWire>>>
-  make_input_gate() const;
+  // std::vector<std::shared_ptr<NewWire>> make_input_gate(std::size_t num_wire, std::size_t num_simd);
+  // std::pair<ENCRYPTO::ReusableFiberPromise<std::vector<ENCRYPTO::BitVector<>>>,
+  //           std::vector<std::shared_ptr<NewWire>>>
+  // make_input_gate(std::size_t num_wire, std::size_t num_simd, my_input_t);
+  ENCRYPTO::ReusableFiberFuture<std::vector<ENCRYPTO::BitVector<>>> make_output_gate(
+      OutputRecipient, const std::vector<std::shared_ptr<NewWire>>&);
+
+  // Implementation of GateFactors interface
+  std::pair<ENCRYPTO::ReusableFiberPromise<BitValues>, WireVector> make_boolean_input_gate_my(
+      std::size_t input_owner, std::size_t num_wires, std::size_t num_simd) override;
+  WireVector make_boolean_input_gate_other(std::size_t input_owner, std::size_t num_wires,
+                                           std::size_t num_simd) override;
+  ENCRYPTO::ReusableFiberFuture<BitValues> make_boolean_output_gate_my(std::size_t output_owner,
+                                                                       const WireVector&) override;
+  void make_boolean_output_gate_other(std::size_t output_owner, const WireVector&) override;
 
   std::vector<std::shared_ptr<NewWire>> make_unary_gate(
-      ENCRYPTO::PrimitiveOperationType op, const std::vector<std::shared_ptr<NewWire>>&) const;
+      ENCRYPTO::PrimitiveOperationType op, const std::vector<std::shared_ptr<NewWire>>&) override;
 
   std::vector<std::shared_ptr<NewWire>> make_binary_gate(
       ENCRYPTO::PrimitiveOperationType op, const std::vector<std::shared_ptr<NewWire>>&,
-      const std::vector<std::shared_ptr<NewWire>>&) const;
+      const std::vector<std::shared_ptr<NewWire>>&) override;
 
-  void setup() noexcept;
-  ENCRYPTO::block128_t get_global_offset() const noexcept { return global_offset_; }
+  void setup();
+  ENCRYPTO::block128_t get_global_offset() const;
 
-  void send_keys_message(std::size_t gate_id, ENCRYPTO::block128_vector&& message) const;
+  void send_blocks_message(std::size_t gate_id, ENCRYPTO::block128_vector&& message) const;
   void send_bits_message(std::size_t gate_id, ENCRYPTO::BitVector<>&& message) const;
   void send_bits_message(std::size_t gate_id, const ENCRYPTO::BitVector<>& message) const;
-  [[nodiscard]] ENCRYPTO::ReusableFiberFuture<ENCRYPTO::block128_vector> register_for_keys_message(
-      std::size_t gate_id, std::size_t num_blocks) const;
+  [[nodiscard]] ENCRYPTO::ReusableFiberFuture<ENCRYPTO::block128_vector>
+  register_for_blocks_message(std::size_t gate_id, std::size_t num_blocks);
   [[nodiscard]] ENCRYPTO::ReusableFiberFuture<ENCRYPTO::BitVector<>> register_for_bits_message(
-      std::size_t gate_id, std::size_t num_bits) const;
-  void create_garbled_tables(const ENCRYPTO::block128_vector& keys_a,
+      std::size_t gate_id, std::size_t num_bits);
+  void create_garbled_tables(std::size_t gate_id, const ENCRYPTO::block128_vector& keys_a,
                              const ENCRYPTO::block128_vector& keys_b,
-                             ENCRYPTO::block128_vector& tables,
+                             ENCRYPTO::block128_t* tables,
                              ENCRYPTO::block128_vector& keys_out) const noexcept;
-  void evaluate_garbled_tables(const ENCRYPTO::block128_vector& keys_a,
+  void evaluate_garbled_tables(std::size_t gate_id, const ENCRYPTO::block128_vector& keys_a,
                                const ENCRYPTO::block128_vector& keys_b,
-                               const ENCRYPTO::block128_vector& tables,
+                               const ENCRYPTO::block128_t* tables,
                                ENCRYPTO::block128_vector& keys_out) const noexcept;
-  // void send_garbled_tables(const ENCRYPTO::block128_vector& tables) const;
-  // ENCRYPTO::ReusableFiberFuture<ENCRYPTO::block128_vector> register_for_garbled_tables(
-  //     std::size_t num) const;
   constexpr static std::size_t garbled_table_size = 2;
 
   ENCRYPTO::ObliviousTransfer::OTProvider& get_ot_provider() const noexcept { return ot_provider_; }
   std::shared_ptr<Logger> get_logger() const noexcept { return logger_; }
 
  private:
-  YaoWireVector make_inv_gate(YaoWireVector&& in_a) const;
-  YaoWireVector make_xor_gate(YaoWireVector&& in_a, YaoWireVector&& in_b) const;
-  YaoWireVector make_and_gate(YaoWireVector&& in_a, YaoWireVector&& in_b) const;
+  YaoWireVector make_inv_gate(YaoWireVector&& in_a);
+  YaoWireVector make_xor_gate(YaoWireVector&& in_a, YaoWireVector&& in_b);
+  YaoWireVector make_and_gate(YaoWireVector&& in_a, YaoWireVector&& in_b);
 
  private:
   Communication::CommunicationLayer& communication_layer_;
   GateRegister& gate_register_;
   ENCRYPTO::ObliviousTransfer::OTProvider& ot_provider_;
+  std::unique_ptr<Crypto::garbling::HalfGateGarbler> hg_garbler_;
+  std::unique_ptr<Crypto::garbling::HalfGateEvaluator> hg_evaluator_;
+  std::shared_ptr<YaoMessageHandler> message_handler_;
+  std::size_t my_id_;
   Role role_;
-  ENCRYPTO::block128_t global_offset_;
+  bool setup_ran_;
   std::shared_ptr<Logger> logger_;
 };
 
