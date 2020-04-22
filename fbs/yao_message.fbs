@@ -1,0 +1,11 @@
+namespace MOTION.Communication;
+
+table YaoSetupMessage {
+  aes_key:[ubyte];      // 16 byte AES key
+  hash_key:[ubyte];      // 16 byte hash key
+}
+
+table YaoGateMessage {
+  gate_id:uint64;       // gate id
+  payload:[ubyte];      // garbled tables/decoding info/encoded outputs
+}
