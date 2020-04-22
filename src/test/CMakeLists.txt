@@ -21,6 +21,7 @@ add_executable(motiontest
         test_sb.cpp
         test_sp.cpp
         test_tcp_transport.cpp
+        test_yao.cpp
         )
 
 target_compile_features(motiontest PRIVATE cxx_std_17)
