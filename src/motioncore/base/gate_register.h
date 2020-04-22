@@ -36,10 +36,14 @@ class NewGate;
 class GateRegister : public ENCRYPTO::enable_wait_setup, public ENCRYPTO::enable_wait_online {
  public:
   GateRegister();
+  ~GateRegister();
   std::size_t get_next_gate_id() noexcept { return next_gate_id_++; }
   void register_gate(std::unique_ptr<NewGate>&& gate);
   void increment_gate_setup_counter() noexcept;
   void increment_gate_online_counter() noexcept;
+
+  std::vector<std::unique_ptr<NewGate>>& get_gates() noexcept { return gates_; }
+  const std::vector<std::unique_ptr<NewGate>>& get_gates() const noexcept { return gates_; }
 
  private:
   std::size_t next_gate_id_;

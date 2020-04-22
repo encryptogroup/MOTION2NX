@@ -27,10 +27,13 @@
 namespace MOTION {
 
 GateRegister::GateRegister()
-    : num_gates_with_setup_(0),
+    : next_gate_id_(0),
+      num_gates_with_setup_(0),
       num_gates_with_online_(0),
       num_evaluated_setup_(0),
       num_evaluated_online_(0) {}
+
+GateRegister::~GateRegister() = default;
 
 void GateRegister::register_gate(std::unique_ptr<NewGate>&& gate) {
   if (gate->need_setup()) {
