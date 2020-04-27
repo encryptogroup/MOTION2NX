@@ -48,7 +48,7 @@ class BasicYaoInputGate : public NewGate {
  public:
   BasicYaoInputGate(std::size_t gate_id, YaoProvider&, std::size_t num_wires, std::size_t num_simd);
   BasicYaoInputGate(std::size_t gate_id, YaoProvider&, std::size_t num_wires, std::size_t num_simd,
-                    ENCRYPTO::ReusableFiberFuture<std::vector<ENCRYPTO::BitVector<>>>);
+                    ENCRYPTO::ReusableFiberFuture<std::vector<ENCRYPTO::BitVector<>>>&&);
   YaoWireVector& get_output_wires() noexcept { return outputs_; };
 
  protected:
@@ -107,7 +107,7 @@ class YaoInputGateGarbler : public detail::BasicYaoInputGate {
                       std::size_t num_simd);
   YaoInputGateGarbler(std::size_t gate_id, YaoProvider&, std::size_t num_wires,
                       std::size_t num_simd,
-                      ENCRYPTO::ReusableFiberFuture<std::vector<ENCRYPTO::BitVector<>>>);
+                      ENCRYPTO::ReusableFiberFuture<std::vector<ENCRYPTO::BitVector<>>>&&);
   bool need_setup() const noexcept override { return true; }
   bool need_online() const noexcept override { return true; }
   void evaluate_setup() override;
@@ -123,7 +123,7 @@ class YaoInputGateEvaluator : public detail::BasicYaoInputGate {
                         std::size_t num_simd);
   YaoInputGateEvaluator(std::size_t gate_id, YaoProvider&, std::size_t num_wires,
                         std::size_t num_simd,
-                        ENCRYPTO::ReusableFiberFuture<std::vector<ENCRYPTO::BitVector<>>>);
+                        ENCRYPTO::ReusableFiberFuture<std::vector<ENCRYPTO::BitVector<>>>&&);
   bool need_setup() const noexcept override { return false; }
   bool need_online() const noexcept override { return true; }
   void evaluate_setup() override;

@@ -45,7 +45,7 @@ BasicYaoInputGate::BasicYaoInputGate(std::size_t gate_id, YaoProvider& yao_provi
 
 BasicYaoInputGate::BasicYaoInputGate(
     std::size_t gate_id, YaoProvider& yao_provider, std::size_t num_wires, std::size_t num_simd,
-    ENCRYPTO::ReusableFiberFuture<std::vector<ENCRYPTO::BitVector<>>> input_future)
+    ENCRYPTO::ReusableFiberFuture<std::vector<ENCRYPTO::BitVector<>>>&& input_future)
     : NewGate(gate_id),
       yao_provider_(yao_provider),
       num_wires_(num_wires),
@@ -145,7 +145,7 @@ YaoInputGateGarbler::YaoInputGateGarbler(std::size_t gate_id, YaoProvider& yao_p
 
 YaoInputGateGarbler::YaoInputGateGarbler(
     std::size_t gate_id, YaoProvider& yao_provider, std::size_t num_wires, std::size_t num_simd,
-    ENCRYPTO::ReusableFiberFuture<std::vector<ENCRYPTO::BitVector<>>> input_future)
+    ENCRYPTO::ReusableFiberFuture<std::vector<ENCRYPTO::BitVector<>>>&& input_future)
     : BasicYaoInputGate(gate_id, yao_provider, num_wires, num_simd, std::move(input_future)),
       ot_sender_(nullptr) {
   if constexpr (MOTION_VERBOSE_DEBUG) {
@@ -255,7 +255,7 @@ YaoInputGateEvaluator::YaoInputGateEvaluator(std::size_t gate_id, YaoProvider& y
 
 YaoInputGateEvaluator::YaoInputGateEvaluator(
     std::size_t gate_id, YaoProvider& yao_provider, std::size_t num_wires, std::size_t num_simd,
-    ENCRYPTO::ReusableFiberFuture<std::vector<ENCRYPTO::BitVector<>>> input_future)
+    ENCRYPTO::ReusableFiberFuture<std::vector<ENCRYPTO::BitVector<>>>&& input_future)
     : BasicYaoInputGate(gate_id, yao_provider, num_wires, num_simd, std::move(input_future)) {
   // my_inputs_ => register for GOTs
   auto& ot_provider = yao_provider_.get_ot_provider();
