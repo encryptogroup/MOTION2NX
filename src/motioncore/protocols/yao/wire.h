@@ -26,7 +26,7 @@
 #include <vector>
 
 #include "utility/block.h"
-#include "utility/fiber_condition.h"
+#include "utility/enable_wait.h"
 #include "utility/typedefs.h"
 #include "wire/new_wire.h"
 
@@ -36,10 +36,8 @@ class YaoProvider;
 
 class YaoWire : public NewWire, public ENCRYPTO::enable_wait_setup {
  public:
-  YaoWire(std::size_t num_simd);
+  YaoWire(std::size_t num_simd) : NewWire(num_simd), keys_(num_simd) {}
   MPCProtocol get_protocol() const noexcept override { return MPCProtocol::Yao; }
-  void set_setup_ready();
-  void wait_setup() const;
   ENCRYPTO::block128_vector& get_keys() { return keys_; };
   const ENCRYPTO::block128_vector& get_keys() const { return keys_; };
 
@@ -47,8 +45,6 @@ class YaoWire : public NewWire, public ENCRYPTO::enable_wait_setup {
   // holds the the zero keys or the active keys for the garbler and evaluator,
   // respectively
   ENCRYPTO::block128_vector keys_;
-  bool setup_done_;
-  ENCRYPTO::FiberCondition setup_cond_;
 };
 
 using YaoWireVector = std::vector<std::shared_ptr<YaoWire>>;
