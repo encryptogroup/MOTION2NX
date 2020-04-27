@@ -36,14 +36,14 @@ class GMWProvider;
 
 class BooleanGMWWire : public NewWire {
  public:
-  BooleanGMWWire(std::size_t num_simd) : NewWire(num_simd), shares_(num_simd) {}
+  BooleanGMWWire(std::size_t num_simd) : NewWire(num_simd), share_(num_simd) {}
   MPCProtocol get_protocol() const noexcept override { return MPCProtocol::BooleanGMW; }
-  ENCRYPTO::BitVector<>& get_share() { return shares_; };
-  const ENCRYPTO::BitVector<>& get_share() const { return shares_; };
+  ENCRYPTO::BitVector<>& get_share() { return share_; };
+  const ENCRYPTO::BitVector<>& get_share() const { return share_; };
 
  private:
   // holds this party shares
-  ENCRYPTO::BitVector<> shares_;
+  ENCRYPTO::BitVector<> share_;
 };
 
 using BooleanGMWWireVector = std::vector<std::shared_ptr<BooleanGMWWire>>;
@@ -51,16 +51,16 @@ using BooleanGMWWireVector = std::vector<std::shared_ptr<BooleanGMWWire>>;
 template <typename T>
 class ArithmeticGMWWire : public NewWire {
  public:
-  ArithmeticGMWWire(std::size_t num_simd) : NewWire(num_simd), shares_(num_simd) {}
+  ArithmeticGMWWire(std::size_t num_simd) : NewWire(num_simd), share_(num_simd) {}
   MPCProtocol get_protocol() const noexcept override { return MPCProtocol::ArithmeticGMW; }
-  std::vector<T>& get_share() { return shares_; };
-  const std::vector<T>& get_share() const { return shares_; };
+  std::vector<T>& get_share() { return share_; };
+  const std::vector<T>& get_share() const { return share_; };
 
  private:
   using is_enabled_ = ENCRYPTO::is_unsigned_int_t<T>;
 
   // holds this party shares
-  std::vector<T> shares_;
+  std::vector<T> share_;
 };
 
 template <typename T>

@@ -45,6 +45,7 @@ add_library(motion
         gate/constant_gate.cpp
         gate/conversion_gate.cpp
         gate/gate.cpp
+        protocols/gmw/gate.cpp
         protocols/yao/gate.cpp
         protocols/yao/yao_provider.cpp
         secure_type/secure_unsigned_integer.cpp
