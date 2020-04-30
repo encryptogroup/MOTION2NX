@@ -23,9 +23,73 @@
 #include "gate.h"
 
 #include "base/gate_factory.h"
+#include "gmw_provider.h"
 #include "wire.h"
 
 namespace MOTION::proto::gmw {
+
+namespace detail {
+
+template <typename WireType>
+BasicGMWBinaryGate<WireType>::BasicGMWBinaryGate(std::size_t gate_id, GMWWireVector&& in_b,
+                                                 GMWWireVector&& in_a)
+    : NewGate(gate_id),
+      num_wires_(in_a.size()),
+      inputs_a_(std::move(in_a)),
+      inputs_b_(std::move(in_b)) {
+  if (num_wires_ == 0) {
+    throw std::logic_error("number of wires need to be positive");
+  }
+  if (num_wires_ != inputs_b_.size()) {
+    throw std::logic_error("number of wires need to be the same for both inputs");
+  }
+  auto num_simd = inputs_a_[0]->get_num_simd();
+  for (std::size_t wire_i = 0; wire_i < num_wires_; ++wire_i) {
+    if (inputs_a_[wire_i]->get_num_simd() != num_simd ||
+        inputs_b_[wire_i]->get_num_simd() != num_simd) {
+      throw std::logic_error("number of SIMD values need to be the same for all wires");
+    }
+  }
+  outputs_.reserve(num_wires_);
+  std::generate_n(std::back_inserter(outputs_), num_wires_,
+                  [num_simd] { return std::make_shared<WireType>(num_simd); });
+}
+
+template class BasicGMWBinaryGate<BooleanGMWWire>;
+template class BasicGMWBinaryGate<ArithmeticGMWWire<std::uint8_t>>;
+template class BasicGMWBinaryGate<ArithmeticGMWWire<std::uint16_t>>;
+template class BasicGMWBinaryGate<ArithmeticGMWWire<std::uint32_t>>;
+template class BasicGMWBinaryGate<ArithmeticGMWWire<std::uint64_t>>;
+
+template <typename WireType>
+BasicGMWUnaryGate<WireType>::BasicGMWUnaryGate(std::size_t gate_id, GMWWireVector&& in,
+                                               bool forward)
+    : NewGate(gate_id), num_wires_(in.size()), inputs_(std::move(in)) {
+  if (num_wires_ == 0) {
+    throw std::logic_error("number of wires need to be positive");
+  }
+  auto num_simd = inputs_[0]->get_num_simd();
+  for (std::size_t wire_i = 0; wire_i < num_wires_; ++wire_i) {
+    if (inputs_[wire_i]->get_num_simd() != num_simd) {
+      throw std::logic_error("number of SIMD values need to be the same for all wires");
+    }
+  }
+  if (forward) {
+    outputs_ = inputs_;
+  } else {
+    outputs_.reserve(num_wires_);
+    std::generate_n(std::back_inserter(outputs_), num_wires_,
+                    [num_simd] { return std::make_shared<WireType>(num_simd); });
+  }
+}
+
+template class BasicGMWUnaryGate<BooleanGMWWire>;
+template class BasicGMWUnaryGate<ArithmeticGMWWire<std::uint8_t>>;
+template class BasicGMWUnaryGate<ArithmeticGMWWire<std::uint16_t>>;
+template class BasicGMWUnaryGate<ArithmeticGMWWire<std::uint32_t>>;
+template class BasicGMWUnaryGate<ArithmeticGMWWire<std::uint64_t>>;
+
+}  // namespace detail
 
 BooleanGMWInputGateSender::BooleanGMWInputGateSender(
     std::size_t gate_id, GMWProvider& gmw_provider, std::size_t num_wires, std::size_t num_simd,
@@ -142,5 +206,159 @@ void BooleanGMWOutputGate::evaluate_online() {
     // TODO: set_value of output_promise_
   }
 }
+
+BooleanGMWINVGate::BooleanGMWINVGate(std::size_t gate_id, const GMWProvider& gmw_provider,
+                                     GMWWireVector&& in)
+    : detail::BasicGMWUnaryGate<BooleanGMWWire>(gate_id, std::move(in),
+                                                gmw_provider.is_my_job(gate_id)),
+      is_my_job_(gmw_provider.is_my_job(gate_id)) {}
+
+void BooleanGMWINVGate::evaluate_setup() {
+  // nothing to do
+}
+
+void BooleanGMWINVGate::evaluate_online() {
+  if (!is_my_job_) {
+    return;
+  }
+
+  for (std::size_t wire_i = 0; wire_i < num_wires_; ++wire_i) {
+    const auto& w_in = inputs_[wire_i];
+    w_in->wait_online();
+    auto& w_o = outputs_[wire_i];
+    w_o->get_share() = ~w_in->get_share();
+    w_o->set_online_ready();
+  }
+}
+
+void BooleanGMWXORGate::evaluate_setup() {
+  // nothing to do
+}
+
+void BooleanGMWXORGate::evaluate_online() {
+  for (std::size_t wire_i = 0; wire_i < num_wires_; ++wire_i) {
+    const auto& w_a = inputs_a_[wire_i];
+    const auto& w_b = inputs_b_[wire_i];
+    w_a->wait_online();
+    w_b->wait_online();
+    auto& w_o = outputs_[wire_i];
+    w_o->get_share() = w_a->get_share() ^ w_b->get_share();
+    w_o->set_online_ready();
+  }
+}
+
+BooleanGMWANDGate::BooleanGMWANDGate(std::size_t gate_id, GMWProvider& gmw_provider,
+                                     GMWWireVector&& in_a, GMWWireVector&& in_b)
+    : detail::BasicGMWBinaryGate<BooleanGMWWire>(gate_id, std::move(in_a), std::move(in_b)),
+      gmw_provider_(gmw_provider) {
+  // TODO: register MTs
+}
+
+void BooleanGMWANDGate::evaluate_setup() {
+  // TODO: wait for MTs
+}
+
+void BooleanGMWANDGate::evaluate_online() {
+  // TODO: compute AND
+}
+
+template <typename T>
+ArithmeticGMWNEGGate<T>::ArithmeticGMWNEGGate(std::size_t gate_id, const GMWProvider&,
+                                              GMWWireVector&& in)
+    : detail::BasicGMWUnaryGate<ArithmeticGMWWire<T>>(gate_id, std::move(in), false) {}
+
+template <typename T>
+void ArithmeticGMWNEGGate<T>::evaluate_setup() {
+  // nothing to do
+}
+
+template <typename T>
+void ArithmeticGMWNEGGate<T>::evaluate_online() {
+  for (std::size_t wire_i = 0; wire_i < this->num_wires_; ++wire_i) {
+    const auto& w_in = this->inputs_[wire_i];
+    w_in->wait_online();
+    auto& w_o = this->outputs_[wire_i];
+    assert(w_o->get_share().size() == w_in->get_num_simd());
+    std::transform(std::begin(w_in->get_share()), std::end(w_in->get_share()),
+                   std::begin(w_o->get_share()), [](auto x) { return -x; });
+    w_o->set_online_ready();
+  }
+}
+
+template class ArithmeticGMWNEGGate<std::uint8_t>;
+template class ArithmeticGMWNEGGate<std::uint16_t>;
+template class ArithmeticGMWNEGGate<std::uint32_t>;
+template class ArithmeticGMWNEGGate<std::uint64_t>;
+
+template <typename T>
+void ArithmeticGMWADDGate<T>::evaluate_setup() {
+  // nothing to do
+}
+
+template <typename T>
+void ArithmeticGMWADDGate<T>::evaluate_online() {
+  for (std::size_t wire_i = 0; wire_i < this->num_wires_; ++wire_i) {
+    const auto& w_a = this->inputs_a_[wire_i];
+    const auto& w_b = this->inputs_b_[wire_i];
+    w_a->wait_online();
+    w_b->wait_online();
+    auto& w_o = this->outputs_[wire_i];
+    std::transform(std::begin(w_a->get_share()), std::end(w_a->get_share()),
+                   std::begin(w_b->get_share()), std::begin(w_o->get_share()),
+                   [](auto x, auto y) { return x + y; });
+    w_o->set_online_ready();
+  }
+}
+
+template class ArithmeticGMWADDGate<std::uint8_t>;
+template class ArithmeticGMWADDGate<std::uint16_t>;
+template class ArithmeticGMWADDGate<std::uint32_t>;
+template class ArithmeticGMWADDGate<std::uint64_t>;
+
+template <typename T>
+ArithmeticGMWMULGate<T>::ArithmeticGMWMULGate(std::size_t gate_id, GMWProvider& gmw_provider,
+                                              GMWWireVector&& in_a, GMWWireVector&& in_b)
+    : detail::BasicGMWBinaryGate<ArithmeticGMWWire<T>>(gate_id, std::move(in_a), std::move(in_b)),
+      gmw_provider_(gmw_provider) {
+  // TODO: register MTs
+}
+
+template <typename T>
+void ArithmeticGMWMULGate<T>::evaluate_setup() {
+  // TODO: wait for MTs
+}
+
+template <typename T>
+void ArithmeticGMWMULGate<T>::evaluate_online() {
+  // TODO: compute MUL
+}
+
+template class ArithmeticGMWMULGate<std::uint8_t>;
+template class ArithmeticGMWMULGate<std::uint16_t>;
+template class ArithmeticGMWMULGate<std::uint32_t>;
+template class ArithmeticGMWMULGate<std::uint64_t>;
+
+template <typename T>
+ArithmeticGMWSQRGate<T>::ArithmeticGMWSQRGate(std::size_t gate_id, GMWProvider& gmw_provider,
+                                              GMWWireVector&& in_a, GMWWireVector&& in_b)
+    : detail::BasicGMWBinaryGate<ArithmeticGMWWire<T>>(gate_id, std::move(in_a), std::move(in_b)),
+      gmw_provider_(gmw_provider) {
+  // TODO: register MTs
+}
+
+template <typename T>
+void ArithmeticGMWSQRGate<T>::evaluate_setup() {
+  // TODO: wait for MTs
+}
+
+template <typename T>
+void ArithmeticGMWSQRGate<T>::evaluate_online() {
+  // TODO: compute SQR
+}
+
+template class ArithmeticGMWSQRGate<std::uint8_t>;
+template class ArithmeticGMWSQRGate<std::uint16_t>;
+template class ArithmeticGMWSQRGate<std::uint32_t>;
+template class ArithmeticGMWSQRGate<std::uint64_t>;
 
 }  // namespace MOTION::proto::gmw

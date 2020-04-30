@@ -27,8 +27,41 @@
 #include "gate/new_gate.h"
 #include "utility/bit_vector.h"
 #include "utility/reusable_future.h"
+#include "utility/type_traits.hpp"
+#include "wire.h"
 
 namespace MOTION::proto::gmw {
+
+namespace detail {
+
+template <typename WireType>
+class BasicGMWBinaryGate : public NewGate {
+ public:
+  using GMWWireVector = std::vector<std::shared_ptr<WireType>>;
+  BasicGMWBinaryGate(std::size_t gate_id, GMWWireVector&&, GMWWireVector&&);
+  GMWWireVector& get_output_wires() noexcept { return outputs_; };
+
+ protected:
+  std::size_t num_wires_;
+  const GMWWireVector inputs_a_;
+  const GMWWireVector inputs_b_;
+  GMWWireVector outputs_;
+};
+
+template <typename WireType>
+class BasicGMWUnaryGate : public NewGate {
+ public:
+  using GMWWireVector = std::vector<std::shared_ptr<WireType>>;
+  BasicGMWUnaryGate(std::size_t gate_id, GMWWireVector&&, bool forward);
+  GMWWireVector& get_output_wires() noexcept { return outputs_; };
+
+ protected:
+  std::size_t num_wires_;
+  const GMWWireVector inputs_;
+  GMWWireVector outputs_;
+};
+
+}
 
 class GMWProvider;
 class BooleanGMWWire;
@@ -85,6 +118,90 @@ class BooleanGMWOutputGate : public NewGate {
   ENCRYPTO::ReusableFiberPromise<std::vector<ENCRYPTO::BitVector<>>> output_promise_;
   std::vector<ENCRYPTO::ReusableFiberFuture<ENCRYPTO::BitVector<>>> share_futures_;
   const BooleanGMWWireVector inputs_;
+};
+
+class BooleanGMWINVGate : public detail::BasicGMWUnaryGate<BooleanGMWWire> {
+ public:
+  BooleanGMWINVGate(std::size_t gate_id, const GMWProvider&, GMWWireVector&&);
+  bool need_setup() const noexcept override { return false; }
+  bool need_online() const noexcept override { return true; }
+  void evaluate_setup() override;
+  void evaluate_online() override;
+ private:
+  bool is_my_job_;
+};
+
+class BooleanGMWXORGate : public detail::BasicGMWBinaryGate<BooleanGMWWire> {
+ public:
+  using detail::BasicGMWBinaryGate<BooleanGMWWire>::BasicGMWBinaryGate;
+  bool need_setup() const noexcept override { return false; }
+  bool need_online() const noexcept override { return true; }
+  void evaluate_setup() override;
+  void evaluate_online() override;
+};
+
+class BooleanGMWANDGate : public detail::BasicGMWBinaryGate<BooleanGMWWire> {
+ public:
+  BooleanGMWANDGate(std::size_t gate_id, GMWProvider&, GMWWireVector&&, GMWWireVector&&);
+  bool need_setup() const noexcept override { return true; }
+  bool need_online() const noexcept override { return true; }
+  void evaluate_setup() override;
+  void evaluate_online() override;
+ private:
+  GMWProvider& gmw_provider_;
+  // TODO: MT ids
+};
+
+
+template <typename T>
+class ArithmeticGMWNEGGate : public detail::BasicGMWUnaryGate<ArithmeticGMWWire<T>> {
+ public:
+  using GMWWireVector = typename detail::BasicGMWUnaryGate<ArithmeticGMWWire<T>>::GMWWireVector;
+  ArithmeticGMWNEGGate(std::size_t gate_id, const GMWProvider&, GMWWireVector&&);
+  bool need_setup() const noexcept override { return false; }
+  bool need_online() const noexcept override { return true; }
+  void evaluate_setup() override;
+  void evaluate_online() override;
+ private:
+  using is_enabled_ = ENCRYPTO::is_unsigned_int_t<T>;
+};
+
+template <typename T>
+class ArithmeticGMWADDGate : public detail::BasicGMWBinaryGate<ArithmeticGMWWire<T>> {
+ public:
+  using detail::BasicGMWBinaryGate<ArithmeticGMWWire<T>>::BasicGMWBinaryGate;
+  bool need_setup() const noexcept override { return false; }
+  bool need_online() const noexcept override { return true; }
+  void evaluate_setup() override;
+  void evaluate_online() override;
+};
+
+template <typename T>
+class ArithmeticGMWMULGate : public detail::BasicGMWBinaryGate<ArithmeticGMWWire<T>> {
+ public:
+  using GMWWireVector = typename detail::BasicGMWUnaryGate<ArithmeticGMWWire<T>>::GMWWireVector;
+  ArithmeticGMWMULGate(std::size_t gate_id, GMWProvider&, GMWWireVector&&, GMWWireVector&&);
+  bool need_setup() const noexcept override { return true; }
+  bool need_online() const noexcept override { return true; }
+  void evaluate_setup() override;
+  void evaluate_online() override;
+ private:
+  GMWProvider& gmw_provider_;
+  // TODO: MT ids
+};
+
+template <typename T>
+class ArithmeticGMWSQRGate : public detail::BasicGMWBinaryGate<ArithmeticGMWWire<T>> {
+ public:
+  using GMWWireVector = typename detail::BasicGMWUnaryGate<ArithmeticGMWWire<T>>::GMWWireVector;
+  ArithmeticGMWSQRGate(std::size_t gate_id, GMWProvider&, GMWWireVector&&, GMWWireVector&&);
+  bool need_setup() const noexcept override { return true; }
+  bool need_online() const noexcept override { return true; }
+  void evaluate_setup() override;
+  void evaluate_online() override;
+ private:
+  GMWProvider& gmw_provider_;
+  // TODO: SP ids
 };
 
 }  // namespace MOTION::proto::gmw
