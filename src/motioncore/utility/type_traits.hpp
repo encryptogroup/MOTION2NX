@@ -31,4 +31,7 @@ using is_unsigned_int_t =
     std::enable_if_t<std::conjunction_v<std::is_integral<T>, std::is_unsigned<T>,
                                         std::negation<std::is_same<T, bool>>>>;
 
+template <typename T>
+constexpr std::size_t bit_size_v = 8 * sizeof(T);
+
 }  // namespace ENCRYPTO
