@@ -19,6 +19,7 @@ add_library(motion
         communication/tcp_transport.cpp
         communication/transport.cpp
         crypto/aes/aesni_primitives.cpp
+        crypto/arithmetic_provider.cpp
         crypto/base_ots/base_ot_provider.cpp
         crypto/base_ots/ot_hl17.cpp
         crypto/blake2b.cpp
