@@ -20,6 +20,7 @@ add_executable(motiontest
         test_rng.cpp
         test_sb.cpp
         test_sp.cpp
+        test_type_traits.cpp
         test_tcp_transport.cpp
         test_yao.cpp
         )
