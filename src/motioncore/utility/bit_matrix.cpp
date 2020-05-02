@@ -331,21 +331,27 @@ void BitMatrix::Transpose128x128InPlace(std::array<std::uint64_t*, 128>& rows_64
 
   {
     // block size = {8, 4, 2}
-    constexpr std::array<std::uint64_t, 3> mask0{0x0F0F0F0F0F0F0F0Full, 0x3333333333333333ull,
-                                                 0x5555555555555555ull};
+    // constexpr std::array<std::uint64_t, 3> mask0{0x0F0F0F0F0F0F0F0Full, 0x3333333333333333ull,
+    //                                              0x5555555555555555ull};
+    constexpr std::array<std::uint64_t, 3> mask0{0xF0F0F0F0F0F0F0F0ull, 0xccccccccccccccccull,
+                                                 0xaaaaaaaaaaaaaaaaull};
     constexpr std::array<std::uint64_t, 3> mask1{~mask0.at(0), ~mask0.at(1), ~mask0.at(2)};
     for (auto this_blk_size = 8, block_id = 0; this_blk_size > 1; this_blk_size >>= 1, ++block_id) {
       const std::size_t this_subblk_size = this_blk_size >> 1;
       for (auto i = 0u; i < blk_size; i += this_blk_size) {
         for (auto j = 0u; j < this_subblk_size; ++j) {
-          tmp_64_0.at(i + j) = (rows_64.at(i + j)[0] & mask0.at(block_id)) << this_subblk_size;
+          // tmp_64_0.at(i + j) = (rows_64.at(i + j)[0] & mask0.at(block_id)) << this_subblk_size;
+          tmp_64_0.at(i + j) = (rows_64.at(i + j)[0] & mask0.at(block_id)) >> this_subblk_size;
           tmp_64_0.at(i + this_subblk_size + j) = (rows_64.at(i + j)[1] & mask0.at(block_id))
-                                                  << this_subblk_size;
+                                                  // << this_subblk_size;
+                                                  >> this_subblk_size;
 
           tmp_64_1.at(i + j) =
-              (rows_64.at(this_subblk_size + i + j)[0] & mask1.at(block_id)) >> this_subblk_size;
+              // (rows_64.at(this_subblk_size + i + j)[0] & mask1.at(block_id)) >> this_subblk_size;
+              (rows_64.at(this_subblk_size + i + j)[0] & mask1.at(block_id)) << this_subblk_size;
           tmp_64_1.at(i + this_subblk_size + j) =
-              (rows_64.at(this_subblk_size + i + j)[1] & mask1.at(block_id)) >> this_subblk_size;
+              // (rows_64.at(this_subblk_size + i + j)[1] & mask1.at(block_id)) >> this_subblk_size;
+              (rows_64.at(this_subblk_size + i + j)[1] & mask1.at(block_id)) << this_subblk_size;
 
           rows_64.at(i + j)[0] = (rows_64.at(i + j)[0] & mask1.at(block_id)) | tmp_64_1.at(i + j);
           rows_64.at(i + j)[1] =
@@ -456,12 +462,18 @@ void BitMatrix::TransposeUsingBitSlicing(std::array<std::byte*, 128>& matrix, st
   // Do the main body in 16x8 blocks:
   for (rr = 0; rr <= nrows - 16; rr += 16) {
     for (cc = 0; cc < ncols; cc += 8) {
-      vec = _mm_set_epi8(INP(rr + 8, cc), INP(rr + 9, cc), INP(rr + 10, cc), INP(rr + 11, cc),
-                         INP(rr + 12, cc), INP(rr + 13, cc), INP(rr + 14, cc), INP(rr + 15, cc),
-                         INP(rr + 0, cc), INP(rr + 1, cc), INP(rr + 2, cc), INP(rr + 3, cc),
-                         INP(rr + 4, cc), INP(rr + 5, cc), INP(rr + 6, cc), INP(rr + 7, cc));
-      for (i = 0; i < 8; vec = _mm_slli_epi64(vec, 1), ++i) {
-        *(uint16_t * __restrict__) & OUT(cc + i, rr) = _mm_movemask_epi8(vec);
+      // vec = _mm_set_epi8(INP(rr + 8, cc), INP(rr + 9, cc), INP(rr + 10, cc), INP(rr + 11, cc),
+      //                    INP(rr + 12, cc), INP(rr + 13, cc), INP(rr + 14, cc), INP(rr + 15, cc),
+      //                    INP(rr + 0, cc), INP(rr + 1, cc), INP(rr + 2, cc), INP(rr + 3, cc),
+      //                    INP(rr + 4, cc), INP(rr + 5, cc), INP(rr + 6, cc), INP(rr + 7, cc));
+      vec = _mm_set_epi8(INP(rr + 15, cc), INP(rr + 14, cc), INP(rr + 13, cc), INP(rr + 12, cc),
+                         INP(rr + 11, cc), INP(rr + 10, cc), INP(rr + 9, cc), INP(rr + 8, cc),
+                         INP(rr + 7, cc), INP(rr + 6, cc), INP(rr + 5, cc), INP(rr + 4, cc),
+                         INP(rr + 3, cc), INP(rr + 2, cc), INP(rr + 1, cc), INP(rr + 0, cc));
+      // for (i = 0; i < 8; vec = _mm_slli_epi64(vec, 1), ++i) {
+      for (i = 8; i > 0; vec = _mm_slli_epi64(vec, 1), --i) {
+        // *(uint16_t * __restrict__) & OUT(cc + i, rr) = _mm_movemask_epi8(vec);
+        *(uint16_t * __restrict__) & OUT(cc + i - 1, rr) = _mm_movemask_epi8(vec);
         // const auto pos = ((cc + i) % nrows) * num_blocks * 16 + (cc / nrows) * 16 + rr / 8;
         //*(uint16_t*)&out[pos] = _mm_movemask_epi8(vec);
       }
@@ -559,12 +571,18 @@ void BitMatrix::SenderTransposeAndEncrypt(const std::array<const std::byte*, 128
     auto c_old{c};
     for (r = 0; r <= nrows - 16; r += 16) {
       for (c = c_old; c == c_old || (c % 128 != 0); c += 8) {
-        vec = _mm_set_epi8(INP(r + 8, c), INP(r + 9, c), INP(r + 10, c), INP(r + 11, c),
-                           INP(r + 12, c), INP(r + 13, c), INP(r + 14, c), INP(r + 15, c),
-                           INP(r + 0, c), INP(r + 1, c), INP(r + 2, c), INP(r + 3, c),
-                           INP(r + 4, c), INP(r + 5, c), INP(r + 6, c), INP(r + 7, c));
-        for (i = 0; i < 8; vec = _mm_slli_epi64(vec, 1), ++i) {
-          *reinterpret_cast<std::uint16_t* __restrict__>(y0[c + i].GetMutableData().data() +
+        // vec = _mm_set_epi8(INP(r + 8, c), INP(r + 9, c), INP(r + 10, c), INP(r + 11, c),
+        //                    INP(r + 12, c), INP(r + 13, c), INP(r + 14, c), INP(r + 15, c),
+        //                    INP(r + 0, c), INP(r + 1, c), INP(r + 2, c), INP(r + 3, c),
+        //                    INP(r + 4, c), INP(r + 5, c), INP(r + 6, c), INP(r + 7, c));
+        vec = _mm_set_epi8(INP(r + 15, c), INP(r + 14, c), INP(r + 13, c), INP(r + 12, c),
+                           INP(r + 11, c), INP(r + 10, c), INP(r + 9, c), INP(r + 8, c),
+                           INP(r + 7, c), INP(r + 6, c), INP(r + 5, c), INP(r + 4, c),
+                           INP(r + 3, c), INP(r + 2, c), INP(r + 1, c), INP(r + 0, c));
+        // for (i = 0; i < 8; vec = _mm_slli_epi64(vec, 1), ++i) {
+        for (i = 8; i > 0; vec = _mm_slli_epi64(vec, 1), --i) {
+          // *reinterpret_cast<std::uint16_t* __restrict__>(y0[c + i].GetMutableData().data() +
+          *reinterpret_cast<std::uint16_t* __restrict__>(y0[c + i - 1].GetMutableData().data() +
                                                          r / 8) = _mm_movemask_epi8(vec);
         }
       }
@@ -677,12 +695,18 @@ void BitMatrix::ReceiverTransposeAndEncrypt(const std::array<const std::byte*, 1
     auto c_old{c};
     for (r = 0; r <= nrows - 16; r += 16) {
       for (c = c_old; c == c_old || (c % 128 != 0); c += 8) {
-        vec = _mm_set_epi8(INP(r + 8, c), INP(r + 9, c), INP(r + 10, c), INP(r + 11, c),
-                           INP(r + 12, c), INP(r + 13, c), INP(r + 14, c), INP(r + 15, c),
-                           INP(r + 0, c), INP(r + 1, c), INP(r + 2, c), INP(r + 3, c),
-                           INP(r + 4, c), INP(r + 5, c), INP(r + 6, c), INP(r + 7, c));
-        for (i = 0; i < 8; vec = _mm_slli_epi64(vec, 1), ++i) {
-          *reinterpret_cast<std::uint16_t* __restrict__>(out[c + i].GetMutableData().data() +
+        // vec = _mm_set_epi8(INP(r + 8, c), INP(r + 9, c), INP(r + 10, c), INP(r + 11, c),
+        //                    INP(r + 12, c), INP(r + 13, c), INP(r + 14, c), INP(r + 15, c),
+        //                    INP(r + 0, c), INP(r + 1, c), INP(r + 2, c), INP(r + 3, c),
+        //                    INP(r + 4, c), INP(r + 5, c), INP(r + 6, c), INP(r + 7, c));
+        vec = _mm_set_epi8(INP(r + 15, c), INP(r + 14, c), INP(r + 13, c), INP(r + 12, c),
+                           INP(r + 11, c), INP(r + 10, c), INP(r + 9, c), INP(r + 8, c),
+                           INP(r + 7, c), INP(r + 6, c), INP(r + 5, c), INP(r + 4, c),
+                           INP(r + 3, c), INP(r + 2, c), INP(r + 1, c), INP(r + 0, c));
+        // for (i = 0; i < 8; vec = _mm_slli_epi64(vec, 1), ++i) {
+        for (i = 8; i > 0; vec = _mm_slli_epi64(vec, 1), --i) {
+          // *reinterpret_cast<std::uint16_t* __restrict__>(out[c + i].GetMutableData().data() +
+          *reinterpret_cast<std::uint16_t* __restrict__>(out[c + i - 1].GetMutableData().data() +
                                                          r / 8) = _mm_movemask_epi8(vec);
         }
       }

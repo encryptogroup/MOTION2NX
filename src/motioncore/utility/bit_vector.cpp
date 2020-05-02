@@ -160,22 +160,29 @@ inline void CopyImpl(const std::size_t from, const std::size_t to, std::byte* sr
   const auto dest_from_offset = from % 8;
 
   if (dest_from_offset + num_bits < 8) {
-    const auto mask = (std::byte(0xFF) >> dest_from_offset) &
-                      (std::byte(0xFF) << (8 - dest_from_offset - num_bits));
+    // const auto mask = (std::byte(0xFF) >> dest_from_offset) &
+    //                   (std::byte(0xFF) << (8 - dest_from_offset - num_bits));
+    const auto mask = (std::byte(0xFF) << dest_from_offset) &
+                      (std::byte(0xFF) >> (8 - dest_from_offset - num_bits));
     const auto from_bytes = from / 8;
     *(dst + from_bytes) &= ~mask;
-    *(dst + from_bytes) |= ((*src) >> dest_from_offset) & mask;
+    // *(dst + from_bytes) |= ((*src) >> dest_from_offset) & mask;
+    dst[from_bytes] |= ((*src) << dest_from_offset) & mask;
   } else if ((from % 8) == 0) {
     const auto num_bytes = MOTION::Helpers::Convert::BitsToBytes(num_bits);
     const auto from_bytes = from / 8;
     const auto dest_to_1 = dest_to_offset > 0 ? 1 : 0;
-    for (auto i = 0ull; i < num_bytes - dest_to_1; ++i) {
-      *(dst + from_bytes + i) = *(src + i);
-    }
+    // for (auto i = 0ull; i < num_bytes - dest_to_1; ++i) {
+    //   *(dst + from_bytes + i) = *(src + i);
+    // }
+    std::copy_n(src, num_bytes - dest_to_1, dst + from_bytes);
     if (dest_to_offset > 0) {
-      const auto mask = std::byte(0xFF) >> dest_to_offset;
-      *(dst + from_bytes + num_bytes - 1) &= mask;
-      *(dst + from_bytes + num_bytes - 1) |= *(src + num_bytes - 1) & ~mask;
+      // const auto mask = std::byte(0xFF) >> dest_to_offset;
+      const auto mask = std::byte(0xFF) << dest_to_offset;
+      // *(dst + from_bytes + num_bytes - 1) &= mask;
+      // *(dst + from_bytes + num_bytes - 1) |= *(src + num_bytes - 1) & ~mask;
+      dst[from_bytes + num_bytes - 1] &= mask;
+      dst[from_bytes + num_bytes - 1] |= src[num_bytes - 1] & ~mask;
     }
   } else {
     const auto num_bytes = MOTION::Helpers::Convert::BitsToBytes(dest_from_offset + num_bits);
@@ -186,19 +193,26 @@ inline void CopyImpl(const std::size_t from, const std::size_t to, std::byte* sr
 
     const auto from_bytes = from / 8;
 
-    const auto mask0 = ~(std::byte(0xFF) >> dest_from_offset);
-    *(dst + from_bytes) &= mask0;
-    *(dst + from_bytes) |= tmp.GetData()[0];
+    // const auto mask0 = ~(std::byte(0xFF) >> dest_from_offset);
+    const auto mask0 = ~(std::byte(0xFF) << dest_from_offset);
+    // *(dst + from_bytes) &= mask0;
+    // *(dst + from_bytes) |= tmp.GetData()[0];
+    dst[from_bytes] &= mask0;
+    dst[from_bytes] |= tmp.GetData()[0];
 
     if (num_complete_bytes > 0u) {
-      std::copy(tmp.GetData().data() + 1, tmp.GetData().data() + num_complete_bytes + 1,
-                dst + from_bytes + 1);
+      // std::copy(tmp.GetData().data() + 1, tmp.GetData().data() + num_complete_bytes + 1,
+      //           dst + from_bytes + 1);
+      std::copy_n(tmp.GetData().data() + 1, num_complete_bytes, dst + from_bytes + 1);
     }
 
     if (dest_to_offset > 0) {
-      const auto mask1 = std::byte(0xFFu >> dest_to_offset);
-      *(dst + from_bytes + num_bytes - 1) &= mask1;
-      *(dst + from_bytes + num_bytes - 1) |= (tmp.GetData()[tmp.GetData().size() - 1]);
+      // const auto mask1 = std::byte(0xFFu >> dest_to_offset);
+      const auto mask1 = std::byte(0xFF) << dest_to_offset;
+      // *(dst + from_bytes + num_bytes - 1) &= mask1;
+      // *(dst + from_bytes + num_bytes - 1) |= (tmp.GetData()[tmp.GetData().size() - 1]);
+      dst[from_bytes + num_bytes - 1] &= mask1;
+      dst[from_bytes + num_bytes - 1] |= (tmp.GetData()[tmp.GetData().size() - 1]);
     }
   }
 }
@@ -628,42 +642,92 @@ void BitVector<Allocator>::Append(const std::byte* ptr,
                                   const std::size_t append_bit_size) noexcept {
   if (append_bit_size > 0u) {
     const auto old_bit_offset = bit_size_ % 8;
+    const auto old_bits_free = 8 - old_bit_offset;
     const auto append_byte_size = MOTION::Helpers::Convert::BitsToBytes(append_bit_size);
     const auto new_bit_size = bit_size_ + append_bit_size;
     const auto new_byte_size = MOTION::Helpers::Convert::BitsToBytes(new_bit_size);
 
     if (new_bit_size <= 8u) {
+      // std::cerr << "case 1\n";
       if (bit_size_ == 0u) {
+        // std::cerr << "case 1a\n";
         data_vector_.emplace_back(*ptr);
       } else {
-        data_vector_.at(0) |= (*ptr >> old_bit_offset);
+        // std::cerr << "case 1b\n";
+        // data_vector_.at(0) |= (*ptr >> old_bit_offset);
+        data_vector_.at(0) |= (*ptr << old_bit_offset);
       }
     } else if (old_bit_offset == 0u) {
+      // std::cerr << "case 2\n";
       data_vector_.insert(data_vector_.end(), ptr, ptr + append_byte_size);
     } else if (old_bit_offset + append_bit_size <= 8u) {
-      data_vector_.at(data_vector_.size() - 1) |= *ptr >> old_bit_offset;
+      // std::cerr << "case 3\n";
+      // data_vector_.at(data_vector_.size() - 1) |= *ptr >> old_bit_offset;
+      data_vector_.at(data_vector_.size() - 1) |= *ptr << old_bit_offset;
     } else if (append_bit_size <= 8u) {
-      data_vector_.at(data_vector_.size() - 1) |= *ptr >> old_bit_offset;
-      if (old_bit_offset + append_bit_size > 8u) {
-        data_vector_.push_back(*ptr << (8 - old_bit_offset));
-      }
+      // std::cerr << "case 4\n";
+      // std::cerr << fmt::format("old_bit_offset: {}\n", old_bit_offset);
+      // std::cerr << fmt::format("append_bit_size: {}\n", append_bit_size);
+      // std::cerr << fmt::format("{:08b}\n", data_vector_[data_vector_.size()-1]);
+      // std::cerr << fmt::format("{:08b}\n", *ptr);
+      data_vector_.at(data_vector_.size() - 1) |= *ptr << old_bit_offset;
+      // if (old_bit_offset + append_bit_size > 8u) { // XXX: always true, cf. previous case
+        // data_vector_.push_back(*ptr << (8 - old_bit_offset));
+        data_vector_.push_back(*ptr >> old_bits_free);
+      // std::cerr << fmt::format("{:08b}\n", data_vector_[new_byte_size-2]);
+      // std::cerr << fmt::format("{:08b}\n", data_vector_[new_byte_size-1]);
+      // }
     } else {
+      // std::cerr << "case 5\n";
+      // std::cerr << fmt::format("old_bit_offset: {}\n", old_bit_offset);
+      // std::cerr << fmt::format("append_bit_size: {}\n", append_bit_size);
+      // std::cerr << fmt::format("old_byte_offset: {}\n", data_vector_.size() - 1);
+      // std::cerr << fmt::format("new_byte_size: {}\n", new_byte_size);
+      // std::cerr << fmt::format("append_byte_size: {}\n", append_byte_size);
+      // std::cerr << fmt::format("last byte old: {:08b}\n", data_vector_[data_vector_.size()-1]);
+      // std::cerr << "to append:";
+      // for (std::size_t i = append_byte_size; i > 0; --i) {
+      //   std::cerr << fmt::format(" {:08b}", ptr[i-1]);
+      // }
+      // std::cerr << "\n";
       auto old_byte_offset = data_vector_.size() - 1;
-      constexpr std::byte zero_byte = std::byte();
-      data_vector_.reserve(new_byte_size);
-      while (data_vector_.size() < new_byte_size) {
-        data_vector_.push_back(zero_byte);
+      // constexpr std::byte zero_byte = std::byte();
+      // data_vector_.reserve(new_byte_size);
+      data_vector_.resize(new_byte_size);  // additional std::byte will be default inserted with value 0x00
+      // while (data_vector_.size() < new_byte_size) {
+      //   data_vector_.push_back(zero_byte);
+      // }
+      for (std::size_t i = 0; i < append_byte_size - 1; ++i) {
+        auto byte = ptr[i];
+        data_vector_.at(old_byte_offset + i) |= byte << old_bit_offset;
+        data_vector_.at(old_byte_offset + i + 1) = byte >> old_bits_free;
       }
-      for (std::size_t i = 0; i < append_byte_size; ++i) {
-        data_vector_.at(old_byte_offset) |= (*(ptr + i) >> old_bit_offset);
-        const bool other_has_next_block = i + 1 < append_byte_size;
-        const bool last_shift_needed = old_bit_offset + (append_bit_size % 8) > 8u;
-        const bool other_fits_byte_size = append_bit_size % 8 == 0;
-        if (other_has_next_block || last_shift_needed || other_fits_byte_size) {
-          data_vector_.at(old_byte_offset + 1) |= *(ptr + i) << (8 - old_bit_offset);
+      // if (old_bit_offset + (append_bit_size % 8) > 8u) {
+      {
+        auto last_byte = ptr[append_byte_size - 1];
+        // data_vector_.at(new_byte_size - 1) = (last_byte >> old_bits_free);
+        data_vector_.at(old_byte_offset + append_byte_size - 1) |= (last_byte << old_bit_offset);
+        if (new_byte_size == old_byte_offset + append_byte_size + 1) {
+          data_vector_.at(new_byte_size - 1) |= (last_byte >> old_bits_free);
         }
-        ++old_byte_offset;
       }
+      // std::cerr << "updated: ";
+      // for (std::size_t i = new_byte_size; i > old_byte_offset; --i) {
+      //   std::cerr << fmt::format(" {:08b}", data_vector_[i-1]);
+      // }
+      // std::cerr << "\n";
+      // for (std::size_t i = 0; i < append_byte_size; ++i) {
+      //   // data_vector_.at(old_byte_offset) |= (*(ptr + i) >> old_bit_offset);
+      //   data_vector_.at(old_byte_offset) |= (*(ptr + i) << old_bit_offset);
+      //   const bool other_has_next_block = i + 1 < append_byte_size;
+      //   const bool last_shift_needed = old_bit_offset + (append_bit_size % 8) > 8u;
+      //   const bool other_fits_byte_size = append_bit_size % 8 == 0;
+      //   if (other_has_next_block || last_shift_needed || other_fits_byte_size) {
+      //     // data_vector_.at(old_byte_offset + 1) |= *(ptr + i) << (8 - old_bit_offset);
+      //     data_vector_.at(old_byte_offset + 1) |= *(ptr + i) >> old_bit_offset;
+      //   }
+      //   ++old_byte_offset;
+      // }
     }
     bit_size_ = new_bit_size;
   }
@@ -734,47 +798,66 @@ void BitVector<Allocator>::Copy(const std::size_t dest_from, const std::size_t d
   const auto dest_from_offset = dest_from % 8;
 
   if (dest_from_offset + num_bits < 8) {
-    const auto mask = (std::byte(0xFF) >> dest_from_offset) &
-                      (std::byte(0xFF) << (8 - dest_from_offset - num_bits));
+    // std::cerr << "case 1\n";
+    // const auto mask = (std::byte(0xFF) >> dest_from_offset) &
+    //                   (std::byte(0xFF) << (8 - dest_from_offset - num_bits));
+    const auto mask = (std::byte(0xFF) << dest_from_offset) &
+                      (std::byte(0xFF) >> (8 - dest_from_offset - num_bits));
     const auto from_bytes = dest_from / 8;
     data_vector_.at(from_bytes) &= ~mask;
-    data_vector_.at(from_bytes) |= (other.GetData().at(0) >> dest_from_offset) & mask;
+    // data_vector_.at(from_bytes) |= (other.GetData().at(0) >> dest_from_offset) & mask;
+    data_vector_.at(from_bytes) |= (other.GetData().at(0) << dest_from_offset) & mask;
   } else if ((dest_from % 8) == 0) {
+    // std::cerr << "case 2\n";
     const auto num_bytes = MOTION::Helpers::Convert::BitsToBytes(num_bits);
     const auto from_bytes = dest_from / 8;
     const auto dest_to_1 = dest_to_offset > 0 ? 1 : 0;
-    for (auto i = 0ull; i < num_bytes - dest_to_1; ++i) {
-      data_vector_.at(from_bytes + i) = other.GetData().at(i);
-    }
+    // for (auto i = 0ull; i < num_bytes - dest_to_1; ++i) {
+    //   data_vector_.at(from_bytes + i) = other.GetData().at(i);
+    // }
+    // XXX: use std::copy_n
+    std::copy_n(std::begin(other.data_vector_), num_bytes - dest_to_1,
+                std::begin(data_vector_) + from_bytes);
     if (dest_to_offset > 0) {
-      const auto mask = std::byte(0xFF) >> dest_to_offset;
+    // std::cerr << "case 2b\n";
+      // const auto mask = std::byte(0xFF) >> dest_to_offset;
+      const auto mask = std::byte(0xFF) << dest_to_offset;
       data_vector_.at(from_bytes + num_bytes - 1) &= mask;
       data_vector_.at(from_bytes + num_bytes - 1) |= (other.GetData().at(num_bytes - 1) & ~mask);
     }
   } else {
+    // std::cerr << "case 3\n";
     const auto num_bytes = MOTION::Helpers::Convert::BitsToBytes(dest_from_offset + num_bits);
     const auto num_complete_bytes =
         MOTION::Helpers::Convert::BitsToBytes(num_bits - (8 - dest_from_offset) - dest_to_offset);
     const auto dest_from_offset = dest_from % 8;
     BitVector tmp(dest_from_offset);
     if (num_bits != other.GetSize()) {
+      // std::cerr << "case 3a\n";
       tmp.Append(other.Subset(0, num_bits));
     } else {
+      // std::cerr << "case 3b\n";
       tmp.Append(other);
     }
     const auto from_bytes = dest_from / 8;
 
-    const auto mask = ~(std::byte(0xFF) >> dest_from_offset);
+    // const auto mask = ~(std::byte(0xFF) >> dest_from_offset);
+    const auto mask = ~(std::byte(0xFF) << dest_from_offset);
     data_vector_.at(from_bytes) &= mask;
     data_vector_.at(from_bytes) |= tmp.data_vector_.at(0);
 
     if (num_complete_bytes > 0u) {
-      std::copy(tmp.data_vector_.begin() + 1, tmp.data_vector_.begin() + num_complete_bytes + 1,
-                data_vector_.begin() + from_bytes + 1);
+      // std::cerr << "case 3c\n";
+      // std::copy(tmp.data_vector_.begin() + 1, tmp.data_vector_.begin() + num_complete_bytes + 1,
+      //           data_vector_.begin() + from_bytes + 1);
+      std::copy_n(tmp.data_vector_.begin() + 1, num_complete_bytes,
+                  data_vector_.begin() + from_bytes + 1);
     }
 
     if (dest_to_offset > 0) {
-      auto mask = std::byte(0xFFu >> dest_to_offset);
+      // std::cerr << "case 3d\n";
+      // auto mask = std::byte(0xFFu >> dest_to_offset);
+      auto mask = std::byte(0xFF) << dest_to_offset;
       data_vector_.at(from_bytes + num_bytes - 1) &= mask;
       data_vector_.at(from_bytes + num_bytes - 1) |=
           (tmp.data_vector_.at(tmp.data_vector_.size() - 1));
@@ -814,18 +897,21 @@ BitVector<Allocator> BitVector<Allocator>::Subset(std::size_t from, std::size_t 
               bv.data_vector_.begin());
   } else if (from_bit_offset + bv.bit_size_ <= 8u) {
     bv.data_vector_.at(0) = data_vector_.at(from / 8);
-    bv.data_vector_.at(0) <<= from_bit_offset;
+    // bv.data_vector_.at(0) <<= from_bit_offset;
+    bv.data_vector_.at(0) >>= from_bit_offset;
   } else {
     auto new_byte_offset = 0ull;
     auto bit_counter = 0ull;
     const auto max = bv.bit_size_;
     for (; bit_counter < max; ++new_byte_offset) {
-      auto left_part = data_vector_.at((from / 8) + new_byte_offset) << from_bit_offset;
+      // auto left_part = data_vector_.at((from / 8) + new_byte_offset) << from_bit_offset;
+      auto left_part = data_vector_.at((from / 8) + new_byte_offset) >> from_bit_offset;
       bv.data_vector_.at(new_byte_offset) |= left_part;
       bit_counter += 8 - from_bit_offset;
       if (bit_counter < max) {
         auto right_part =
-            data_vector_.at((from / 8) + new_byte_offset + 1) >> (8 - from_bit_offset);
+            // data_vector_.at((from / 8) + new_byte_offset + 1) >> (8 - from_bit_offset);
+            data_vector_.at((from / 8) + new_byte_offset + 1) << (8 - from_bit_offset);
         bv.data_vector_.at(new_byte_offset) |= right_part;
         bit_counter += from_bit_offset;
       }

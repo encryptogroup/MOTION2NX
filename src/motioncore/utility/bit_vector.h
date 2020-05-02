@@ -39,16 +39,16 @@
 
 namespace ENCRYPTO {
 constexpr std::byte SET_BIT_MASK[] = {
-    std::byte(0b10000000), std::byte(0b01000000), std::byte(0b00100000), std::byte(0b00010000),
-    std::byte(0b00001000), std::byte(0b00000100), std::byte(0b00000010), std::byte(0b00000001)};
+    std::byte(0b00000001), std::byte(0b00000010), std::byte(0b00000100), std::byte(0b00001000),
+    std::byte(0b00010000), std::byte(0b00100000), std::byte(0b01000000), std::byte(0b10000000)};
 
 constexpr std::byte UNSET_BIT_MASK[] = {
-    std::byte(0b01111111), std::byte(0b10111111), std::byte(0b11011111), std::byte(0b11101111),
-    std::byte(0b11110111), std::byte(0b11111011), std::byte(0b11111101), std::byte(0b11111110)};
+    std::byte(0b11111110), std::byte(0b11111101), std::byte(0b11111011), std::byte(0b11110111),
+    std::byte(0b11101111), std::byte(0b11011111), std::byte(0b10111111), std::byte(0b01111111)};
 
 constexpr std::byte TRUNCATION_BIT_MASK[] = {
-    std::byte(0b10000000), std::byte(0b11000000), std::byte(0b11100000), std::byte(0b111110000),
-    std::byte(0b11111000), std::byte(0b11111100), std::byte(0b11111110), std::byte(0b11111111)};
+    std::byte(0b00000001), std::byte(0b00000011), std::byte(0b00000111), std::byte(0b000001111),
+    std::byte(0b00011111), std::byte(0b00111111), std::byte(0b01111111), std::byte(0b11111111)};
 
 class BitSpan;
 
