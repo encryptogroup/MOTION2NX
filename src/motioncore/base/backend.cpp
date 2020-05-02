@@ -36,6 +36,7 @@
 #include "communication/communication_layer.h"
 #include "communication/message.h"
 #include "configuration.h"
+#include "crypto/arithmetic_provider.h"
 #include "crypto/base_ots/base_ot_provider.h"
 #include "crypto/bmr_provider.h"
 #include "crypto/motion_base_provider.h"
@@ -76,8 +77,12 @@ Backend::Backend(Communication::CommunicationLayer &communication_layer, Configu
   ot_provider_manager_ = std::make_unique<ENCRYPTO::ObliviousTransfer::OTProviderManager>(
       communication_layer_, *base_ot_provider_, *motion_base_provider_, logger_);
 
-  mt_provider_ = std::make_shared<MTProviderFromOTs>(ot_provider_manager_->get_providers(), my_id,
-                                                     *logger_, run_time_stats_.back());
+  arithmetic_provider_manager_ = std::make_unique<ArithmeticProviderManager>(
+      communication_layer_, *ot_provider_manager_, logger_);
+
+  mt_provider_ = std::make_shared<MTProviderFromOTs>(
+      my_id, communication_layer_.get_num_parties(), *arithmetic_provider_manager_,
+      *ot_provider_manager_, run_time_stats_.back(), logger_);
   sp_provider_ = std::make_shared<SPProviderFromOTs>(ot_provider_manager_->get_providers(), my_id,
                                                      *logger_, run_time_stats_.back());
   sb_provider_ = std::make_shared<SBProviderFromSPs>(communication_layer_, sp_provider_, *logger_,

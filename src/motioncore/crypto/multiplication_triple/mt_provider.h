@@ -37,6 +37,7 @@ namespace Statistics {
 struct RunTimeStats;
 }
 
+class ArithmeticProviderManager;
 class Logger;
 
 template <typename T, typename = std::enable_if_t<std::is_unsigned_v<T>>>
@@ -170,36 +171,27 @@ class MTProvider {
   }
 };
 
-class MTProviderFromOTs final : public MTProvider {
+class MTProviderFromOTs : public MTProvider {
  public:
-  MTProviderFromOTs(
-      std::vector<std::unique_ptr<ENCRYPTO::ObliviousTransfer::OTProvider>>& ot_providers,
-      const std::size_t my_id, Logger& logger, Statistics::RunTimeStats& run_time_stats);
+  MTProviderFromOTs(std::size_t my_id, std::size_t num_parties, ArithmeticProviderManager&,
+                    ENCRYPTO::ObliviousTransfer::OTProviderManager&, Statistics::RunTimeStats&,
+                    std::shared_ptr<Logger>);
   ~MTProviderFromOTs();
 
   void PreSetup() final;
-
-  // needs completed OTExtension
   void Setup() final;
 
  private:
-  void RegisterOTs();
-
-  void ParseOutputs();
-
-  std::vector<std::unique_ptr<ENCRYPTO::ObliviousTransfer::OTProvider>>& ot_providers_;
-
-  // use alternating party roles for load balancing
-  std::vector<std::list<std::shared_ptr<ENCRYPTO::ObliviousTransfer::OTVectorReceiver>>> ots_rcv_;
-  std::vector<std::list<std::shared_ptr<ENCRYPTO::ObliviousTransfer::OTVectorSender>>> ots_snd_;
-  std::vector<std::unique_ptr<ENCRYPTO::ObliviousTransfer::XCOTBitReceiver>> bit_ots_rcv_;
-  std::vector<std::unique_ptr<ENCRYPTO::ObliviousTransfer::XCOTBitSender>> bit_ots_snd_;
+  struct MTProviderFromOTsImpl;
+  std::unique_ptr<MTProviderFromOTsImpl> impl_;
 
   // divisible by 128
   static inline constexpr std::size_t max_batch_size_{16'384};
 
-  Logger& logger_;
+  ArithmeticProviderManager& arithmetic_manager_;
+  ENCRYPTO::ObliviousTransfer::OTProviderManager& ot_manager_;
   Statistics::RunTimeStats& run_time_stats_;
+  std::shared_ptr<Logger> logger_;
 };
 
 }  // namespace MOTION

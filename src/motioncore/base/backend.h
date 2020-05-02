@@ -318,6 +318,7 @@ class Backend : public std::enable_shared_from_this<Backend> {
   std::unique_ptr<Crypto::MotionBaseProvider> motion_base_provider_;
   std::unique_ptr<BaseOTProvider> base_ot_provider_;
   std::unique_ptr<ENCRYPTO::ObliviousTransfer::OTProviderManager> ot_provider_manager_;
+  std::unique_ptr<ArithmeticProviderManager> arithmetic_provider_manager_;
   std::shared_ptr<MTProvider> mt_provider_;
   std::shared_ptr<SPProvider> sp_provider_;
   std::shared_ptr<SBProvider> sb_provider_;

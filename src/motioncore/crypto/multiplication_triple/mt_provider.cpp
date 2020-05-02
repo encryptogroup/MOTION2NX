@@ -23,7 +23,9 @@
 // SOFTWARE.
 
 #include "mt_provider.h"
+#include <algorithm>
 
+#include "crypto/arithmetic_provider.h"
 #include "crypto/oblivious_transfer/ot_flavors.h"
 #include "statistics/run_time_stats.h"
 #include "utility/constants.h"
@@ -63,81 +65,11 @@ MTProvider::MTProvider(const std::size_t my_id, const std::size_t num_parties)
       std::make_shared<ENCRYPTO::FiberCondition>([this]() { return finished_.load(); });
 }
 
-MTProviderFromOTs::MTProviderFromOTs(
-    std::vector<std::unique_ptr<ENCRYPTO::ObliviousTransfer::OTProvider>>& ot_providers,
-    const std::size_t my_id, Logger& logger, Statistics::RunTimeStats& run_time_stats)
-    : MTProvider(my_id, ot_providers.size()),
-      ot_providers_(ot_providers),
-      ots_rcv_(num_parties_),
-      ots_snd_(num_parties_),
-      bit_ots_rcv_(num_parties_),
-      bit_ots_snd_(num_parties_),
-      logger_(logger),
-      run_time_stats_(run_time_stats) {}
+// ---------- MTProviderFromOTs ----------
 
-MTProviderFromOTs::~MTProviderFromOTs() = default;
+namespace {
 
-void MTProviderFromOTs::PreSetup() {
-  if (!NeedMTs()) {
-    return;
-  }
-
-  if constexpr (MOTION_DEBUG) {
-    logger_.LogDebug("Start computing presetup for MTs");
-  }
-  run_time_stats_.record_start<Statistics::RunTimeStats::StatID::mt_presetup>();
-
-  RegisterOTs();
-
-  run_time_stats_.record_end<Statistics::RunTimeStats::StatID::mt_presetup>();
-  if constexpr (MOTION_DEBUG) {
-    logger_.LogDebug("Finished computing presetup for MTs");
-  }
-}
-
-// needs completed OTExtension
-void MTProviderFromOTs::Setup() {
-  if (!NeedMTs()) {
-    return;
-  }
-
-  if constexpr (MOTION_DEBUG) {
-    logger_.LogDebug("Start computing setup for MTs");
-  }
-  run_time_stats_.record_start<Statistics::RunTimeStats::StatID::mt_setup>();
-
-#pragma omp parallel for
-  for (auto i = 0ull; i < num_parties_; ++i) {
-    if (i == my_id_) {
-      continue;
-    }
-    for (auto& ot : ots_snd_.at(i)) {
-      ot->SendMessages();
-    }
-    for (auto& ot : ots_rcv_.at(i)) {
-      ot->SendCorrections();
-    }
-    if (num_bit_mts_ > 0) {
-      assert(bit_ots_rcv_.at(i) != nullptr);
-      assert(bit_ots_snd_.at(i) != nullptr);
-      bit_ots_rcv_.at(i)->SendCorrections();
-      bit_ots_snd_.at(i)->SendMessages();
-    }
-  }
-  ParseOutputs();
-  {
-    std::scoped_lock lock(finished_condition_->GetMutex());
-    finished_ = true;
-  }
-  finished_condition_->NotifyAll();
-
-  run_time_stats_.record_end<Statistics::RunTimeStats::StatID::mt_setup>();
-  if constexpr (MOTION_DEBUG) {
-    logger_.LogDebug("Finished computing setup for MTs");
-  }
-}
-
-static void generate_random_triples_bool(BinaryMTVector& bit_mts, std::size_t num_bit_mts) {
+void generate_random_triples_bool(BinaryMTVector& bit_mts, std::size_t num_bit_mts) {
   if (num_bit_mts > 0u) {
     bit_mts.a = ENCRYPTO::BitVector<>::Random(num_bit_mts);
     bit_mts.b = ENCRYPTO::BitVector<>::Random(num_bit_mts);
@@ -146,7 +78,7 @@ static void generate_random_triples_bool(BinaryMTVector& bit_mts, std::size_t nu
 }
 
 template <typename T>
-static void generate_random_triples(IntegerMTVector<T>& mts, std::size_t num_mts) {
+void generate_random_triples(IntegerMTVector<T>& mts, std::size_t num_mts) {
   if (num_mts > 0u) {
     mts.a = Helpers::RandomVector<T>(num_mts);
     mts.b = Helpers::RandomVector<T>(num_mts);
@@ -156,11 +88,10 @@ static void generate_random_triples(IntegerMTVector<T>& mts, std::size_t num_mts
   }
 }
 
-static void register_helper_bool(
-    ENCRYPTO::ObliviousTransfer::OTProvider& ot_provider,
-    std::unique_ptr<ENCRYPTO::ObliviousTransfer::XCOTBitSender>& ots_snd,
-    std::unique_ptr<ENCRYPTO::ObliviousTransfer::XCOTBitReceiver>& ots_rcv,
-    const BinaryMTVector& bit_mts, std::size_t num_bit_mts) {
+void register_helper_bool(ENCRYPTO::ObliviousTransfer::OTProvider& ot_provider,
+                          std::unique_ptr<ENCRYPTO::ObliviousTransfer::XCOTBitSender>& ots_snd,
+                          std::unique_ptr<ENCRYPTO::ObliviousTransfer::XCOTBitReceiver>& ots_rcv,
+                          const BinaryMTVector& bit_mts, std::size_t num_bit_mts) {
   ots_snd = ot_provider.RegisterSendXCOTBit(num_bit_mts);
   ots_rcv = ot_provider.RegisterReceiveXCOTBit(num_bit_mts);
 
@@ -169,133 +100,269 @@ static void register_helper_bool(
 }
 
 template <typename T>
-static void register_helper(
-    ENCRYPTO::ObliviousTransfer::OTProvider& ot_provider,
-    std::list<std::shared_ptr<ENCRYPTO::ObliviousTransfer::OTVectorSender>>& ots_snd,
-    std::list<std::shared_ptr<ENCRYPTO::ObliviousTransfer::OTVectorReceiver>>& ots_rcv,
-    std::size_t max_batch_size, const IntegerMTVector<T>& mts, std::size_t num_mts) {
-  constexpr std::size_t bit_size = sizeof(T) * 8;
-  constexpr auto ACOT = ENCRYPTO::ObliviousTransfer::OTProtocol::ACOT;
-
+void register_multiplications_helper(
+    ArithmeticProvider& arithmetic_provider,
+    std::list<std::unique_ptr<IntegerMultiplicationSender<T>>>& mult_senders,
+    std::list<std::unique_ptr<IntegerMultiplicationReceiver<T>>>& mult_receivers,
+    std::size_t max_batch_size, std::size_t num_mts) {
   for (std::size_t mt_id = 0; mt_id < num_mts;) {
-    const auto batch_size = std::min(max_batch_size, num_mts - mt_id);
-    auto ot_s = ot_provider.RegisterSend(bit_size, batch_size * bit_size, ACOT);
-    std::vector<ENCRYPTO::BitVector<>> v_s;
-    v_s.reserve(batch_size);
-    for (auto k = 0ull; k < batch_size; ++k) {
-      for (auto bit_i = 0u; bit_i < bit_size; ++bit_i) {
-        const T input = mts.a.at(mt_id + k) << bit_i;
-        v_s.emplace_back(reinterpret_cast<const std::byte*>(&input), bit_size);
-      }
-    }
-    ot_s->SetInputs(std::move(v_s));
+    auto batch_size = std::min(max_batch_size, num_mts - mt_id);
 
-    auto ot_r = ot_provider.RegisterReceive(bit_size, batch_size * bit_size, ACOT);
-    ENCRYPTO::BitVector<> choices;
-    choices.Reserve(Helpers::Convert::BitsToBytes(batch_size * bit_size));
-    for (auto k = 0ull; k < batch_size; ++k) {
-      for (auto bit_i = 0u; bit_i < bit_size; ++bit_i) {
-        const bool choice = ((mts.b.at(mt_id + k) >> bit_i) & 1u) == 1;
-        choices.Append(choice);
-      }
-    }
-    ot_r->SetChoices(std::move(choices));
-
-    ots_snd.emplace_back(std::move(ot_s));
-    ots_rcv.emplace_back(std::move(ot_r));
+    auto mult_sender = arithmetic_provider.register_integer_multiplication_send<T>(batch_size);
+    auto mult_receiver = arithmetic_provider.register_integer_multiplication_receive<T>(batch_size);
+    mult_senders.push_back(std::move(mult_sender));
+    mult_receivers.push_back(std::move(mult_receiver));
 
     mt_id += batch_size;
   }
 }
 
-void MTProviderFromOTs::RegisterOTs() {
-  if (num_bit_mts_ > 0) {
-    generate_random_triples_bool(bit_mts_, num_bit_mts_);
-  }
-  generate_random_triples<std::uint8_t>(mts8_, num_mts_8_);
-  generate_random_triples<std::uint16_t>(mts16_, num_mts_16_);
-  generate_random_triples<std::uint32_t>(mts32_, num_mts_32_);
-  generate_random_triples<std::uint64_t>(mts64_, num_mts_64_);
+template <typename T>
+void start_multiplications_helper(
+    std::list<std::unique_ptr<IntegerMultiplicationSender<T>>>& mult_senders,
+    std::list<std::unique_ptr<IntegerMultiplicationReceiver<T>>>& mult_receivers,
+    std::size_t max_batch_size, std::size_t num_mts, const IntegerMTVector<T>& mts) {
+  auto it_sender = std::begin(mult_senders);
+  auto it_receiver = std::begin(mult_receivers);
+  for (std::size_t mt_id = 0; mt_id < num_mts; mt_id += max_batch_size) {
+    (*it_sender)->set_inputs(mts.a.data() + mt_id);
+    (*it_receiver)->set_inputs(mts.b.data() + mt_id);
 
-#pragma omp parallel for num_threads(num_parties_)
-  for (auto i = 0ull; i < num_parties_; ++i) {
-    if (i == my_id_) {
-      continue;
-    }
-
-    if (num_bit_mts_ > 0) {
-      register_helper_bool(*ot_providers_.at(i), bit_ots_snd_.at(i), bit_ots_rcv_.at(i), bit_mts_,
-                           num_bit_mts_);
-    }
-    register_helper<std::uint8_t>(*ot_providers_.at(i), ots_snd_.at(i), ots_rcv_.at(i),
-                                  max_batch_size_, mts8_, num_mts_8_);
-    register_helper<std::uint16_t>(*ot_providers_.at(i), ots_snd_.at(i), ots_rcv_.at(i),
-                                   max_batch_size_, mts16_, num_mts_16_);
-    register_helper<std::uint32_t>(*ot_providers_.at(i), ots_snd_.at(i), ots_rcv_.at(i),
-                                   max_batch_size_, mts32_, num_mts_32_);
-    register_helper<std::uint64_t>(*ot_providers_.at(i), ots_snd_.at(i), ots_rcv_.at(i),
-                                   max_batch_size_, mts64_, num_mts_64_);
+    ++it_sender;
+    ++it_receiver;
   }
 }
 
-static void parse_helper_bool(
-    std::unique_ptr<ENCRYPTO::ObliviousTransfer::XCOTBitSender>& ots_snd,
-    std::unique_ptr<ENCRYPTO::ObliviousTransfer::XCOTBitReceiver>& ots_rcv,
-    BinaryMTVector& bit_mts) {
-  ots_snd->ComputeOutputs();
-  ots_rcv->ComputeOutputs();
-  const auto& out_s = ots_snd->GetOutputs();
-  const auto& out_r = ots_rcv->GetOutputs();
+template <typename T>
+void compute_multiplications_helper(
+    std::list<std::unique_ptr<IntegerMultiplicationSender<T>>>& mult_senders,
+    std::list<std::unique_ptr<IntegerMultiplicationReceiver<T>>>& mult_receivers) {
+  for (auto& sender : mult_senders) {
+    sender->compute_outputs();
+  }
+  for (auto& receiver : mult_receivers) {
+    receiver->compute_outputs();
+  }
+}
+
+void finish_mts_helper_bool(ENCRYPTO::ObliviousTransfer::XCOTBitSender& ot_sender,
+                            ENCRYPTO::ObliviousTransfer::XCOTBitReceiver& ot_receiver,
+                            BinaryMTVector& bit_mts) {
+  const auto& out_s = ot_sender.GetOutputs();
+  const auto& out_r = ot_receiver.GetOutputs();
   bit_mts.c ^= out_s;
   bit_mts.c ^= out_r;
 }
 
 template <typename T>
-static void parse_helper(
-    std::list<std::shared_ptr<ENCRYPTO::ObliviousTransfer::OTVectorSender>>& ots_snd,
-    std::list<std::shared_ptr<ENCRYPTO::ObliviousTransfer::OTVectorReceiver>>& ots_rcv,
-    std::size_t max_batch_size, IntegerMTVector<T>& mts, std::size_t num_mts) {
-  constexpr std::size_t bit_size = sizeof(T) * 8;
-
-  for (std::size_t mt_id = 0; mt_id < num_mts;) {
-    const auto batch_size = std::min(max_batch_size, num_mts - mt_id);
-    const auto& ot_s = ots_snd.front();
-    const auto& ot_r = ots_rcv.front();
-    const auto& out_s = ot_s->GetOutputs();
-    const auto& out_r = ot_r->GetOutputs();
-    for (auto j = 0ull; j < batch_size; ++j) {
-      for (auto bit_i = 0u; bit_i < bit_size; ++bit_i) {
-        mts.c.at(mt_id + j) += *reinterpret_cast<const T* __restrict__>(
-                                   out_r.at(j * bit_size + bit_i).GetData().data()) -
-                               *reinterpret_cast<const T* __restrict__>(
-                                   out_s.at(j * bit_size + bit_i).GetData().data());
-      }
+void finish_mts_helper(std::list<std::unique_ptr<IntegerMultiplicationSender<T>>>& mult_senders,
+                       std::list<std::unique_ptr<IntegerMultiplicationReceiver<T>>>& mult_receivers,
+                       std::size_t max_batch_size, std::size_t num_mts, IntegerMTVector<T>& mts) {
+  auto it_sender = std::begin(mult_senders);
+  auto it_receiver = std::begin(mult_receivers);
+  for (std::size_t mt_id = 0; mt_id < num_mts; mt_id += max_batch_size) {
+    const auto share_s = (*it_sender)->get_outputs();
+    const auto share_r = (*it_receiver)->get_outputs();
+    for (std::size_t i = 0; i < share_s.size(); ++i) {
+      mts.c.at(mt_id + i) += share_s[i] + share_r[i];
     }
-    ots_snd.pop_front();
-    ots_rcv.pop_front();
-    mt_id += batch_size;
+
+    ++it_sender;
+    ++it_receiver;
   }
 }
 
-void MTProviderFromOTs::ParseOutputs() {
-  for (auto i = 0ull; i < num_parties_; ++i) {
-    if (i == my_id_) {
+}  // namespace
+
+struct MTProviderFromOTs::MTProviderFromOTsImpl {
+  MTProviderFromOTsImpl(std::size_t num_parties);
+
+  std::vector<std::unique_ptr<ENCRYPTO::ObliviousTransfer::XCOTBitSender>> bit_xcots_senders_;
+  std::vector<std::unique_ptr<ENCRYPTO::ObliviousTransfer::XCOTBitReceiver>> bit_xcots_receivers_;
+  std::vector<std::list<std::unique_ptr<IntegerMultiplicationSender<std::uint8_t>>>>
+      mult_senders_8_;
+  std::vector<std::list<std::unique_ptr<IntegerMultiplicationReceiver<std::uint8_t>>>>
+      mult_receivers_8_;
+  std::vector<std::list<std::unique_ptr<IntegerMultiplicationSender<std::uint16_t>>>>
+      mult_senders_16_;
+  std::vector<std::list<std::unique_ptr<IntegerMultiplicationReceiver<std::uint16_t>>>>
+      mult_receivers_16_;
+  std::vector<std::list<std::unique_ptr<IntegerMultiplicationSender<std::uint32_t>>>>
+      mult_senders_32_;
+  std::vector<std::list<std::unique_ptr<IntegerMultiplicationReceiver<std::uint32_t>>>>
+      mult_receivers_32_;
+  std::vector<std::list<std::unique_ptr<IntegerMultiplicationSender<std::uint64_t>>>>
+      mult_senders_64_;
+  std::vector<std::list<std::unique_ptr<IntegerMultiplicationReceiver<std::uint64_t>>>>
+      mult_receivers_64_;
+};
+
+MTProviderFromOTs::MTProviderFromOTsImpl::MTProviderFromOTsImpl(std::size_t num_parties)
+    : bit_xcots_senders_(num_parties),
+      bit_xcots_receivers_(num_parties),
+      mult_senders_8_(num_parties),
+      mult_receivers_8_(num_parties),
+      mult_senders_16_(num_parties),
+      mult_receivers_16_(num_parties),
+      mult_senders_32_(num_parties),
+      mult_receivers_32_(num_parties),
+      mult_senders_64_(num_parties),
+      mult_receivers_64_(num_parties) {}
+
+MTProviderFromOTs::MTProviderFromOTs(std::size_t my_id, std::size_t num_parties,
+                                     ArithmeticProviderManager& arithmetic_manager,
+                                     ENCRYPTO::ObliviousTransfer::OTProviderManager& ot_manager,
+                                     Statistics::RunTimeStats& run_time_stats,
+                                     std::shared_ptr<Logger> logger)
+    : MTProvider(my_id, num_parties),
+      impl_(std::make_unique<MTProviderFromOTsImpl>(num_parties)),
+      arithmetic_manager_(arithmetic_manager),
+      ot_manager_(ot_manager),
+      run_time_stats_(run_time_stats),
+      logger_(logger) {}
+
+MTProviderFromOTs::~MTProviderFromOTs() = default;
+
+void MTProviderFromOTs::PreSetup() {
+  if constexpr (MOTION_DEBUG) {
+    if (logger_) {
+      logger_->LogDebug("Start computing presetup for MTs");
+    }
+  }
+  run_time_stats_.record_start<Statistics::RunTimeStats::StatID::mt_presetup>();
+
+  generate_random_triples_bool(bit_mts_, num_bit_mts_);
+  generate_random_triples<std::uint8_t>(mts8_, num_mts_8_);
+  generate_random_triples<std::uint16_t>(mts16_, num_mts_16_);
+  generate_random_triples<std::uint32_t>(mts32_, num_mts_32_);
+  generate_random_triples<std::uint64_t>(mts64_, num_mts_64_);
+
+  for (std::size_t party_id = 0; party_id < num_parties_; ++party_id) {
+    if (party_id == my_id_) {
       continue;
     }
 
     if (num_bit_mts_ > 0) {
-      parse_helper_bool(bit_ots_snd_.at(i), bit_ots_rcv_.at(i), bit_mts_);
+      register_helper_bool(ot_manager_.get_provider(party_id),
+                           impl_->bit_xcots_senders_.at(party_id),
+                           impl_->bit_xcots_receivers_.at(party_id), bit_mts_, num_bit_mts_);
     }
-    parse_helper<std::uint8_t>(ots_snd_.at(i), ots_rcv_.at(i), max_batch_size_, mts8_, num_mts_8_);
-    parse_helper<std::uint16_t>(ots_snd_.at(i), ots_rcv_.at(i), max_batch_size_, mts16_,
-                                num_mts_16_);
-    parse_helper<std::uint32_t>(ots_snd_.at(i), ots_rcv_.at(i), max_batch_size_, mts32_,
-                                num_mts_32_);
-    parse_helper<std::uint64_t>(ots_snd_.at(i), ots_rcv_.at(i), max_batch_size_, mts64_,
-                                num_mts_64_);
+    register_multiplications_helper<std::uint8_t>(
+        arithmetic_manager_.get_provider(party_id), impl_->mult_senders_8_.at(party_id),
+        impl_->mult_receivers_8_.at(party_id), max_batch_size_, num_mts_8_);
+    register_multiplications_helper<std::uint16_t>(
+        arithmetic_manager_.get_provider(party_id), impl_->mult_senders_16_.at(party_id),
+        impl_->mult_receivers_16_.at(party_id), max_batch_size_, num_mts_16_);
+    register_multiplications_helper<std::uint32_t>(
+        arithmetic_manager_.get_provider(party_id), impl_->mult_senders_32_.at(party_id),
+        impl_->mult_receivers_32_.at(party_id), max_batch_size_, num_mts_32_);
+    register_multiplications_helper<std::uint64_t>(
+        arithmetic_manager_.get_provider(party_id), impl_->mult_senders_64_.at(party_id),
+        impl_->mult_receivers_64_.at(party_id), max_batch_size_, num_mts_64_);
+  }
 
-    assert(ots_snd_.at(i).empty());
-    assert(ots_rcv_.at(i).empty());
+  run_time_stats_.record_end<Statistics::RunTimeStats::StatID::mt_presetup>();
+  if constexpr (MOTION_DEBUG) {
+    if (logger_) {
+      logger_->LogDebug("Finished computing presetup for MTs");
+    }
   }
 }
+
+void MTProviderFromOTs::Setup() {
+  if constexpr (MOTION_DEBUG) {
+    if (logger_) {
+      logger_->LogDebug("Start computing setup for MTs");
+    }
+  }
+  run_time_stats_.record_start<Statistics::RunTimeStats::StatID::mt_setup>();
+
+  std::vector<std::future<void>> futures;
+  futures.reserve(num_parties_ - 1);
+
+  for (std::size_t party_id = 0; party_id < num_parties_; ++party_id) {
+    if (party_id == my_id_) {
+      continue;
+    }
+    futures.emplace_back(std::async(std::launch::async, [this, party_id] {
+      // prepare and send messages
+      if (num_bit_mts_ > 0) {
+        assert(impl_->bit_xcots_senders_.at(party_id) != nullptr);
+        assert(impl_->bit_xcots_receivers_.at(party_id) != nullptr);
+        impl_->bit_xcots_senders_.at(party_id)->SendMessages();
+        impl_->bit_xcots_receivers_.at(party_id)->SendCorrections();
+      }
+      start_multiplications_helper<std::uint8_t>(impl_->mult_senders_8_.at(party_id),
+                                                 impl_->mult_receivers_8_.at(party_id),
+                                                 max_batch_size_, num_mts_8_, mts8_);
+      start_multiplications_helper<std::uint16_t>(impl_->mult_senders_16_.at(party_id),
+                                                  impl_->mult_receivers_16_.at(party_id),
+                                                  max_batch_size_, num_mts_16_, mts16_);
+      start_multiplications_helper<std::uint32_t>(impl_->mult_senders_32_.at(party_id),
+                                                  impl_->mult_receivers_32_.at(party_id),
+                                                  max_batch_size_, num_mts_32_, mts32_);
+      start_multiplications_helper<std::uint64_t>(impl_->mult_senders_64_.at(party_id),
+                                                  impl_->mult_receivers_64_.at(party_id),
+                                                  max_batch_size_, num_mts_64_, mts64_);
+
+      // finish the OTs and multiplications
+      if (num_bit_mts_ > 0) {
+        assert(impl_->bit_xcots_senders_.at(party_id) != nullptr);
+        assert(impl_->bit_xcots_receivers_.at(party_id) != nullptr);
+        impl_->bit_xcots_senders_.at(party_id)->ComputeOutputs();
+        impl_->bit_xcots_receivers_.at(party_id)->ComputeOutputs();
+      }
+      compute_multiplications_helper<std::uint8_t>(impl_->mult_senders_8_.at(party_id),
+                                                   impl_->mult_receivers_8_.at(party_id));
+      compute_multiplications_helper<std::uint16_t>(impl_->mult_senders_16_.at(party_id),
+                                                    impl_->mult_receivers_16_.at(party_id));
+      compute_multiplications_helper<std::uint32_t>(impl_->mult_senders_32_.at(party_id),
+                                                    impl_->mult_receivers_32_.at(party_id));
+      compute_multiplications_helper<std::uint64_t>(impl_->mult_senders_64_.at(party_id),
+                                                    impl_->mult_receivers_64_.at(party_id));
+    }));
+  }
+
+  std::for_each(std::begin(futures), std::end(futures), [](auto& f) { f.get(); });
+
+  // finish computation of MTs (would need synchronization)
+  for (std::size_t party_id = 0; party_id < num_parties_; ++party_id) {
+    if (party_id == my_id_) {
+      continue;
+    }
+    if (num_bit_mts_ > 0) {
+      assert(impl_->bit_xcots_senders_.at(party_id) != nullptr);
+      assert(impl_->bit_xcots_receivers_.at(party_id) != nullptr);
+      finish_mts_helper_bool(*impl_->bit_xcots_senders_.at(party_id),
+                             *impl_->bit_xcots_receivers_.at(party_id), bit_mts_);
+    }
+    finish_mts_helper<std::uint8_t>(impl_->mult_senders_8_.at(party_id),
+                                    impl_->mult_receivers_8_.at(party_id), max_batch_size_,
+                                    num_mts_8_, mts8_);
+    finish_mts_helper<std::uint16_t>(impl_->mult_senders_16_.at(party_id),
+                                     impl_->mult_receivers_16_.at(party_id), max_batch_size_,
+                                     num_mts_16_, mts16_);
+    finish_mts_helper<std::uint32_t>(impl_->mult_senders_32_.at(party_id),
+                                     impl_->mult_receivers_32_.at(party_id), max_batch_size_,
+                                     num_mts_32_, mts32_);
+    finish_mts_helper<std::uint64_t>(impl_->mult_senders_64_.at(party_id),
+                                     impl_->mult_receivers_64_.at(party_id), max_batch_size_,
+                                     num_mts_64_, mts64_);
+  }
+
+  // signal MTs are ready
+  {
+    std::scoped_lock lock(finished_condition_->GetMutex());
+    finished_ = true;
+  }
+  finished_condition_->NotifyAll();
+
+  run_time_stats_.record_end<Statistics::RunTimeStats::StatID::mt_setup>();
+  if constexpr (MOTION_DEBUG) {
+    if (logger_) {
+      logger_->LogDebug("Finished computing setup for MTs");
+    }
+  }
+}
+
 }  // namespace MOTION
