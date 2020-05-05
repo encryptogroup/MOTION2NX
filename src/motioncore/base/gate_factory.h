@@ -39,20 +39,61 @@ class NewWire;
 constexpr std::size_t ALL_PARTIES = std::numeric_limits<std::size_t>::max();
 using WireVector = std::vector<std::shared_ptr<NewWire>>;
 using BitValues = std::vector<ENCRYPTO::BitVector<>>;
+template <typename T>
+using IntegerValues = std::vector<T>;
 
 class GateFactory {
  public:
+  virtual ~GateFactory() = 0;
+
+  virtual std::string get_provider_name() const noexcept = 0;
+
+  // Boolean inputs
   virtual std::pair<ENCRYPTO::ReusableFiberPromise<BitValues>, WireVector>
   make_boolean_input_gate_my(std::size_t input_owner, std::size_t num_wires,
-                             std::size_t num_simd) = 0;
+                             std::size_t num_simd);
 
   virtual WireVector make_boolean_input_gate_other(std::size_t input_owner, std::size_t num_wires,
-                                                   std::size_t num_simd) = 0;
+                                                   std::size_t num_simd);
 
+  // arithmetic inputs
+  virtual std::pair<ENCRYPTO::ReusableFiberPromise<IntegerValues<std::uint8_t>>, WireVector>
+  make_arithmetic_8_input_gate_my(std::size_t input_owner, std::size_t num_simd);
+  virtual std::pair<ENCRYPTO::ReusableFiberPromise<IntegerValues<std::uint16_t>>, WireVector>
+  make_arithmetic_16_input_gate_my(std::size_t input_owner, std::size_t num_simd);
+  virtual std::pair<ENCRYPTO::ReusableFiberPromise<IntegerValues<std::uint32_t>>, WireVector>
+  make_arithmetic_32_input_gate_my(std::size_t input_owner, std::size_t num_simd);
+  virtual std::pair<ENCRYPTO::ReusableFiberPromise<IntegerValues<std::uint64_t>>, WireVector>
+  make_arithmetic_64_input_gate_my(std::size_t input_owner, std::size_t num_simd);
+
+  virtual WireVector make_arithmetic_8_input_gate_other(std::size_t input_owner,
+                                                        std::size_t num_simd);
+  virtual WireVector make_arithmetic_16_input_gate_other(std::size_t input_owner,
+                                                         std::size_t num_simd);
+  virtual WireVector make_arithmetic_32_input_gate_other(std::size_t input_owner,
+                                                         std::size_t num_simd);
+  virtual WireVector make_arithmetic_64_input_gate_other(std::size_t input_owner,
+                                                         std::size_t num_simd);
+
+  // Boolean outputs
   virtual ENCRYPTO::ReusableFiberFuture<BitValues> make_boolean_output_gate_my(
-      std::size_t output_owner, const WireVector&) = 0;
+      std::size_t output_owner, const WireVector&);
 
-  virtual void make_boolean_output_gate_other(std::size_t output_owner, const WireVector&) = 0;
+  virtual void make_boolean_output_gate_other(std::size_t output_owner, const WireVector&);
+
+  // arithmetic outputs
+  virtual ENCRYPTO::ReusableFiberFuture<IntegerValues<std::uint8_t>>
+  make_arithmetic_8_output_gate_my(std::size_t output_owner, const WireVector&);
+  virtual ENCRYPTO::ReusableFiberFuture<IntegerValues<std::uint16_t>>
+  make_arithmetic_16_output_gate_my(std::size_t output_owner, const WireVector&);
+  virtual ENCRYPTO::ReusableFiberFuture<IntegerValues<std::uint32_t>>
+  make_arithmetic_32_output_gate_my(std::size_t output_owner, const WireVector&);
+  virtual ENCRYPTO::ReusableFiberFuture<IntegerValues<std::uint64_t>>
+  make_arithmetic_64_output_gate_my(std::size_t output_owner, const WireVector&);
+
+  virtual void make_arithmetic_output_gate_other(std::size_t output_owner, const WireVector&);
+
+  // function gates
 
   virtual WireVector make_unary_gate(ENCRYPTO::PrimitiveOperationType op, const WireVector&) = 0;
 
