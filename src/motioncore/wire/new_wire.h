@@ -37,6 +37,7 @@ class NewWire : public ENCRYPTO::enable_wait_online {
   virtual ~NewWire() = default;
   virtual MPCProtocol get_protocol() const noexcept = 0;
   std::size_t get_num_simd() const noexcept { return num_simd_; }
+  virtual std::size_t get_bit_size() const noexcept = 0;
 
  protected:
   NewWire(std::size_t num_simd) noexcept : num_simd_(num_simd) {}
