@@ -26,15 +26,22 @@
 
 #include "base/gate_factory.h"
 #include "utility/bit_vector.h"
+#include "utility/enable_wait.h"
+#include "utility/type_traits.hpp"
 
 namespace MOTION {
 
 class GateRegister;
 class Logger;
+class MTProvider;
 class NewWire;
 
 namespace Communication {
 class CommunicationLayer;
+}
+
+namespace Crypto {
+class MotionBaseProvider;
 }
 
 namespace proto::gmw {
@@ -46,26 +53,75 @@ using BooleanGMWWireVector = std::vector<std::shared_ptr<BooleanGMWWire>>;
 
 struct GMWMessageHandler;
 
-class GMWProvider : public GateFactory {
+class GMWProvider : public GateFactory, public ENCRYPTO::enable_wait_setup {
  public:
   enum class Role { garbler, evaluator };
   struct my_input_t {};
 
-  GMWProvider(Communication::CommunicationLayer&, GateRegister&, std::shared_ptr<Logger>);
+  GMWProvider(Communication::CommunicationLayer&, GateRegister&, Crypto::MotionBaseProvider&,
+              MTProvider&, std::shared_ptr<Logger>);
   ~GMWProvider();
 
-  ENCRYPTO::ReusableFiberFuture<std::vector<ENCRYPTO::BitVector<>>> make_output_gate(
-      OutputRecipient, const std::vector<std::shared_ptr<NewWire>>&);
+  std::string get_provider_name() const noexcept override { return "GMWProvider"; }
+
+  void setup();
+  Crypto::MotionBaseProvider& get_motion_base_provider() noexcept { return motion_base_provider_; }
+  MTProvider& get_mt_provider() noexcept { return mt_provider_; }
+  std::shared_ptr<Logger> get_logger() const noexcept { return logger_; }
+  bool is_my_job(std::size_t gate_id) const noexcept;
+  std::size_t get_my_id() const noexcept { return my_id_; }
+  std::size_t get_num_parties() const noexcept { return num_parties_; }
+
+  std::size_t get_next_input_id(std::size_t num_inputs) noexcept;
+
+  // ENCRYPTO::ReusableFiberFuture<std::vector<ENCRYPTO::BitVector<>>> make_output_gate(
+  //     OutputRecipient, const std::vector<std::shared_ptr<NewWire>>&);
 
   // Implementation of GateFactors interface
+
+  // Boolean inputs
   std::pair<ENCRYPTO::ReusableFiberPromise<BitValues>, WireVector> make_boolean_input_gate_my(
       std::size_t input_owner, std::size_t num_wires, std::size_t num_simd) override;
   WireVector make_boolean_input_gate_other(std::size_t input_owner, std::size_t num_wires,
                                            std::size_t num_simd) override;
+
+  // arithmetic inputs
+  std::pair<ENCRYPTO::ReusableFiberPromise<IntegerValues<std::uint8_t>>, WireVector>
+  make_arithmetic_8_input_gate_my(std::size_t input_owner, std::size_t num_simd) override;
+  std::pair<ENCRYPTO::ReusableFiberPromise<IntegerValues<std::uint16_t>>, WireVector>
+  make_arithmetic_16_input_gate_my(std::size_t input_owner, std::size_t num_simd) override;
+  std::pair<ENCRYPTO::ReusableFiberPromise<IntegerValues<std::uint32_t>>, WireVector>
+  make_arithmetic_32_input_gate_my(std::size_t input_owner, std::size_t num_simd) override;
+  std::pair<ENCRYPTO::ReusableFiberPromise<IntegerValues<std::uint64_t>>, WireVector>
+  make_arithmetic_64_input_gate_my(std::size_t input_owner, std::size_t num_simd) override;
+
+  WireVector make_arithmetic_8_input_gate_other(std::size_t input_owner,
+                                                std::size_t num_simd) override;
+  WireVector make_arithmetic_16_input_gate_other(std::size_t input_owner,
+                                                 std::size_t num_simd) override;
+  WireVector make_arithmetic_32_input_gate_other(std::size_t input_owner,
+                                                 std::size_t num_simd) override;
+  WireVector make_arithmetic_64_input_gate_other(std::size_t input_owner,
+                                                 std::size_t num_simd) override;
+
+  // Boolean outputs
   ENCRYPTO::ReusableFiberFuture<BitValues> make_boolean_output_gate_my(std::size_t output_owner,
                                                                        const WireVector&) override;
   void make_boolean_output_gate_other(std::size_t output_owner, const WireVector&) override;
 
+  // arithmetic outputs
+  ENCRYPTO::ReusableFiberFuture<IntegerValues<std::uint8_t>> make_arithmetic_8_output_gate_my(
+      std::size_t output_owner, const WireVector&) override;
+  ENCRYPTO::ReusableFiberFuture<IntegerValues<std::uint16_t>> make_arithmetic_16_output_gate_my(
+      std::size_t output_owner, const WireVector&) override;
+  ENCRYPTO::ReusableFiberFuture<IntegerValues<std::uint32_t>> make_arithmetic_32_output_gate_my(
+      std::size_t output_owner, const WireVector&) override;
+  ENCRYPTO::ReusableFiberFuture<IntegerValues<std::uint64_t>> make_arithmetic_64_output_gate_my(
+      std::size_t output_owner, const WireVector&) override;
+
+  void make_arithmetic_output_gate_other(std::size_t output_owner, const WireVector&) override;
+
+  // function gates
   std::vector<std::shared_ptr<NewWire>> make_unary_gate(
       ENCRYPTO::PrimitiveOperationType op, const std::vector<std::shared_ptr<NewWire>>&) override;
 
@@ -73,13 +129,24 @@ class GMWProvider : public GateFactory {
       ENCRYPTO::PrimitiveOperationType op, const std::vector<std::shared_ptr<NewWire>>&,
       const std::vector<std::shared_ptr<NewWire>>&) override;
 
-  void setup();
-
-  std::shared_ptr<Logger> get_logger() const noexcept { return logger_; }
-
-  bool is_my_job(std::size_t gate_id) const noexcept;
+  void broadcast_bits_message(std::size_t gate_id, ENCRYPTO::BitVector<>&& message) const;
+  void broadcast_bits_message(std::size_t gate_id, const ENCRYPTO::BitVector<>& message) const;
+  void send_bits_message(std::size_t party_id, std::size_t gate_id,
+                         ENCRYPTO::BitVector<>&& message) const;
+  void send_bits_message(std::size_t party_id, std::size_t gate_id,
+                         const ENCRYPTO::BitVector<>& message) const;
+  [[nodiscard]] std::vector<ENCRYPTO::ReusableFiberFuture<ENCRYPTO::BitVector<>>>
+  register_for_bits_messages(std::size_t gate_id, std::size_t num_bits);
 
  private:
+  template <typename T>
+  std::pair<ENCRYPTO::ReusableFiberPromise<IntegerValues<T>>, WireVector>
+  basic_make_arithmetic_input_gate_my(std::size_t input_owner, std::size_t num_simd);
+  template <typename T>
+  WireVector basic_make_arithmetic_input_gate_other(std::size_t input_owner, std::size_t num_simd);
+  template <typename T>
+  ENCRYPTO::ReusableFiberFuture<IntegerValues<T>>
+  basic_make_arithmetic_output_gate_my(std::size_t output_owner, const WireVector& in);
   BooleanGMWWireVector make_inv_gate(BooleanGMWWireVector&& in_a);
   BooleanGMWWireVector make_xor_gate(BooleanGMWWireVector&& in_a, BooleanGMWWireVector&& in_b);
   BooleanGMWWireVector make_and_gate(BooleanGMWWireVector&& in_a, BooleanGMWWireVector&& in_b);
@@ -87,12 +154,14 @@ class GMWProvider : public GateFactory {
  private:
   Communication::CommunicationLayer& communication_layer_;
   GateRegister& gate_register_;
+  Crypto::MotionBaseProvider& motion_base_provider_;
+  MTProvider& mt_provider_;
   std::shared_ptr<GMWMessageHandler> message_handler_;
   std::size_t my_id_;
-  Role role_;
-  bool setup_ran_;
+  std::size_t num_parties_;
+  std::size_t next_input_id_;
   std::shared_ptr<Logger> logger_;
 };
 
-}  // namespace proto::yao
+}  // namespace proto::gmw
 }  // namespace MOTION

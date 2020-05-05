@@ -17,6 +17,7 @@ enum MessageType : ubyte {
   SharedBitsReconstruct = 13,
   YaoSetup = 14,
   YaoGate = 15,
+  GMWGate = 16,
   // add new message types here
   }
 

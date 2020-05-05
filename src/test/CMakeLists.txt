@@ -10,6 +10,7 @@ add_executable(motiontest
         test_communication_layer.cpp
         test_conversions.cpp
         test_dummy_transport.cpp
+        test_gmw.cpp
         test_half_gates.cpp
         test_integer_operations.cpp
         test_misc.cpp

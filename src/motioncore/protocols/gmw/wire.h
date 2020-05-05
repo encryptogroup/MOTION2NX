@@ -36,8 +36,9 @@ class GMWProvider;
 
 class BooleanGMWWire : public NewWire {
  public:
-  BooleanGMWWire(std::size_t num_simd) : NewWire(num_simd), share_(num_simd) {}
+  BooleanGMWWire(std::size_t num_simd) : NewWire(num_simd) {}
   MPCProtocol get_protocol() const noexcept override { return MPCProtocol::BooleanGMW; }
+  std::size_t get_bit_size() const noexcept override { return 1; }
   ENCRYPTO::BitVector<>& get_share() { return share_; };
   const ENCRYPTO::BitVector<>& get_share() const { return share_; };
 
@@ -53,6 +54,7 @@ class ArithmeticGMWWire : public NewWire {
  public:
   ArithmeticGMWWire(std::size_t num_simd) : NewWire(num_simd), share_(num_simd) {}
   MPCProtocol get_protocol() const noexcept override { return MPCProtocol::ArithmeticGMW; }
+  std::size_t get_bit_size() const noexcept override { return ENCRYPTO::bit_size_v<T>; }
   std::vector<T>& get_share() { return share_; };
   const std::vector<T>& get_share() const { return share_; };
 
@@ -63,6 +65,8 @@ class ArithmeticGMWWire : public NewWire {
   std::vector<T> share_;
 };
 
+template <typename T>
+using ArithmeticGMWWireP = std::shared_ptr<ArithmeticGMWWire<T>>;
 template <typename T>
 using ArithmeticGMWWireVector = std::vector<std::shared_ptr<ArithmeticGMWWire<T>>>;
 

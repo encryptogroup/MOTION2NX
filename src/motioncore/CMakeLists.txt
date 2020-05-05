@@ -48,6 +48,7 @@ add_library(motion
         gate/conversion_gate.cpp
         gate/gate.cpp
         protocols/gmw/gate.cpp
+        protocols/gmw/gmw_provider.cpp
         protocols/yao/gate.cpp
         protocols/yao/yao_provider.cpp
         secure_type/secure_unsigned_integer.cpp

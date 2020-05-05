@@ -1,0 +1,6 @@
+namespace MOTION.Communication;
+
+table GMWGateMessage {
+  gate_id:uint64;       // gate id
+  payload:[ubyte];      // share
+}
