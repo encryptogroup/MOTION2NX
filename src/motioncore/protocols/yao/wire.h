@@ -38,6 +38,7 @@ class YaoWire : public NewWire, public ENCRYPTO::enable_wait_setup {
  public:
   YaoWire(std::size_t num_simd) : NewWire(num_simd), keys_(num_simd) {}
   MPCProtocol get_protocol() const noexcept override { return MPCProtocol::Yao; }
+  std::size_t get_bit_size() const noexcept override { return 1; }
   ENCRYPTO::block128_vector& get_keys() { return keys_; };
   const ENCRYPTO::block128_vector& get_keys() const { return keys_; };
 

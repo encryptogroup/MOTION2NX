@@ -74,6 +74,8 @@ class YaoProvider : public GateFactory {
               ENCRYPTO::ObliviousTransfer::OTProvider&, std::shared_ptr<Logger>);
   ~YaoProvider();
 
+  std::string get_provider_name() const noexcept override { return "YaoProvider"; }
+
   // std::vector<std::shared_ptr<NewWire>> make_input_gate(std::size_t num_wire, std::size_t num_simd);
   // std::pair<ENCRYPTO::ReusableFiberPromise<std::vector<ENCRYPTO::BitVector<>>>,
   //           std::vector<std::shared_ptr<NewWire>>>
