@@ -34,7 +34,9 @@ namespace MOTION {
 class GateRegister;
 class Logger;
 class MTProvider;
+class SPProvider;
 class NewWire;
+using NewWireP = std::shared_ptr<NewWire>;
 
 namespace Communication {
 class CommunicationLayer;
@@ -59,7 +61,7 @@ class GMWProvider : public GateFactory, public ENCRYPTO::enable_wait_setup {
   struct my_input_t {};
 
   GMWProvider(Communication::CommunicationLayer&, GateRegister&, Crypto::MotionBaseProvider&,
-              MTProvider&, std::shared_ptr<Logger>);
+              MTProvider&, SPProvider&, std::shared_ptr<Logger>);
   ~GMWProvider();
 
   std::string get_provider_name() const noexcept override { return "GMWProvider"; }
@@ -67,6 +69,7 @@ class GMWProvider : public GateFactory, public ENCRYPTO::enable_wait_setup {
   void setup();
   Crypto::MotionBaseProvider& get_motion_base_provider() noexcept { return motion_base_provider_; }
   MTProvider& get_mt_provider() noexcept { return mt_provider_; }
+  SPProvider& get_sp_provider() noexcept { return sp_provider_; }
   std::shared_ptr<Logger> get_logger() const noexcept { return logger_; }
   bool is_my_job(std::size_t gate_id) const noexcept;
   std::size_t get_my_id() const noexcept { return my_id_; }
@@ -129,14 +132,20 @@ class GMWProvider : public GateFactory, public ENCRYPTO::enable_wait_setup {
       ENCRYPTO::PrimitiveOperationType op, const std::vector<std::shared_ptr<NewWire>>&,
       const std::vector<std::shared_ptr<NewWire>>&) override;
 
-  void broadcast_bits_message(std::size_t gate_id, ENCRYPTO::BitVector<>&& message) const;
   void broadcast_bits_message(std::size_t gate_id, const ENCRYPTO::BitVector<>& message) const;
-  void send_bits_message(std::size_t party_id, std::size_t gate_id,
-                         ENCRYPTO::BitVector<>&& message) const;
   void send_bits_message(std::size_t party_id, std::size_t gate_id,
                          const ENCRYPTO::BitVector<>& message) const;
   [[nodiscard]] std::vector<ENCRYPTO::ReusableFiberFuture<ENCRYPTO::BitVector<>>>
   register_for_bits_messages(std::size_t gate_id, std::size_t num_bits);
+
+  template <typename T>
+  void broadcast_ints_message(std::size_t gate_id, const std::vector<T>& message) const;
+  template <typename T>
+  void send_ints_message(std::size_t party_id, std::size_t gate_id,
+                         const std::vector<T>& message) const;
+  template <typename T>
+  [[nodiscard]] std::vector<ENCRYPTO::ReusableFiberFuture<std::vector<T>>>
+  register_for_ints_messages(std::size_t gate_id, std::size_t num_elements);
 
  private:
   template <typename T>
@@ -147,15 +156,29 @@ class GMWProvider : public GateFactory, public ENCRYPTO::enable_wait_setup {
   template <typename T>
   ENCRYPTO::ReusableFiberFuture<IntegerValues<T>>
   basic_make_arithmetic_output_gate_my(std::size_t output_owner, const WireVector& in);
-  BooleanGMWWireVector make_inv_gate(BooleanGMWWireVector&& in_a);
-  BooleanGMWWireVector make_xor_gate(BooleanGMWWireVector&& in_a, BooleanGMWWireVector&& in_b);
-  BooleanGMWWireVector make_and_gate(BooleanGMWWireVector&& in_a, BooleanGMWWireVector&& in_b);
+  WireVector make_inv_gate(const WireVector& in_a);
+  WireVector make_xor_gate(const WireVector& in_a, const WireVector& in_b);
+  WireVector make_and_gate(const WireVector& in_a, const WireVector& in_b);
+
+  template <template <typename> class BinaryGate, typename T>
+  WireVector make_arithmetic_unary_gate(const NewWireP& in_a);
+  template <template <typename> class BinaryGate>
+  WireVector make_arithmetic_unary_gate(const WireVector& in_a);
+  template <template <typename> class BinaryGate, typename T>
+  WireVector make_arithmetic_binary_gate(const NewWireP& in_a, const NewWireP& in_b);
+  template <template <typename> class BinaryGate>
+  WireVector make_arithmetic_binary_gate(const WireVector& in_a, const WireVector& in_b);
+  WireVector make_neg_gate(const WireVector& in_a);
+  WireVector make_add_gate(const WireVector& in_a, const WireVector& in_b);
+  WireVector make_mul_gate(const WireVector& in_a, const WireVector& in_b);
+  WireVector make_sqr_gate(const WireVector& in_a);
 
  private:
   Communication::CommunicationLayer& communication_layer_;
   GateRegister& gate_register_;
   Crypto::MotionBaseProvider& motion_base_provider_;
   MTProvider& mt_provider_;
+  SPProvider& sp_provider_;
   std::shared_ptr<GMWMessageHandler> message_handler_;
   std::size_t my_id_;
   std::size_t num_parties_;

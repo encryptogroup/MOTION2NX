@@ -21,10 +21,13 @@
 // SOFTWARE.
 
 #include "gate.h"
+#include <openssl/bn.h>
+#include <stdexcept>
 
 #include "base/gate_factory.h"
 #include "crypto/motion_base_provider.h"
 #include "crypto/multiplication_triple/mt_provider.h"
+#include "crypto/multiplication_triple/sp_provider.h"
 #include "crypto/sharing_randomness_generator.h"
 #include "gmw_provider.h"
 #include "utility/helpers.h"
@@ -35,9 +38,9 @@ namespace MOTION::proto::gmw {
 
 namespace detail {
 
-template <typename WireType>
-BasicGMWBinaryGate<WireType>::BasicGMWBinaryGate(std::size_t gate_id, GMWWireVector&& in_b,
-                                                 GMWWireVector&& in_a)
+BasicBooleanGMWBinaryGate::BasicBooleanGMWBinaryGate(std::size_t gate_id,
+                                                     BooleanGMWWireVector&& in_b,
+                                                     BooleanGMWWireVector&& in_a)
     : NewGate(gate_id),
       num_wires_(in_a.size()),
       inputs_a_(std::move(in_a)),
@@ -57,18 +60,11 @@ BasicGMWBinaryGate<WireType>::BasicGMWBinaryGate(std::size_t gate_id, GMWWireVec
   }
   outputs_.reserve(num_wires_);
   std::generate_n(std::back_inserter(outputs_), num_wires_,
-                  [num_simd] { return std::make_shared<WireType>(num_simd); });
+                  [num_simd] { return std::make_shared<BooleanGMWWire>(num_simd); });
 }
 
-template class BasicGMWBinaryGate<BooleanGMWWire>;
-template class BasicGMWBinaryGate<ArithmeticGMWWire<std::uint8_t>>;
-template class BasicGMWBinaryGate<ArithmeticGMWWire<std::uint16_t>>;
-template class BasicGMWBinaryGate<ArithmeticGMWWire<std::uint32_t>>;
-template class BasicGMWBinaryGate<ArithmeticGMWWire<std::uint64_t>>;
-
-template <typename WireType>
-BasicGMWUnaryGate<WireType>::BasicGMWUnaryGate(std::size_t gate_id, GMWWireVector&& in,
-                                               bool forward)
+BasicBooleanGMWUnaryGate::BasicBooleanGMWUnaryGate(std::size_t gate_id, BooleanGMWWireVector&& in,
+                                                   bool forward)
     : NewGate(gate_id), num_wires_(in.size()), inputs_(std::move(in)) {
   if (num_wires_ == 0) {
     throw std::logic_error("number of wires need to be positive");
@@ -84,15 +80,9 @@ BasicGMWUnaryGate<WireType>::BasicGMWUnaryGate(std::size_t gate_id, GMWWireVecto
   } else {
     outputs_.reserve(num_wires_);
     std::generate_n(std::back_inserter(outputs_), num_wires_,
-                    [num_simd] { return std::make_shared<WireType>(num_simd); });
+                    [num_simd] { return std::make_shared<BooleanGMWWire>(num_simd); });
   }
 }
-
-template class BasicGMWUnaryGate<BooleanGMWWire>;
-template class BasicGMWUnaryGate<ArithmeticGMWWire<std::uint8_t>>;
-template class BasicGMWUnaryGate<ArithmeticGMWWire<std::uint16_t>>;
-template class BasicGMWUnaryGate<ArithmeticGMWWire<std::uint32_t>>;
-template class BasicGMWUnaryGate<ArithmeticGMWWire<std::uint64_t>>;
 
 }  // namespace detail
 
@@ -274,7 +264,7 @@ void BooleanGMWOutputGate::evaluate_online() {
     if (output_owner_ == ALL_PARTIES) {
       gmw_provider_.broadcast_bits_message(gate_id_, my_share);
     } else {
-      gmw_provider_.send_bits_message(output_owner_, gate_id_, std::move(my_share));
+      gmw_provider_.send_bits_message(output_owner_, gate_id_, my_share);
     }
   }
   if (output_owner_ == ALL_PARTIES || output_owner_ == my_id) {
@@ -286,7 +276,6 @@ void BooleanGMWOutputGate::evaluate_online() {
       const auto other_share = share_futures_[party_id].get();
       my_share ^= other_share;
     }
-    // TODO: set_value of output_promise_
     std::vector<ENCRYPTO::BitVector<>> outputs;
     outputs.reserve(num_wires_);
     std::size_t bit_offset = 0;
@@ -307,9 +296,8 @@ void BooleanGMWOutputGate::evaluate_online() {
 }
 
 BooleanGMWINVGate::BooleanGMWINVGate(std::size_t gate_id, const GMWProvider& gmw_provider,
-                                     GMWWireVector&& in)
-    : detail::BasicGMWUnaryGate<BooleanGMWWire>(gate_id, std::move(in),
-                                                !gmw_provider.is_my_job(gate_id)),
+                                     BooleanGMWWireVector&& in)
+    : detail::BasicBooleanGMWUnaryGate(gate_id, std::move(in), !gmw_provider.is_my_job(gate_id)),
       is_my_job_(gmw_provider.is_my_job(gate_id)) {}
 
 void BooleanGMWINVGate::evaluate_setup() {
@@ -347,8 +335,8 @@ void BooleanGMWXORGate::evaluate_online() {
 }
 
 BooleanGMWANDGate::BooleanGMWANDGate(std::size_t gate_id, GMWProvider& gmw_provider,
-                                     GMWWireVector&& in_a, GMWWireVector&& in_b)
-    : detail::BasicGMWBinaryGate<BooleanGMWWire>(gate_id, std::move(in_a), std::move(in_b)),
+                                     BooleanGMWWireVector&& in_a, BooleanGMWWireVector&& in_b)
+    : detail::BasicBooleanGMWBinaryGate(gate_id, std::move(in_a), std::move(in_b)),
       gmw_provider_(gmw_provider) {
   auto num_bits = count_bits(inputs_a_);
   mt_offset_ = gmw_provider_.get_mt_provider().RequestBinaryMTs(num_bits);
@@ -409,6 +397,40 @@ void BooleanGMWANDGate::evaluate_online() {
     wire_o->set_online_ready();
   }
 }
+
+namespace detail {
+
+template <typename T>
+BasicArithmeticGMWBinaryGate<T>::BasicArithmeticGMWBinaryGate(std::size_t gate_id, GMWProvider&,
+                                                              ArithmeticGMWWireP<T>&& in_a,
+                                                              ArithmeticGMWWireP<T>&& in_b)
+    : NewGate(gate_id),
+      input_a_(std::move(in_a)),
+      input_b_(std::move(in_b)),
+      output_(std::make_shared<ArithmeticGMWWire<T>>(input_a_->get_num_simd())) {
+  if (input_a_->get_num_simd() != input_b_->get_num_simd()) {
+    throw std::logic_error("number of SIMD values need to be the same for all wires");
+  }
+}
+
+template class BasicArithmeticGMWBinaryGate<std::uint8_t>;
+template class BasicArithmeticGMWBinaryGate<std::uint16_t>;
+template class BasicArithmeticGMWBinaryGate<std::uint32_t>;
+template class BasicArithmeticGMWBinaryGate<std::uint64_t>;
+
+template <typename T>
+BasicArithmeticGMWUnaryGate<T>::BasicArithmeticGMWUnaryGate(std::size_t gate_id, GMWProvider&,
+                                                            ArithmeticGMWWireP<T>&& in)
+    : NewGate(gate_id),
+      input_(std::move(in)),
+      output_(std::make_shared<ArithmeticGMWWire<T>>(input_->get_num_simd())) {}
+
+template class BasicArithmeticGMWUnaryGate<std::uint8_t>;
+template class BasicArithmeticGMWUnaryGate<std::uint16_t>;
+template class BasicArithmeticGMWUnaryGate<std::uint32_t>;
+template class BasicArithmeticGMWUnaryGate<std::uint64_t>;
+
+}  // namespace detail
 
 template <typename T>
 ArithmeticGMWInputGateSender<T>::ArithmeticGMWInputGateSender(
@@ -547,9 +569,9 @@ ArithmeticGMWOutputGate<T>::ArithmeticGMWOutputGate(std::size_t gate_id, GMWProv
       output_owner_(output_owner),
       input_(std::move(input)) {
   std::size_t my_id = gmw_provider_.get_my_id();
-  // if (output_owner_ == ALL_PARTIES || output_owner_ == my_id) {
-  //   share_futures_ = gmw_provider_.register_for_integer_messages<T>(gate_id_, num_simd_);
-  // }
+  if (output_owner_ == ALL_PARTIES || output_owner_ == my_id) {
+    share_futures_ = gmw_provider_.register_for_ints_messages<T>(gate_id_, input_->get_num_simd());
+  }
 }
 
 template <typename T>
@@ -573,48 +595,37 @@ void ArithmeticGMWOutputGate<T>::evaluate_online() {
     auto logger = gmw_provider_.get_logger();
     if (logger) {
       logger->LogTrace(
-          fmt::format("Gate {}: BooleanGMWOutputGate::evaluate_online start", gate_id_));
+          fmt::format("Gate {}: ArithmeticGMWOutputGate<T>::evaluate_online start", gate_id_));
     }
   }
 
-  // std::size_t my_id = gmw_provider_.get_my_id();
-  // ENCRYPTO::BitVector<> my_share;
-  // // auto num_bits = count_bits(inputs_);  // TODO: reserve
-  // for (const auto& wire : inputs_) {
-  //   my_share.Append(wire->get_share());
-  // }
-  // if (output_owner_ != my_id) {
-  //   if (output_owner_ == ALL_PARTIES) {
-  //     gmw_provider_.broadcast_bits_message(gate_id_, my_share);
-  //   } else {
-  //     gmw_provider_.send_bits_message(output_owner_, gate_id_, std::move(my_share));
-  //   }
-  // }
-  // if (output_owner_ == ALL_PARTIES || output_owner_ == my_id) {
-  //   std::size_t num_parties = gmw_provider_.get_num_parties();
-  //   for (std::size_t party_id = 0; party_id < num_parties; ++party_id) {
-  //     if (party_id == my_id) {
-  //       continue;
-  //     }
-  //     const auto other_share = share_futures_[party_id].get();
-  //     my_share ^= other_share;
-  //   }
-  //   // TODO: set_value of output_promise_
-  //   std::vector<ENCRYPTO::BitVector<>> outputs;
-  //   outputs.reserve(num_wires_);
-  //   std::size_t bit_offset = 0;
-  //   for (std::size_t wire_i = 0; wire_i < num_wires_; ++wire_i) {
-  //     auto num_simd = inputs_[wire_i]->get_num_simd();
-  //     outputs.push_back(my_share.Subset(bit_offset, bit_offset + num_simd));
-  //     bit_offset += num_simd;
-  //   }
-  //   output_promise_.set_value(std::move(outputs));
-  // }
+  std::size_t my_id = gmw_provider_.get_my_id();
+  auto my_share = input_->get_share();
+  if (output_owner_ != my_id) {
+    if (output_owner_ == ALL_PARTIES) {
+      gmw_provider_.broadcast_ints_message(gate_id_, my_share);
+    } else {
+      gmw_provider_.send_ints_message(output_owner_, gate_id_, my_share);
+    }
+  }
+  if (output_owner_ == ALL_PARTIES || output_owner_ == my_id) {
+    std::size_t num_parties = gmw_provider_.get_num_parties();
+    for (std::size_t party_id = 0; party_id < num_parties; ++party_id) {
+      if (party_id == my_id) {
+        continue;
+      }
+      const auto other_share = share_futures_[party_id].get();
+      std::transform(std::begin(my_share), std::end(my_share), std::begin(other_share),
+                     std::begin(my_share), std::plus{});
+    }
+    output_promise_.set_value(std::move(my_share));
+  }
 
   if constexpr (MOTION_VERBOSE_DEBUG) {
     auto logger = gmw_provider_.get_logger();
     if (logger) {
-      logger->LogTrace(fmt::format("Gate {}: BooleanGMWOutputGate::evaluate_online end", gate_id_));
+      logger->LogTrace(
+          fmt::format("Gate {}: ArithmeticGMWOutputGate<T>::evaluate_online end", gate_id_));
     }
   }
 }
@@ -625,9 +636,9 @@ template class ArithmeticGMWOutputGate<std::uint32_t>;
 template class ArithmeticGMWOutputGate<std::uint64_t>;
 
 template <typename T>
-ArithmeticGMWNEGGate<T>::ArithmeticGMWNEGGate(std::size_t gate_id, const GMWProvider&,
-                                              GMWWireVector&& in)
-    : detail::BasicGMWUnaryGate<ArithmeticGMWWire<T>>(gate_id, std::move(in), false) {}
+ArithmeticGMWNEGGate<T>::ArithmeticGMWNEGGate(std::size_t gate_id, GMWProvider& gmw_provider,
+                                              ArithmeticGMWWireP<T>&& in)
+    : detail::BasicArithmeticGMWUnaryGate<T>(gate_id, gmw_provider, std::move(in)) {}
 
 template <typename T>
 void ArithmeticGMWNEGGate<T>::evaluate_setup() {
@@ -636,15 +647,11 @@ void ArithmeticGMWNEGGate<T>::evaluate_setup() {
 
 template <typename T>
 void ArithmeticGMWNEGGate<T>::evaluate_online() {
-  for (std::size_t wire_i = 0; wire_i < this->num_wires_; ++wire_i) {
-    const auto& w_in = this->inputs_[wire_i];
-    w_in->wait_online();
-    auto& w_o = this->outputs_[wire_i];
-    assert(w_o->get_share().size() == w_in->get_num_simd());
-    std::transform(std::begin(w_in->get_share()), std::end(w_in->get_share()),
-                   std::begin(w_o->get_share()), std::negate{});
-    w_o->set_online_ready();
-  }
+  this->input_->wait_online();
+  assert(this->output_->get_share().size() == this->input_->get_num_simd());
+  std::transform(std::begin(this->input_->get_share()), std::end(this->input_->get_share()),
+                 std::begin(this->output_->get_share()), std::negate{});
+  this->output_->set_online_ready();
 }
 
 template class ArithmeticGMWNEGGate<std::uint8_t>;
@@ -659,16 +666,12 @@ void ArithmeticGMWADDGate<T>::evaluate_setup() {
 
 template <typename T>
 void ArithmeticGMWADDGate<T>::evaluate_online() {
-  for (std::size_t wire_i = 0; wire_i < this->num_wires_; ++wire_i) {
-    const auto& w_a = this->inputs_a_[wire_i];
-    const auto& w_b = this->inputs_b_[wire_i];
-    w_a->wait_online();
-    w_b->wait_online();
-    auto& w_o = this->outputs_[wire_i];
-    std::transform(std::begin(w_a->get_share()), std::end(w_a->get_share()),
-                   std::begin(w_b->get_share()), std::begin(w_o->get_share()), std::plus{});
-    w_o->set_online_ready();
-  }
+  this->input_a_->wait_online();
+  this->input_b_->wait_online();
+  std::transform(std::begin(this->input_a_->get_share()), std::end(this->input_a_->get_share()),
+                 std::begin(this->input_b_->get_share()), std::begin(this->output_->get_share()),
+                 std::plus{});
+  this->output_->set_online_ready();
 }
 
 template class ArithmeticGMWADDGate<std::uint8_t>;
@@ -678,20 +681,63 @@ template class ArithmeticGMWADDGate<std::uint64_t>;
 
 template <typename T>
 ArithmeticGMWMULGate<T>::ArithmeticGMWMULGate(std::size_t gate_id, GMWProvider& gmw_provider,
-                                              GMWWireVector&& in_a, GMWWireVector&& in_b)
-    : detail::BasicGMWBinaryGate<ArithmeticGMWWire<T>>(gate_id, std::move(in_a), std::move(in_b)),
-      gmw_provider_(gmw_provider) {
-  // TODO: register MTs
-}
+                                              ArithmeticGMWWireP<T>&& in_a,
+                                              ArithmeticGMWWireP<T>&& in_b)
+    : detail::BasicArithmeticGMWBinaryGate<T>(gate_id, gmw_provider, std::move(in_a),
+                                              std::move(in_b)),
+      gmw_provider_(gmw_provider),
+      mt_offset_(
+          gmw_provider.get_mt_provider().RequestArithmeticMTs<T>(this->input_a_->get_num_simd())),
+      share_futures_(gmw_provider_.register_for_ints_messages<T>(
+          this->gate_id_, 2 * this->input_a_->get_num_simd())) {}
 
 template <typename T>
 void ArithmeticGMWMULGate<T>::evaluate_setup() {
-  // TODO: wait for MTs
+  // nothing to do
 }
 
 template <typename T>
 void ArithmeticGMWMULGate<T>::evaluate_online() {
-  // TODO: compute MUL
+  auto num_simd = this->input_a_->get_num_simd();
+  const auto& mtp = gmw_provider_.get_mt_provider();
+  const auto& all_mts = mtp.GetIntegerAll<T>();
+  const auto& x = this->input_a_->get_share();
+  const auto& y = this->input_b_->get_share();
+
+  //  mask inputs
+  std::vector<T> de(2 * num_simd);
+  auto it = std::transform(std::begin(x), std::end(x), std::begin(all_mts.a) + this->mt_offset_,
+                           std::begin(de), std::minus{});
+  std::transform(std::begin(y), std::end(y), std::begin(all_mts.b) + this->mt_offset_, it,
+                 std::minus{});
+  this->gmw_provider_.broadcast_ints_message(this->gate_id_, de);
+
+  // compute d, e
+  auto num_parties = gmw_provider_.get_num_parties();
+  auto my_id = gmw_provider_.get_my_id();
+  for (std::size_t party_id = 0; party_id < num_parties; ++party_id) {
+    if (party_id == my_id) {
+      continue;
+    }
+    auto other_share = share_futures_[party_id].get();
+    std::transform(std::begin(de), std::end(de), std::begin(other_share), std::begin(de),
+                   std::plus{});
+  }
+  // result = c ...
+  std::vector<T> result(std::begin(all_mts.c) + mt_offset_,
+                        std::begin(all_mts.c) + mt_offset_ + num_simd);
+  // ... - d * e ...
+  if (this->gmw_provider_.is_my_job(this->gate_id_)) {
+    for (std::size_t simd_j = 0; simd_j < num_simd; ++simd_j) {
+      result[simd_j] -= de[simd_j] * de[simd_j + num_simd];
+    }
+  }
+  // ... + e * x + d * y
+  for (std::size_t simd_j = 0; simd_j < num_simd; ++simd_j) {
+    result[simd_j] += de[simd_j] * y[simd_j] + de[simd_j + num_simd] * x[simd_j];
+  }
+  this->output_->get_share() = std::move(result);
+  this->output_->set_online_ready();
 }
 
 template class ArithmeticGMWMULGate<std::uint8_t>;
@@ -701,20 +747,58 @@ template class ArithmeticGMWMULGate<std::uint64_t>;
 
 template <typename T>
 ArithmeticGMWSQRGate<T>::ArithmeticGMWSQRGate(std::size_t gate_id, GMWProvider& gmw_provider,
-                                              GMWWireVector&& in_a, GMWWireVector&& in_b)
-    : detail::BasicGMWBinaryGate<ArithmeticGMWWire<T>>(gate_id, std::move(in_a), std::move(in_b)),
-      gmw_provider_(gmw_provider) {
-  // TODO: register MTs
-}
+                                              ArithmeticGMWWireP<T>&& in)
+    : detail::BasicArithmeticGMWUnaryGate<T>(gate_id, gmw_provider, std::move(in)),
+      gmw_provider_(gmw_provider),
+      sp_offset_(
+          gmw_provider.get_sp_provider().RequestSPs<T>(this->input_->get_num_simd())),
+      share_futures_(gmw_provider_.register_for_ints_messages<T>(
+          this->gate_id_, this->input_->get_num_simd())) {}
 
 template <typename T>
 void ArithmeticGMWSQRGate<T>::evaluate_setup() {
-  // TODO: wait for MTs
+  // nothing to do
 }
 
 template <typename T>
 void ArithmeticGMWSQRGate<T>::evaluate_online() {
-  // TODO: compute SQR
+  auto num_simd = this->input_->get_num_simd();
+  const auto& spp = gmw_provider_.get_sp_provider();
+  const auto& all_sps = spp.GetSPsAll<T>();
+  const auto& x = this->input_->get_share();
+
+  //  mask inputs
+  std::vector<T> d(num_simd);
+  std::transform(std::begin(x), std::end(x), std::begin(all_sps.a) + this->sp_offset_,
+                           std::begin(d), std::minus{});
+  this->gmw_provider_.broadcast_ints_message(this->gate_id_, d);
+
+  // compute d
+  auto num_parties = gmw_provider_.get_num_parties();
+  auto my_id = gmw_provider_.get_my_id();
+  for (std::size_t party_id = 0; party_id < num_parties; ++party_id) {
+    if (party_id == my_id) {
+      continue;
+    }
+    auto other_share = share_futures_[party_id].get();
+    std::transform(std::begin(d), std::end(d), std::begin(other_share), std::begin(d),
+                   std::plus{});
+  }
+  // result = c ...
+  std::vector<T> result(std::begin(all_sps.c) + sp_offset_,
+                        std::begin(all_sps.c) + sp_offset_ + num_simd);
+  // ... - d^2 ...
+  if (this->gmw_provider_.is_my_job(this->gate_id_)) {
+    for (std::size_t simd_j = 0; simd_j < num_simd; ++simd_j) {
+      result[simd_j] -= d[simd_j] * d[simd_j];
+    }
+  }
+  // ... + 2 * d * x
+  for (std::size_t simd_j = 0; simd_j < num_simd; ++simd_j) {
+    result[simd_j] += 2 * d[simd_j] * x[simd_j];
+  }
+  this->output_->get_share() = std::move(result);
+  this->output_->set_online_ready();
 }
 
 template class ArithmeticGMWSQRGate<std::uint8_t>;

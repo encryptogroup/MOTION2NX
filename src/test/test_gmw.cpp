@@ -32,6 +32,7 @@
 #include "crypto/base_ots/base_ot_provider.h"
 #include "crypto/motion_base_provider.h"
 #include "crypto/multiplication_triple/mt_provider.h"
+#include "crypto/multiplication_triple/sp_provider.h"
 #include "crypto/oblivious_transfer/ot_provider.h"
 #include "gate/new_gate.h"
 #include "protocols/gmw/gmw_provider.h"
@@ -58,10 +59,12 @@ class GMWTest : public ::testing::Test {
           *comm_layers_[i], *ot_provider_managers_[i], nullptr);
       mt_providers_[i] = std::make_unique<MOTION::MTProviderFromOTs>(
           i, 2, *arithmetic_provider_managers_[i], *ot_provider_managers_[i], stats_[i], nullptr);
+      sp_providers_[i] = std::make_unique<MOTION::SPProviderFromOTs>(
+          ot_provider_managers_[i]->get_providers(), i, stats_[i], nullptr);
       gate_registers_[i] = std::make_unique<MOTION::GateRegister>();
-      gmw_providers_[i] =
-          std::make_unique<GMWProvider>(*comm_layers_[i], *gate_registers_[i],
-                                        *motion_base_providers_[i], *mt_providers_[i], loggers_[i]);
+      gmw_providers_[i] = std::make_unique<GMWProvider>(
+          *comm_layers_[i], *gate_registers_[i], *motion_base_providers_[i], *mt_providers_[i],
+          *sp_providers_[i], loggers_[i]);
     }
   }
 
@@ -90,10 +93,14 @@ class GMWTest : public ::testing::Test {
         motion_base_providers_[i]->setup();
         base_ot_providers_[i]->ComputeBaseOTs();
         mt_providers_[i]->PreSetup();
-        auto f = std::async(std::launch::async, [this, i] { ot_provider_managers_[i]->get_provider(1 - i).SendSetup(); });
+        sp_providers_[i]->PreSetup();
+        auto f = std::async(std::launch::async, [this, i] {
+          ot_provider_managers_[i]->get_provider(1 - i).SendSetup();
+        });
         ot_provider_managers_[i]->get_provider(1 - i).ReceiveSetup();
         f.get();
         mt_providers_[i]->Setup();
+        sp_providers_[i]->Setup();
         gmw_providers_[i]->setup();
       }));
     }
@@ -135,6 +142,7 @@ class GMWTest : public ::testing::Test {
       ot_provider_managers_;
   std::array<std::unique_ptr<MOTION::ArithmeticProviderManager>, 2> arithmetic_provider_managers_;
   std::array<std::unique_ptr<MOTION::MTProvider>, 2> mt_providers_;
+  std::array<std::unique_ptr<MOTION::SPProvider>, 2> sp_providers_;
   std::array<std::unique_ptr<MOTION::GateRegister>, 2> gate_registers_;
   std::array<std::unique_ptr<GMWProvider>, 2> gmw_providers_;
   std::array<std::shared_ptr<MOTION::Logger>, 2> loggers_;
@@ -266,10 +274,14 @@ TEST_F(BooleanGMWTest, OutputBoth) {
   auto [input_b_promise, wires_b_in_1] =
       gmw_providers_[1]->make_boolean_input_gate_my(1, num_wires, num_simd);
 
-  auto output_future_a_0 = gmw_providers_[0]->make_boolean_output_gate_my(MOTION::ALL_PARTIES, wires_a_in_0);
-  auto output_future_a_1 = gmw_providers_[1]->make_boolean_output_gate_my(MOTION::ALL_PARTIES, wires_a_in_1);
-  auto output_future_b_0 = gmw_providers_[0]->make_boolean_output_gate_my(MOTION::ALL_PARTIES, wires_b_in_0);
-  auto output_future_b_1 = gmw_providers_[1]->make_boolean_output_gate_my(MOTION::ALL_PARTIES, wires_b_in_1);
+  auto output_future_a_0 =
+      gmw_providers_[0]->make_boolean_output_gate_my(MOTION::ALL_PARTIES, wires_a_in_0);
+  auto output_future_a_1 =
+      gmw_providers_[1]->make_boolean_output_gate_my(MOTION::ALL_PARTIES, wires_a_in_1);
+  auto output_future_b_0 =
+      gmw_providers_[0]->make_boolean_output_gate_my(MOTION::ALL_PARTIES, wires_b_in_0);
+  auto output_future_b_1 =
+      gmw_providers_[1]->make_boolean_output_gate_my(MOTION::ALL_PARTIES, wires_b_in_1);
 
   run_setup();
   run_gates_setup();
@@ -310,10 +322,10 @@ TEST_F(BooleanGMWTest, INV) {
   auto [input_promise, wires_0_in] =
       gmw_providers_[0]->make_boolean_input_gate_my(0, num_wires, num_simd);
   auto wires_1_in = gmw_providers_[1]->make_boolean_input_gate_other(0, num_wires, num_simd);
-  auto wires_0_out = gmw_providers_[0]->make_unary_gate(
-      ENCRYPTO::PrimitiveOperationType::INV, wires_0_in);
-  auto wires_1_out = gmw_providers_[1]->make_unary_gate(
-      ENCRYPTO::PrimitiveOperationType::INV, wires_1_in);
+  auto wires_0_out =
+      gmw_providers_[0]->make_unary_gate(ENCRYPTO::PrimitiveOperationType::INV, wires_0_in);
+  auto wires_1_out =
+      gmw_providers_[1]->make_unary_gate(ENCRYPTO::PrimitiveOperationType::INV, wires_1_in);
 
   run_setup();
   run_gates_setup();
@@ -351,10 +363,10 @@ TEST_F(BooleanGMWTest, XOR) {
   auto wires_0_in_b = gmw_providers_[0]->make_boolean_input_gate_other(1, num_wires, num_simd);
   auto [input_b_promise, wires_1_in_b] =
       gmw_providers_[1]->make_boolean_input_gate_my(1, num_wires, num_simd);
-  auto wires_0_out = gmw_providers_[0]->make_binary_gate(
-      ENCRYPTO::PrimitiveOperationType::XOR, wires_0_in_a, wires_0_in_b);
-  auto wires_1_out = gmw_providers_[1]->make_binary_gate(
-      ENCRYPTO::PrimitiveOperationType::XOR, wires_1_in_a, wires_1_in_b);
+  auto wires_0_out = gmw_providers_[0]->make_binary_gate(ENCRYPTO::PrimitiveOperationType::XOR,
+                                                         wires_0_in_a, wires_0_in_b);
+  auto wires_1_out = gmw_providers_[1]->make_binary_gate(ENCRYPTO::PrimitiveOperationType::XOR,
+                                                         wires_1_in_a, wires_1_in_b);
 
   run_setup();
   run_gates_setup();
@@ -392,10 +404,10 @@ TEST_F(BooleanGMWTest, AND) {
   auto wires_0_in_b = gmw_providers_[0]->make_boolean_input_gate_other(1, num_wires, num_simd);
   auto [input_b_promise, wires_1_in_b] =
       gmw_providers_[1]->make_boolean_input_gate_my(1, num_wires, num_simd);
-  auto wires_0_out = gmw_providers_[0]->make_binary_gate(
-      ENCRYPTO::PrimitiveOperationType::AND, wires_0_in_a, wires_0_in_b);
-  auto wires_1_out = gmw_providers_[1]->make_binary_gate(
-      ENCRYPTO::PrimitiveOperationType::AND, wires_1_in_a, wires_1_in_b);
+  auto wires_0_out = gmw_providers_[0]->make_binary_gate(ENCRYPTO::PrimitiveOperationType::AND,
+                                                         wires_0_in_a, wires_0_in_b);
+  auto wires_1_out = gmw_providers_[1]->make_binary_gate(ENCRYPTO::PrimitiveOperationType::AND,
+                                                         wires_1_in_a, wires_1_in_b);
 
   run_setup();
   run_gates_setup();
@@ -452,8 +464,7 @@ class ArithmeticGMWTest : public GMWTest {
     }
   }
   ENCRYPTO::ReusableFiberFuture<MOTION::IntegerValues<T>> make_arithmetic_T_output_gate_my(
-      std::size_t party_id,
-      std::size_t output_owner, const MOTION::WireVector& in) {
+      std::size_t party_id, std::size_t output_owner, const MOTION::WireVector& in) {
     auto& gp = *gmw_providers_.at(party_id);
     if constexpr (ENCRYPTO::bit_size_v<T> == 8) {
       return gp.make_arithmetic_8_output_gate_my(output_owner, in);
@@ -467,10 +478,8 @@ class ArithmeticGMWTest : public GMWTest {
   }
 };
 
-using integer_types =
-    ::testing::Types<std::uint8_t, std::uint16_t, std::uint32_t, std::uint64_t>;
+using integer_types = ::testing::Types<std::uint8_t, std::uint16_t, std::uint32_t, std::uint64_t>;
 TYPED_TEST_SUITE(ArithmeticGMWTest, integer_types);
-
 
 TYPED_TEST(ArithmeticGMWTest, Input) {
   std::size_t num_simd = 10;
@@ -478,16 +487,12 @@ TYPED_TEST(ArithmeticGMWTest, Input) {
   const auto inputs_b = this->generate_inputs(num_simd);
 
   // input of party 0
-  auto [input_a_promise, wires_a_in_0] =
-    this->make_arithmetic_T_input_gate_my(0, 0, num_simd);
-  auto wires_a_in_1 =
-    this->make_arithmetic_T_input_gate_other(1, 0, num_simd);
+  auto [input_a_promise, wires_a_in_0] = this->make_arithmetic_T_input_gate_my(0, 0, num_simd);
+  auto wires_a_in_1 = this->make_arithmetic_T_input_gate_other(1, 0, num_simd);
 
   // input of party 1
-  auto wires_b_in_0 =
-    this->make_arithmetic_T_input_gate_other(0, 1, num_simd);
-  auto [input_b_promise, wires_b_in_1] =
-    this->make_arithmetic_T_input_gate_my(1, 1, num_simd);
+  auto wires_b_in_0 = this->make_arithmetic_T_input_gate_other(0, 1, num_simd);
+  auto [input_b_promise, wires_b_in_1] = this->make_arithmetic_T_input_gate_my(1, 1, num_simd);
 
   ASSERT_EQ(wires_a_in_0.size(), 1);
   ASSERT_EQ(wires_a_in_1.size(), 1);
@@ -533,16 +538,12 @@ TYPED_TEST(ArithmeticGMWTest, OutputSingle) {
   const auto inputs_b = this->generate_inputs(num_simd);
 
   // input of party 0
-  auto [input_a_promise, wires_a_in_0] =
-    this->make_arithmetic_T_input_gate_my(0, 0, num_simd);
-  auto wires_a_in_1 =
-    this->make_arithmetic_T_input_gate_other(1, 0, num_simd);
+  auto [input_a_promise, wires_a_in_0] = this->make_arithmetic_T_input_gate_my(0, 0, num_simd);
+  auto wires_a_in_1 = this->make_arithmetic_T_input_gate_other(1, 0, num_simd);
 
   // input of party 1
-  auto wires_b_in_0 =
-    this->make_arithmetic_T_input_gate_other(0, 1, num_simd);
-  auto [input_b_promise, wires_b_in_1] =
-    this->make_arithmetic_T_input_gate_my(1, 1, num_simd);
+  auto wires_b_in_0 = this->make_arithmetic_T_input_gate_other(0, 1, num_simd);
+  auto [input_b_promise, wires_b_in_1] = this->make_arithmetic_T_input_gate_my(1, 1, num_simd);
 
   auto output_future_a_0 = this->make_arithmetic_T_output_gate_my(0, 0, wires_a_in_0);
   this->gmw_providers_[1]->make_arithmetic_output_gate_other(0, wires_a_in_1);
@@ -566,3 +567,154 @@ TYPED_TEST(ArithmeticGMWTest, OutputSingle) {
   ASSERT_EQ(inputs_b, outputs_b);
 }
 
+TYPED_TEST(ArithmeticGMWTest, NEG) {
+  std::size_t num_simd = 10;
+  const auto inputs = this->generate_inputs(num_simd);
+  std::vector<TypeParam> expected_output;
+  std::transform(std::begin(inputs), std::end(inputs), std::back_inserter(expected_output),
+                 std::negate{});
+
+  // input of party 0
+  auto [input_promise, wires_in_0] = this->make_arithmetic_T_input_gate_my(0, 0, num_simd);
+  auto wires_in_1 = this->make_arithmetic_T_input_gate_other(1, 0, num_simd);
+
+  auto wires_0_out =
+      this->gmw_providers_[0]->make_unary_gate(ENCRYPTO::PrimitiveOperationType::NEG, wires_in_0);
+  auto wires_1_out =
+      this->gmw_providers_[1]->make_unary_gate(ENCRYPTO::PrimitiveOperationType::NEG, wires_in_1);
+
+  this->run_setup();
+  this->run_gates_setup();
+  input_promise.set_value(inputs);
+  this->run_gates_online();
+
+  // check wire values
+  const auto wire_0 = std::dynamic_pointer_cast<ArithmeticGMWWire<TypeParam>>(wires_0_out.at(0));
+  const auto wire_1 = std::dynamic_pointer_cast<ArithmeticGMWWire<TypeParam>>(wires_1_out.at(0));
+  wire_0->wait_online();
+  wire_1->wait_online();
+  const auto& share_0 = wire_0->get_share();
+  const auto& share_1 = wire_1->get_share();
+  ASSERT_EQ(share_0.size(), num_simd);
+  ASSERT_EQ(share_1.size(), num_simd);
+  for (std::size_t simd_j = 0; simd_j < num_simd; ++simd_j) {
+    ASSERT_EQ(expected_output.at(simd_j), TypeParam(share_0.at(simd_j) + share_1.at(simd_j)));
+  }
+}
+
+TYPED_TEST(ArithmeticGMWTest, ADD) {
+  std::size_t num_simd = 10;
+  const auto inputs_a = this->generate_inputs(num_simd);
+  const auto inputs_b = this->generate_inputs(num_simd);
+  std::vector<TypeParam> expected_output;
+  std::transform(std::begin(inputs_a), std::end(inputs_a), std::begin(inputs_b),
+                 std::back_inserter(expected_output), std::plus{});
+
+  // input of party 0
+  auto [input_a_promise, wires_a_in_0] = this->make_arithmetic_T_input_gate_my(0, 0, num_simd);
+  auto wires_a_in_1 = this->make_arithmetic_T_input_gate_other(1, 0, num_simd);
+
+  // input of party 1
+  auto wires_b_in_0 = this->make_arithmetic_T_input_gate_other(0, 1, num_simd);
+  auto [input_b_promise, wires_b_in_1] = this->make_arithmetic_T_input_gate_my(1, 1, num_simd);
+
+  auto wires_out_0 = this->gmw_providers_[0]->make_binary_gate(
+      ENCRYPTO::PrimitiveOperationType::ADD, wires_a_in_0, wires_b_in_0);
+  auto wires_out_1 = this->gmw_providers_[1]->make_binary_gate(
+      ENCRYPTO::PrimitiveOperationType::ADD, wires_a_in_1, wires_b_in_1);
+
+  this->run_setup();
+  this->run_gates_setup();
+  input_a_promise.set_value(inputs_a);
+  input_b_promise.set_value(inputs_b);
+  this->run_gates_online();
+
+  // check wire values
+  const auto wire_0 = std::dynamic_pointer_cast<ArithmeticGMWWire<TypeParam>>(wires_out_0.at(0));
+  const auto wire_1 = std::dynamic_pointer_cast<ArithmeticGMWWire<TypeParam>>(wires_out_1.at(0));
+  wire_0->wait_online();
+  wire_1->wait_online();
+  const auto& share_0 = wire_0->get_share();
+  const auto& share_1 = wire_1->get_share();
+  ASSERT_EQ(share_0.size(), num_simd);
+  ASSERT_EQ(share_1.size(), num_simd);
+  for (std::size_t simd_j = 0; simd_j < num_simd; ++simd_j) {
+    ASSERT_EQ(expected_output.at(simd_j), TypeParam(share_0.at(simd_j) + share_1.at(simd_j)));
+  }
+}
+
+TYPED_TEST(ArithmeticGMWTest, MUL) {
+  std::size_t num_simd = 10;
+  const auto inputs_a = this->generate_inputs(num_simd);
+  const auto inputs_b = this->generate_inputs(num_simd);
+  std::vector<TypeParam> expected_output;
+  std::transform(std::begin(inputs_a), std::end(inputs_a), std::begin(inputs_b),
+                 std::back_inserter(expected_output), std::multiplies{});
+
+  // input of party 0
+  auto [input_a_promise, wires_a_in_0] = this->make_arithmetic_T_input_gate_my(0, 0, num_simd);
+  auto wires_a_in_1 = this->make_arithmetic_T_input_gate_other(1, 0, num_simd);
+
+  // input of party 1
+  auto wires_b_in_0 = this->make_arithmetic_T_input_gate_other(0, 1, num_simd);
+  auto [input_b_promise, wires_b_in_1] = this->make_arithmetic_T_input_gate_my(1, 1, num_simd);
+
+  auto wires_out_0 = this->gmw_providers_[0]->make_binary_gate(
+      ENCRYPTO::PrimitiveOperationType::MUL, wires_a_in_0, wires_b_in_0);
+  auto wires_out_1 = this->gmw_providers_[1]->make_binary_gate(
+      ENCRYPTO::PrimitiveOperationType::MUL, wires_a_in_1, wires_b_in_1);
+
+  this->run_setup();
+  this->run_gates_setup();
+  input_a_promise.set_value(inputs_a);
+  input_b_promise.set_value(inputs_b);
+  this->run_gates_online();
+
+  // check wire values
+  const auto wire_0 = std::dynamic_pointer_cast<ArithmeticGMWWire<TypeParam>>(wires_out_0.at(0));
+  const auto wire_1 = std::dynamic_pointer_cast<ArithmeticGMWWire<TypeParam>>(wires_out_1.at(0));
+  wire_0->wait_online();
+  wire_1->wait_online();
+  const auto& share_0 = wire_0->get_share();
+  const auto& share_1 = wire_1->get_share();
+  ASSERT_EQ(share_0.size(), num_simd);
+  ASSERT_EQ(share_1.size(), num_simd);
+  for (std::size_t simd_j = 0; simd_j < num_simd; ++simd_j) {
+    ASSERT_EQ(expected_output.at(simd_j), TypeParam(share_0.at(simd_j) + share_1.at(simd_j)));
+  }
+}
+
+TYPED_TEST(ArithmeticGMWTest, SQR) {
+  std::size_t num_simd = 10;
+  const auto inputs = this->generate_inputs(num_simd);
+  std::vector<TypeParam> expected_output;
+  std::transform(std::begin(inputs), std::end(inputs), std::back_inserter(expected_output),
+                 [](auto x) { return x * x; });
+
+  // input of party 0
+  auto [input_promise, wires_in_0] = this->make_arithmetic_T_input_gate_my(0, 0, num_simd);
+  auto wires_in_1 = this->make_arithmetic_T_input_gate_other(1, 0, num_simd);
+
+  auto wires_0_out =
+      this->gmw_providers_[0]->make_unary_gate(ENCRYPTO::PrimitiveOperationType::SQR, wires_in_0);
+  auto wires_1_out =
+      this->gmw_providers_[1]->make_unary_gate(ENCRYPTO::PrimitiveOperationType::SQR, wires_in_1);
+
+  this->run_setup();
+  this->run_gates_setup();
+  input_promise.set_value(inputs);
+  this->run_gates_online();
+
+  // check wire values
+  const auto wire_0 = std::dynamic_pointer_cast<ArithmeticGMWWire<TypeParam>>(wires_0_out.at(0));
+  const auto wire_1 = std::dynamic_pointer_cast<ArithmeticGMWWire<TypeParam>>(wires_1_out.at(0));
+  wire_0->wait_online();
+  wire_1->wait_online();
+  const auto& share_0 = wire_0->get_share();
+  const auto& share_1 = wire_1->get_share();
+  ASSERT_EQ(share_0.size(), num_simd);
+  ASSERT_EQ(share_1.size(), num_simd);
+  for (std::size_t simd_j = 0; simd_j < num_simd; ++simd_j) {
+    ASSERT_EQ(expected_output.at(simd_j), TypeParam(share_0.at(simd_j) + share_1.at(simd_j)));
+  }
+}
