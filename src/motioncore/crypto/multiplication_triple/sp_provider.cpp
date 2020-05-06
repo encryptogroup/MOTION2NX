@@ -40,7 +40,7 @@ SPProvider::SPProvider(const std::size_t my_id) : my_id_(my_id) {
 
 SPProviderFromOTs::SPProviderFromOTs(
     std::vector<std::unique_ptr<ENCRYPTO::ObliviousTransfer::OTProvider>>& ot_providers,
-    const std::size_t my_id, Logger& logger, Statistics::RunTimeStats& run_time_stats)
+    const std::size_t my_id, Statistics::RunTimeStats& run_time_stats, std::shared_ptr<Logger> logger)
     : SPProvider(my_id),
       ot_providers_(ot_providers),
       ots_rcv_(ot_providers_.size()),
@@ -54,7 +54,9 @@ void SPProviderFromOTs::PreSetup() {
   }
 
   if constexpr (MOTION_DEBUG) {
-    logger_.LogDebug("Start computing presetup for SPs");
+    if (logger_) {
+      logger_->LogDebug("Start computing presetup for SPs");
+    }
   }
   run_time_stats_.record_start<Statistics::RunTimeStats::StatID::sp_presetup>();
 
@@ -62,17 +64,26 @@ void SPProviderFromOTs::PreSetup() {
 
   run_time_stats_.record_end<Statistics::RunTimeStats::StatID::sp_presetup>();
   if constexpr (MOTION_DEBUG) {
-    logger_.LogDebug("Finished computing presetup for SPs");
+    if (logger_) {
+      logger_->LogDebug("Finished computing presetup for SPs");
+    }
   }
 }
 
 void SPProviderFromOTs::Setup() {
   if (!NeedSPs()) {
+    {
+      std::scoped_lock lock(finished_condition_->GetMutex());
+      finished_ = true;
+    }
+    finished_condition_->NotifyAll();
     return;
   }
 
   if constexpr (MOTION_DEBUG) {
-    logger_.LogDebug("Start computing setup for SPs");
+    if (logger_) {
+      logger_->LogDebug("Start computing setup for SPs");
+    }
   }
   run_time_stats_.record_start<Statistics::RunTimeStats::StatID::sp_setup>();
 
@@ -97,7 +108,9 @@ void SPProviderFromOTs::Setup() {
 
   run_time_stats_.record_end<Statistics::RunTimeStats::StatID::sp_setup>();
   if constexpr (MOTION_DEBUG) {
-    logger_.LogDebug("Finished computing setup for SPs");
+    if (logger_) {
+      logger_->LogDebug("Finished computing setup for SPs");
+    }
   }
 }
 

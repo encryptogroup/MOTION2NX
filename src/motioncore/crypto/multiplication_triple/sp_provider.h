@@ -104,7 +104,7 @@ class SPProvider {
   }
 
   template <typename T, typename = std::enable_if_t<std::is_unsigned_v<T>>>
-  SPVector<T> GetSPs(const std::size_t offset, const std::size_t n = 1) {
+  SPVector<T> GetSPs(const std::size_t offset, const std::size_t n = 1) const {
     WaitFinished();
     if constexpr (std::is_same_v<T, std::uint8_t>) {
       return GetSPs(sps_8_, offset, n);
@@ -122,7 +122,7 @@ class SPProvider {
   }
 
   template <typename T, typename = std::enable_if_t<std::is_unsigned_v<T>>>
-  const SPVector<T>& GetSPsAll() noexcept {
+  const SPVector<T>& GetSPsAll() const noexcept {
     WaitFinished();
     if constexpr (std::is_same_v<T, std::uint8_t>) {
       return sps_8_;
@@ -143,7 +143,7 @@ class SPProvider {
   virtual void Setup() = 0;
 
   // blocking wait
-  void WaitFinished() { finished_condition_->Wait(); }
+  void WaitFinished() const { finished_condition_->Wait(); }
 
  protected:
   SPProvider(const std::size_t my_id);
@@ -178,7 +178,7 @@ class SPProviderFromOTs final : public SPProvider {
  public:
   SPProviderFromOTs(
       std::vector<std::unique_ptr<ENCRYPTO::ObliviousTransfer::OTProvider>>& ot_providers,
-      const std::size_t my_id, Logger& logger, Statistics::RunTimeStats& run_time_stats);
+      const std::size_t my_id,Statistics::RunTimeStats& run_time_stats, std::shared_ptr<Logger>);
 
   void PreSetup() final;
 
@@ -198,7 +198,7 @@ class SPProviderFromOTs final : public SPProvider {
 
   const std::size_t max_batch_size_{10'000};
 
-  Logger& logger_;
+  std::shared_ptr<Logger> logger_;
   Statistics::RunTimeStats& run_time_stats_;
 };
 

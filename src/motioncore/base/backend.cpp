@@ -84,7 +84,7 @@ Backend::Backend(Communication::CommunicationLayer &communication_layer, Configu
       my_id, communication_layer_.get_num_parties(), *arithmetic_provider_manager_,
       *ot_provider_manager_, run_time_stats_.back(), logger_);
   sp_provider_ = std::make_shared<SPProviderFromOTs>(ot_provider_manager_->get_providers(), my_id,
-                                                     *logger_, run_time_stats_.back());
+                                                     run_time_stats_.back(), logger_);
   sb_provider_ = std::make_shared<SBProviderFromSPs>(communication_layer_, sp_provider_, *logger_,
                                                      run_time_stats_.back());
   bmr_provider_ = std::make_unique<Crypto::BMRProvider>(communication_layer_);
