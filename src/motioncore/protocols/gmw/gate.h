@@ -263,7 +263,8 @@ class ArithmeticGMWNEGGate : public detail::BasicArithmeticGMWUnaryGate<T> {
 template <typename T>
 class ArithmeticGMWADDGate : public detail::BasicArithmeticGMWBinaryGate<T> {
  public:
-  using detail::BasicArithmeticGMWBinaryGate<T>::BasicArithmeticGMWBinaryGate;
+  ArithmeticGMWADDGate(std::size_t gate_id, GMWProvider&, ArithmeticGMWWireP<T>&&,
+                       ArithmeticGMWWireP<T>&&);
   bool need_setup() const noexcept override { return false; }
   bool need_online() const noexcept override { return true; }
   void evaluate_setup() override;

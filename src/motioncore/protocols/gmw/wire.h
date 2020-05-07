@@ -52,7 +52,7 @@ using BooleanGMWWireVector = std::vector<std::shared_ptr<BooleanGMWWire>>;
 template <typename T>
 class ArithmeticGMWWire : public NewWire {
  public:
-  ArithmeticGMWWire(std::size_t num_simd) : NewWire(num_simd), share_(num_simd) {}
+  ArithmeticGMWWire(std::size_t num_simd) : NewWire(num_simd) {}
   MPCProtocol get_protocol() const noexcept override { return MPCProtocol::ArithmeticGMW; }
   std::size_t get_bit_size() const noexcept override { return ENCRYPTO::bit_size_v<T>; }
   std::vector<T>& get_share() { return share_; };

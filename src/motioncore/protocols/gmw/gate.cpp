@@ -638,7 +638,9 @@ template class ArithmeticGMWOutputGate<std::uint64_t>;
 template <typename T>
 ArithmeticGMWNEGGate<T>::ArithmeticGMWNEGGate(std::size_t gate_id, GMWProvider& gmw_provider,
                                               ArithmeticGMWWireP<T>&& in)
-    : detail::BasicArithmeticGMWUnaryGate<T>(gate_id, gmw_provider, std::move(in)) {}
+    : detail::BasicArithmeticGMWUnaryGate<T>(gate_id, gmw_provider, std::move(in)) {
+  this->output_->get_share().resize(this->input_->get_num_simd());
+}
 
 template <typename T>
 void ArithmeticGMWNEGGate<T>::evaluate_setup() {
@@ -660,6 +662,15 @@ template class ArithmeticGMWNEGGate<std::uint32_t>;
 template class ArithmeticGMWNEGGate<std::uint64_t>;
 
 template <typename T>
+ArithmeticGMWADDGate<T>::ArithmeticGMWADDGate(std::size_t gate_id, GMWProvider& gmw_provider,
+                                              ArithmeticGMWWireP<T>&& in_a,
+                                              ArithmeticGMWWireP<T>&& in_b)
+    : detail::BasicArithmeticGMWBinaryGate<T>(gate_id, gmw_provider, std::move(in_a),
+                                              std::move(in_b)) {
+  this->output_->get_share().resize(this->input_a_->get_num_simd());
+}
+
+template <typename T>
 void ArithmeticGMWADDGate<T>::evaluate_setup() {
   // nothing to do
 }
@@ -668,6 +679,7 @@ template <typename T>
 void ArithmeticGMWADDGate<T>::evaluate_online() {
   this->input_a_->wait_online();
   this->input_b_->wait_online();
+  assert(this->output_->get_share().size() == this->input_a_->get_num_simd());
   std::transform(std::begin(this->input_a_->get_share()), std::end(this->input_a_->get_share()),
                  std::begin(this->input_b_->get_share()), std::begin(this->output_->get_share()),
                  std::plus{});
