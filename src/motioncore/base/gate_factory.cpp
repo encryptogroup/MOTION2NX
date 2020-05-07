@@ -85,7 +85,7 @@ ENCRYPTO::ReusableFiberFuture<BitValues> GateFactory::make_boolean_output_gate_m
   throw std::logic_error(fmt::format("{} does not support Boolean outputs", get_provider_name()));
 }
 
-void GateFactory::make_boolean_output_gate_other(std::size_t output_owner, const WireVector&) {
+void GateFactory::make_boolean_output_gate_other(std::size_t, const WireVector&) {
   throw std::logic_error(fmt::format("{} does not support Boolean outputs", get_provider_name()));
 }
 
