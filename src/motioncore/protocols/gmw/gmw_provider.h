@@ -25,6 +25,7 @@
 #include <memory>
 
 #include "base/gate_factory.h"
+#include "protocols/common/comm_mixin.h"
 #include "utility/bit_vector.h"
 #include "utility/enable_wait.h"
 #include "utility/type_traits.hpp"
@@ -55,7 +56,7 @@ using BooleanGMWWireVector = std::vector<std::shared_ptr<BooleanGMWWire>>;
 
 struct GMWMessageHandler;
 
-class GMWProvider : public GateFactory, public ENCRYPTO::enable_wait_setup {
+class GMWProvider : public GateFactory, public ENCRYPTO::enable_wait_setup, public CommMixin {
  public:
   enum class Role { garbler, evaluator };
   struct my_input_t {};
@@ -76,9 +77,6 @@ class GMWProvider : public GateFactory, public ENCRYPTO::enable_wait_setup {
   std::size_t get_num_parties() const noexcept { return num_parties_; }
 
   std::size_t get_next_input_id(std::size_t num_inputs) noexcept;
-
-  // ENCRYPTO::ReusableFiberFuture<std::vector<ENCRYPTO::BitVector<>>> make_output_gate(
-  //     OutputRecipient, const std::vector<std::shared_ptr<NewWire>>&);
 
   // Implementation of GateFactors interface
 
@@ -132,21 +130,6 @@ class GMWProvider : public GateFactory, public ENCRYPTO::enable_wait_setup {
       ENCRYPTO::PrimitiveOperationType op, const std::vector<std::shared_ptr<NewWire>>&,
       const std::vector<std::shared_ptr<NewWire>>&) override;
 
-  void broadcast_bits_message(std::size_t gate_id, const ENCRYPTO::BitVector<>& message) const;
-  void send_bits_message(std::size_t party_id, std::size_t gate_id,
-                         const ENCRYPTO::BitVector<>& message) const;
-  [[nodiscard]] std::vector<ENCRYPTO::ReusableFiberFuture<ENCRYPTO::BitVector<>>>
-  register_for_bits_messages(std::size_t gate_id, std::size_t num_bits);
-
-  template <typename T>
-  void broadcast_ints_message(std::size_t gate_id, const std::vector<T>& message) const;
-  template <typename T>
-  void send_ints_message(std::size_t party_id, std::size_t gate_id,
-                         const std::vector<T>& message) const;
-  template <typename T>
-  [[nodiscard]] std::vector<ENCRYPTO::ReusableFiberFuture<std::vector<T>>>
-  register_for_ints_messages(std::size_t gate_id, std::size_t num_elements);
-
  private:
   template <typename T>
   std::pair<ENCRYPTO::ReusableFiberPromise<IntegerValues<T>>, WireVector>
@@ -179,7 +162,6 @@ class GMWProvider : public GateFactory, public ENCRYPTO::enable_wait_setup {
   Crypto::MotionBaseProvider& motion_base_provider_;
   MTProvider& mt_provider_;
   SPProvider& sp_provider_;
-  std::shared_ptr<GMWMessageHandler> message_handler_;
   std::size_t my_id_;
   std::size_t num_parties_;
   std::size_t next_input_id_;

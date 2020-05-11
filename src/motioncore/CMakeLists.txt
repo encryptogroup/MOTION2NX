@@ -47,6 +47,7 @@ add_library(motion
         gate/constant_gate.cpp
         gate/conversion_gate.cpp
         gate/gate.cpp
+        protocols/common/comm_mixin.cpp
         protocols/gmw/gate.cpp
         protocols/gmw/gmw_provider.cpp
         protocols/yao/gate.cpp
