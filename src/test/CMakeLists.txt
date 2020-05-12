@@ -3,6 +3,7 @@ add_executable(motiontest
         test_agmw.cpp
         test_arithmetic_provider.cpp
         test_base_ot.cpp
+        test_beavy.cpp
         test_bgmw.cpp
         test_bitmatrix.cpp
         test_bitvector.cpp

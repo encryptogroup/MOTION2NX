@@ -161,6 +161,8 @@ enum class MPCProtocol : unsigned int {
   ArithmeticConstant,
   BooleanConstant,
   Yao,
+  ArithmeticBEAVY,
+  BooleanBEAVY,
   Invalid  // for checking whether the value is valid
 };
 
@@ -177,6 +179,12 @@ inline std::string ToString(MPCProtocol p) {
     }
     case MPCProtocol::Yao: {
       return "Yao";
+    }
+    case MPCProtocol::ArithmeticBEAVY: {
+      return "ArithmeticBEAVY";
+    }
+    case MPCProtocol::BooleanBEAVY: {
+      return "BooleanBEAVY";
     }
     default:
       throw std::invalid_argument("Invalid MPCProtocol");

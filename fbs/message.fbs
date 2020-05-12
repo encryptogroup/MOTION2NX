@@ -18,6 +18,7 @@ enum MessageType : ubyte {
   YaoSetup = 14,
   YaoGate = 15,
   GMWGate = 16,
+  BEAVYGate = 17,
   // add new message types here
   }
 

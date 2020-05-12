@@ -48,6 +48,8 @@ add_library(motion
         gate/conversion_gate.cpp
         gate/gate.cpp
         protocols/common/comm_mixin.cpp
+        protocols/beavy/beavy_provider.cpp
+        protocols/beavy/gate.cpp
         protocols/gmw/gate.cpp
         protocols/gmw/gmw_provider.cpp
         protocols/yao/gate.cpp
