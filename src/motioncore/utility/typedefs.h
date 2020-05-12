@@ -175,6 +175,9 @@ inline std::string ToString(MPCProtocol p) {
     case MPCProtocol::BooleanGMW: {
       return "BooleanGMW";
     }
+    case MPCProtocol::Yao: {
+      return "Yao";
+    }
     default:
       throw std::invalid_argument("Invalid MPCProtocol");
   }
