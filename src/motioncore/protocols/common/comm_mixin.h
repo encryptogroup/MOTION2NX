@@ -49,6 +49,8 @@ class CommMixin {
                          const ENCRYPTO::BitVector<>& message) const;
   [[nodiscard]] std::vector<ENCRYPTO::ReusableFiberFuture<ENCRYPTO::BitVector<>>>
   register_for_bits_messages(std::size_t gate_id, std::size_t num_bits);
+  [[nodiscard]] ENCRYPTO::ReusableFiberFuture<ENCRYPTO::BitVector<>>
+  register_for_bits_message(std::size_t party_id, std::size_t gate_id, std::size_t num_bits);
 
   template <typename T>
   void broadcast_ints_message(std::size_t gate_id, const std::vector<T>& message) const;

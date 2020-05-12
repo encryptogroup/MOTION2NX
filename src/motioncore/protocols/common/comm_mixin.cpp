@@ -287,6 +287,31 @@ CommMixin::register_for_bits_messages(std::size_t gate_id, std::size_t num_bits)
   return futures;
 }
 
+[[nodiscard]] ENCRYPTO::ReusableFiberFuture<ENCRYPTO::BitVector<>>
+CommMixin::register_for_bits_message(std::size_t party_id, std::size_t gate_id, std::size_t num_bits) {
+  assert(party_id != my_id_);
+  auto& mh = *message_handler_;
+  ENCRYPTO::ReusableFiberPromise<ENCRYPTO::BitVector<>> promise;
+  ENCRYPTO::ReusableFiberFuture<ENCRYPTO::BitVector<>> future = promise.get_future();
+  auto [_, success] = mh.expected_messages_.insert(
+      {gate_id, std::make_pair(num_bits, GateMessageHandler::MsgValueType::bit)});
+  if (!success) {
+    throw std::logic_error(fmt::format("tried to register twice for message for gate {}", gate_id));
+  }
+  {
+    auto& promise_map = mh.bits_promises_.at(party_id);
+    auto [_, success] = promise_map.insert({gate_id, std::move(promise)});
+    assert(success);
+  }
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    if (logger_) {
+      logger_->LogTrace(
+          fmt::format("Gate {}: registered for bits message of size {}", gate_id, num_bits));
+    }
+  }
+  return future;
+}
+
 template <typename T>
 void CommMixin::broadcast_ints_message(std::size_t gate_id, const std::vector<T>& message) const {
   communication_layer_.broadcast_message(build_gate_message(gate_id, message));
