@@ -54,8 +54,6 @@ enum class OutputRecipient : std::uint8_t { garbler, evaluator, both };
 class BooleanGMWWire;
 using BooleanGMWWireVector = std::vector<std::shared_ptr<BooleanGMWWire>>;
 
-struct GMWMessageHandler;
-
 class GMWProvider : public GateFactory, public ENCRYPTO::enable_wait_setup, public CommMixin {
  public:
   enum class Role { garbler, evaluator };
