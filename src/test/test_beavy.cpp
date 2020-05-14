@@ -56,8 +56,9 @@ class BEAVYTest : public ::testing::Test {
       // arithmetic_provider_managers_[i] = std::make_unique<MOTION::ArithmeticProviderManager>(
       //     *comm_layers_[i], *ot_provider_managers_[i], nullptr);
       gate_registers_[i] = std::make_unique<MOTION::GateRegister>();
-      beavy_providers_[i] = std::make_unique<BEAVYProvider>(
-          *comm_layers_[i], *gate_registers_[i], *motion_base_providers_[i], loggers_[i]);
+      beavy_providers_[i] = std::make_unique<BEAVYProvider>(*comm_layers_[i], *gate_registers_[i],
+                                                            *motion_base_providers_[i],
+                                                            *ot_provider_managers_[i], loggers_[i]);
     }
   }
 
@@ -84,12 +85,12 @@ class BEAVYTest : public ::testing::Test {
       futs.emplace_back(std::async(std::launch::async, [this, i] {
         comm_layers_[i]->start();
         motion_base_providers_[i]->setup();
-        // base_ot_providers_[i]->ComputeBaseOTs();
-        // auto f = std::async(std::launch::async, [this, i] {
-        //   ot_provider_managers_[i]->get_provider(1 - i).SendSetup();
-        // });
-        // ot_provider_managers_[i]->get_provider(1 - i).ReceiveSetup();
-        // f.get();
+        base_ot_providers_[i]->ComputeBaseOTs();
+        auto f = std::async(std::launch::async, [this, i] {
+          ot_provider_managers_[i]->get_provider(1 - i).SendSetup();
+        });
+        ot_provider_managers_[i]->get_provider(1 - i).ReceiveSetup();
+        f.get();
         beavy_providers_[i]->setup();
       }));
     }
@@ -97,31 +98,31 @@ class BEAVYTest : public ::testing::Test {
   }
 
   void run_gates_setup() {
-    auto& gates_g = gate_registers_[garbler_i_]->get_gates();
-    auto& gates_e = gate_registers_[evaluator_i_]->get_gates();
-    for (auto& gate : gates_g) {
-      gate->evaluate_setup();
-    }
-    for (auto& gate : gates_e) {
-      gate->evaluate_setup();
-    }
+    auto eval_gates = [this](auto party_id) {
+      for (auto& gate : gate_registers_[party_id]->get_gates()) {
+        if (gate->need_setup()) {
+          gate->evaluate_setup();
+        }
+      }
+    };
+    auto f0 = std::async(std::launch::async, eval_gates, 0);
+    auto f1 = std::async(std::launch::async, eval_gates, 1);
+    f0.get();
+    f1.get();
   }
 
   void run_gates_online() {
-    auto& gates_g = gate_registers_[garbler_i_]->get_gates();
-    auto& gates_e = gate_registers_[evaluator_i_]->get_gates();
-    auto fut_g = std::async(std::launch::async, [&gates_g] {
-      for (auto& gate : gates_g) {
-        gate->evaluate_online();
+    auto eval_gates = [this](auto party_id) {
+      for (auto& gate : gate_registers_[party_id]->get_gates()) {
+        if (gate->need_online()) {
+          gate->evaluate_online();
+        }
       }
-    });
-    auto fut_e = std::async(std::launch::async, [&gates_e] {
-      for (auto& gate : gates_e) {
-        gate->evaluate_online();
-      }
-    });
-    fut_g.get();
-    fut_e.get();
+    };
+    auto f0 = std::async(std::launch::async, eval_gates, 0);
+    auto f1 = std::async(std::launch::async, eval_gates, 1);
+    f0.get();
+    f1.get();
   }
 
   std::vector<std::unique_ptr<MOTION::Communication::CommunicationLayer>> comm_layers_;
@@ -395,3 +396,101 @@ TEST_F(BooleanBEAVYTest, XOR) {
     ASSERT_EQ(expected_output_bits, pshare_0 ^ sshare_0 ^ sshare_1);
   }
 }
+
+TEST_F(BooleanBEAVYTest, AND) {
+  std::size_t num_wires = 8;
+  std::size_t num_simd = 10;
+  const auto inputs_a = generate_inputs(num_wires, num_simd);
+  const auto inputs_b = generate_inputs(num_wires, num_simd);
+  MOTION::BitValues expected_output;
+  std::transform(std::begin(inputs_a), std::end(inputs_a), std::begin(inputs_b),
+                 std::back_inserter(expected_output),
+                 [](const auto& bv_a, const auto& bv_b) { return bv_a & bv_b; });
+
+  auto [input_a_promise, wires_0_in_a] =
+      beavy_providers_[0]->make_boolean_input_gate_my(0, num_wires, num_simd);
+  auto wires_1_in_a = beavy_providers_[1]->make_boolean_input_gate_other(0, num_wires, num_simd);
+  auto wires_0_in_b = beavy_providers_[0]->make_boolean_input_gate_other(1, num_wires, num_simd);
+  auto [input_b_promise, wires_1_in_b] =
+      beavy_providers_[1]->make_boolean_input_gate_my(1, num_wires, num_simd);
+  auto wires_0_out = beavy_providers_[0]->make_binary_gate(ENCRYPTO::PrimitiveOperationType::AND,
+                                                           wires_0_in_a, wires_0_in_b);
+  auto wires_1_out = beavy_providers_[1]->make_binary_gate(ENCRYPTO::PrimitiveOperationType::AND,
+                                                           wires_1_in_a, wires_1_in_b);
+
+  run_setup();
+  run_gates_setup();
+  input_a_promise.set_value(inputs_a);
+  input_b_promise.set_value(inputs_b);
+  run_gates_online();
+
+  for (std::size_t wire_i = 0; wire_i < num_wires; ++wire_i) {
+    const auto& expected_output_bits = expected_output.at(wire_i);
+    const auto wire_0 = std::dynamic_pointer_cast<BooleanBEAVYWire>(wires_0_out.at(wire_i));
+    const auto wire_1 = std::dynamic_pointer_cast<BooleanBEAVYWire>(wires_1_out.at(wire_i));
+    wire_0->wait_online();
+    wire_1->wait_online();
+    const auto& pshare_0 = wire_0->get_public_share();
+    const auto& pshare_1 = wire_1->get_public_share();
+    const auto& sshare_0 = wire_0->get_secret_share();
+    const auto& sshare_1 = wire_1->get_secret_share();
+    ASSERT_EQ(pshare_0.GetSize(), num_simd);
+    ASSERT_EQ(pshare_1.GetSize(), num_simd);
+    ASSERT_EQ(sshare_0.GetSize(), num_simd);
+    ASSERT_EQ(sshare_1.GetSize(), num_simd);
+    ASSERT_EQ(pshare_0, pshare_1);
+    ASSERT_EQ(expected_output_bits, pshare_0 ^ sshare_0 ^ sshare_1);
+  }
+}
+
+template <typename T>
+class ArithmeticBEAVYTest : public BEAVYTest {
+ public:
+  static std::vector<T> generate_inputs(std::size_t num_simd) {
+    return MOTION::Helpers::RandomVector<T>(num_simd);
+  }
+  std::pair<ENCRYPTO::ReusableFiberPromise<MOTION::IntegerValues<T>>, MOTION::WireVector>
+  make_arithmetic_T_input_gate_my(std::size_t party_id, std::size_t input_owner,
+                                  std::size_t num_simd) {
+    auto& gp = *beavy_providers_.at(party_id);
+    if constexpr (ENCRYPTO::bit_size_v<T> == 8) {
+      return gp.make_arithmetic_8_input_gate_my(input_owner, num_simd);
+    } else if constexpr (ENCRYPTO::bit_size_v<T> == 16) {
+      return gp.make_arithmetic_16_input_gate_my(input_owner, num_simd);
+    } else if constexpr (ENCRYPTO::bit_size_v<T> == 32) {
+      return gp.make_arithmetic_32_input_gate_my(input_owner, num_simd);
+    } else if constexpr (ENCRYPTO::bit_size_v<T> == 64) {
+      return gp.make_arithmetic_64_input_gate_my(input_owner, num_simd);
+    }
+  }
+  MOTION::WireVector make_arithmetic_T_input_gate_other(std::size_t party_id,
+                                                        std::size_t input_owner,
+                                                        std::size_t num_simd) {
+    auto& gp = *beavy_providers_.at(party_id);
+    if constexpr (ENCRYPTO::bit_size_v<T> == 8) {
+      return gp.make_arithmetic_8_input_gate_other(input_owner, num_simd);
+    } else if constexpr (ENCRYPTO::bit_size_v<T> == 16) {
+      return gp.make_arithmetic_16_input_gate_other(input_owner, num_simd);
+    } else if constexpr (ENCRYPTO::bit_size_v<T> == 32) {
+      return gp.make_arithmetic_32_input_gate_other(input_owner, num_simd);
+    } else if constexpr (ENCRYPTO::bit_size_v<T> == 64) {
+      return gp.make_arithmetic_64_input_gate_other(input_owner, num_simd);
+    }
+  }
+  ENCRYPTO::ReusableFiberFuture<MOTION::IntegerValues<T>> make_arithmetic_T_output_gate_my(
+      std::size_t party_id, std::size_t output_owner, const MOTION::WireVector& in) {
+    auto& gp = *beavy_providers_.at(party_id);
+    if constexpr (ENCRYPTO::bit_size_v<T> == 8) {
+      return gp.make_arithmetic_8_output_gate_my(output_owner, in);
+    } else if constexpr (ENCRYPTO::bit_size_v<T> == 16) {
+      return gp.make_arithmetic_16_output_gate_my(output_owner, in);
+    } else if constexpr (ENCRYPTO::bit_size_v<T> == 32) {
+      return gp.make_arithmetic_32_output_gate_my(output_owner, in);
+    } else if constexpr (ENCRYPTO::bit_size_v<T> == 64) {
+      return gp.make_arithmetic_64_output_gate_my(output_owner, in);
+    }
+  }
+};
+
+using integer_types = ::testing::Types<std::uint8_t, std::uint16_t, std::uint32_t, std::uint64_t>;
+TYPED_TEST_SUITE(ArithmeticBEAVYTest, integer_types);

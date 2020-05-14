@@ -67,7 +67,7 @@ class BooleanBEAVYWire : public NewWire, public ENCRYPTO::enable_wait_setup {
 using BooleanBEAVYWireVector = std::vector<std::shared_ptr<BooleanBEAVYWire>>;
 
 template <typename T>
-class ArithmeticBEAVYWire : public NewWire {
+class ArithmeticBEAVYWire : public NewWire, public ENCRYPTO::enable_wait_setup {
  public:
   ArithmeticBEAVYWire(std::size_t num_simd)
       : NewWire(num_simd), public_share_(num_simd), secret_share_(num_simd) {}
@@ -78,6 +78,18 @@ class ArithmeticBEAVYWire : public NewWire {
   };
   std::pair<const std::vector<T>&, const std::vector<T>&> get_share() const {
     return {public_share_, secret_share_};
+  };
+  std::vector<T>& get_public_share() {
+    return public_share_;
+  };
+  const std::vector<T>& get_public_share() const {
+    return public_share_;
+  };
+  std::vector<T>& get_secret_share() {
+    return secret_share_;
+  };
+  const std::vector<T>& get_secret_share() const {
+    return secret_share_;
   };
 
  private:

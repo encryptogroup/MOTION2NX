@@ -30,6 +30,11 @@
 #include "utility/type_traits.hpp"
 #include "wire.h"
 
+namespace ENCRYPTO::ObliviousTransfer {
+class XCOTBitSender;
+class XCOTBitReceiver;
+}
+
 namespace MOTION::proto::beavy {
 
 namespace detail {
@@ -88,7 +93,7 @@ class BooleanBEAVYInputGateReceiver : public NewGate {
   BooleanBEAVYInputGateReceiver(std::size_t gate_id, BEAVYProvider&, std::size_t num_wires,
                               std::size_t num_simd, std::size_t input_owner);
   bool need_setup() const noexcept override { return true; }
-  bool need_online() const noexcept override { return false; }
+  bool need_online() const noexcept override { return true; }
   void evaluate_setup() override;
   void evaluate_online() override;
   BooleanBEAVYWireVector& get_output_wires() noexcept { return outputs_; }
@@ -136,26 +141,73 @@ class BooleanBEAVYINVGate : public detail::BasicBooleanBEAVYUnaryGate {
 
 class BooleanBEAVYXORGate : public detail::BasicBooleanBEAVYBinaryGate {
  public:
-  using BasicBooleanBEAVYBinaryGate::BasicBooleanBEAVYBinaryGate;
+  BooleanBEAVYXORGate(std::size_t gate_id, BEAVYProvider&, BooleanBEAVYWireVector&&,
+                    BooleanBEAVYWireVector&&);
   bool need_setup() const noexcept override { return true; }
   bool need_online() const noexcept override { return true; }
   void evaluate_setup() override;
   void evaluate_online() override;
 };
 
-// class BooleanBEAVYANDGate : public detail::BasicBooleanBEAVYBinaryGate {
-//  public:
-//   BooleanBEAVYANDGate(std::size_t gate_id, BEAVYProvider&, BooleanBEAVYWireVector&&,
-//                     BooleanBEAVYWireVector&&);
-//   bool need_setup() const noexcept override { return false; }
-//   bool need_online() const noexcept override { return true; }
-//   void evaluate_setup() override;
-//   void evaluate_online() override;
-//
-//  private:
-//   BEAVYProvider& beavy_provider_;
-//   std::size_t mt_offset_;
-//   std::vector<ENCRYPTO::ReusableFiberFuture<ENCRYPTO::BitVector<>>> share_futures_;
-// };
+class BooleanBEAVYANDGate : public detail::BasicBooleanBEAVYBinaryGate {
+ public:
+  BooleanBEAVYANDGate(std::size_t gate_id, BEAVYProvider&, BooleanBEAVYWireVector&&,
+                    BooleanBEAVYWireVector&&);
+  ~BooleanBEAVYANDGate();
+  bool need_setup() const noexcept override { return true; }
+  bool need_online() const noexcept override { return true; }
+  void evaluate_setup() override;
+  void evaluate_online() override;
+
+ private:
+  BEAVYProvider& beavy_provider_;
+  ENCRYPTO::ReusableFiberFuture<ENCRYPTO::BitVector<>> share_future_;
+  ENCRYPTO::BitVector<> delta_a_share_;
+  ENCRYPTO::BitVector<> delta_b_share_;
+  ENCRYPTO::BitVector<> Delta_y_share_;
+  std::unique_ptr<ENCRYPTO::ObliviousTransfer::XCOTBitSender> ot_sender_;
+  std::unique_ptr<ENCRYPTO::ObliviousTransfer::XCOTBitReceiver> ot_receiver_;
+};
+
+template <typename T>
+class ArithmeticBEAVYInputGateSender : public NewGate {
+ public:
+  ArithmeticBEAVYInputGateSender(std::size_t gate_id, BEAVYProvider&, std::size_t num_simd,
+                               ENCRYPTO::ReusableFiberFuture<std::vector<T>>&&);
+  bool need_setup() const noexcept override { return true; }
+  bool need_online() const noexcept override { return true; }
+  void evaluate_setup() override;
+  void evaluate_online() override;
+  ArithmeticBEAVYWireP<T>& get_output_wire() noexcept { return output_; }
+
+ private:
+  BEAVYProvider& beavy_provider_;
+  std::size_t num_wires_;
+  std::size_t num_simd_;
+  std::size_t input_id_;
+  ENCRYPTO::ReusableFiberFuture<std::vector<T>> input_future_;
+  ArithmeticBEAVYWireP<T> output_;
+};
+
+template <typename T>
+class ArithmeticBEAVYInputGateReceiver : public NewGate {
+ public:
+  ArithmeticBEAVYInputGateReceiver(std::size_t gate_id, BEAVYProvider&, std::size_t num_simd,
+                                 std::size_t input_owner);
+  bool need_setup() const noexcept override { return true; }
+  bool need_online() const noexcept override { return true; }
+  void evaluate_setup() override;
+  void evaluate_online() override;
+  ArithmeticBEAVYWireP<T>& get_output_wire() noexcept { return output_; }
+
+ private:
+  BEAVYProvider& beavy_provider_;
+  std::size_t num_wires_;
+  std::size_t num_simd_;
+  std::size_t input_owner_;
+  std::size_t input_id_;
+  ArithmeticBEAVYWireP<T> output_;
+  ENCRYPTO::ReusableFiberFuture<std::vector<T>> public_share_future_;
+};
 
 }  // namespace MOTION::proto::beavy

@@ -40,23 +40,29 @@
 namespace MOTION::proto::beavy {
 
 BEAVYProvider::BEAVYProvider(Communication::CommunicationLayer& communication_layer,
-                         GateRegister& gate_register,
-                         Crypto::MotionBaseProvider& motion_base_provider,
-                         std::shared_ptr<Logger> logger)
+                             GateRegister& gate_register,
+                             Crypto::MotionBaseProvider& motion_base_provider,
+                             ENCRYPTO::ObliviousTransfer::OTProviderManager& ot_manager,
+                             std::shared_ptr<Logger> logger)
     : CommMixin(communication_layer, Communication::MessageType::BEAVYGate, logger),
       communication_layer_(communication_layer),
       gate_register_(gate_register),
       motion_base_provider_(motion_base_provider),
+      ot_manager_(ot_manager),
       my_id_(communication_layer_.get_my_id()),
       num_parties_(communication_layer_.get_num_parties()),
       next_input_id_(0),
       logger_(std::move(logger)) {
+  if (communication_layer.get_num_parties() != 2) {
+    throw std::logic_error("currently only two parties are supported");
+  }
 }
 
 BEAVYProvider::~BEAVYProvider() = default;
 
 void BEAVYProvider::setup() {
   motion_base_provider_.wait_for_setup();
+  // TODO wait for ot setup
   set_setup_ready();
 }
 
@@ -97,7 +103,7 @@ static std::vector<std::shared_ptr<NewWire>> cast_wires(BooleanBEAVYWireVector&&
 
 std::pair<ENCRYPTO::ReusableFiberPromise<BitValues>, WireVector>
 BEAVYProvider::make_boolean_input_gate_my(std::size_t input_owner, std::size_t num_wires,
-                                        std::size_t num_simd) {
+                                          std::size_t num_simd) {
   if (input_owner != my_id_) {
     throw std::logic_error("trying to create input gate for wrong party");
   }
@@ -105,21 +111,22 @@ BEAVYProvider::make_boolean_input_gate_my(std::size_t input_owner, std::size_t n
   ENCRYPTO::ReusableFiberPromise<std::vector<ENCRYPTO::BitVector<>>> promise;
   auto gate_id = gate_register_.get_next_gate_id();
   auto gate = std::make_unique<BooleanBEAVYInputGateSender>(gate_id, *this, num_wires, num_simd,
-                                                          promise.get_future());
+                                                            promise.get_future());
   output = gate->get_output_wires();
   gate_register_.register_gate(std::move(gate));
   return {std::move(promise), cast_wires(std::move(output))};
 }
 
 WireVector BEAVYProvider::make_boolean_input_gate_other(std::size_t input_owner,
-                                                      std::size_t num_wires, std::size_t num_simd) {
+                                                        std::size_t num_wires,
+                                                        std::size_t num_simd) {
   if (input_owner == my_id_) {
     throw std::logic_error("trying to create input gate for wrong party");
   }
   BooleanBEAVYWireVector output;
   auto gate_id = gate_register_.get_next_gate_id();
   auto gate = std::make_unique<BooleanBEAVYInputGateReceiver>(gate_id, *this, num_wires, num_simd,
-                                                            input_owner);
+                                                              input_owner);
   output = gate->get_output_wires();
   gate_register_.register_gate(std::move(gate));
   return cast_wires(std::move(output));
@@ -154,7 +161,8 @@ void BEAVYProvider::make_boolean_output_gate_other(std::size_t output_owner, con
 
 // template <typename T>
 // std::pair<ENCRYPTO::ReusableFiberPromise<IntegerValues<T>>, WireVector>
-// BEAVYProvider::basic_make_arithmetic_input_gate_my(std::size_t input_owner, std::size_t num_simd) {
+// BEAVYProvider::basic_make_arithmetic_input_gate_my(std::size_t input_owner, std::size_t num_simd)
+// {
 //   if (input_owner != my_id_) {
 //     throw std::logic_error("trying to create input gate for wrong party");
 //   }
@@ -192,31 +200,33 @@ BEAVYProvider::make_arithmetic_64_input_gate_my(std::size_t input_owner, std::si
 //   }
 //   auto gate_id = gate_register_.get_next_gate_id();
 //   auto gate =
-//       std::make_unique<ArithmeticBEAVYInputGateReceiver<T>>(gate_id, *this, num_simd, input_owner);
+//       std::make_unique<ArithmeticBEAVYInputGateReceiver<T>>(gate_id, *this, num_simd,
+//       input_owner);
 //   auto output = gate->get_output_wire();
 //   gate_register_.register_gate(std::move(gate));
 //   return {cast_arith_wire(std::move(output))};
 // }
 
 WireVector BEAVYProvider::make_arithmetic_8_input_gate_other(std::size_t input_owner,
-                                                           std::size_t num_simd) {
+                                                             std::size_t num_simd) {
   // return basic_make_arithmetic_input_gate_other<std::uint8_t>(input_owner, num_simd);
 }
 WireVector BEAVYProvider::make_arithmetic_16_input_gate_other(std::size_t input_owner,
-                                                            std::size_t num_simd) {
+                                                              std::size_t num_simd) {
   // return basic_make_arithmetic_input_gate_other<std::uint16_t>(input_owner, num_simd);
 }
 WireVector BEAVYProvider::make_arithmetic_32_input_gate_other(std::size_t input_owner,
-                                                            std::size_t num_simd) {
+                                                              std::size_t num_simd) {
   // return basic_make_arithmetic_input_gate_other<std::uint32_t>(input_owner, num_simd);
 }
 WireVector BEAVYProvider::make_arithmetic_64_input_gate_other(std::size_t input_owner,
-                                                            std::size_t num_simd) {
+                                                              std::size_t num_simd) {
   // return basic_make_arithmetic_input_gate_other<std::uint64_t>(input_owner, num_simd);
 }
 
 // template <typename T>
-// ENCRYPTO::ReusableFiberFuture<IntegerValues<T>> BEAVYProvider::basic_make_arithmetic_output_gate_my(
+// ENCRYPTO::ReusableFiberFuture<IntegerValues<T>>
+// BEAVYProvider::basic_make_arithmetic_output_gate_my(
 //     std::size_t output_owner, const WireVector& in) {
 //   if (output_owner != ALL_PARTIES && output_owner != my_id_) {
 //     throw std::logic_error("trying to create output gate for wrong party");
@@ -230,7 +240,8 @@ WireVector BEAVYProvider::make_arithmetic_64_input_gate_other(std::size_t input_
 //   }
 //   auto gate_id = gate_register_.get_next_gate_id();
 //   auto gate =
-//       std::make_unique<ArithmeticBEAVYOutputGate<T>>(gate_id, *this, std::move(input), output_owner);
+//       std::make_unique<ArithmeticBEAVYOutputGate<T>>(gate_id, *this, std::move(input),
+//       output_owner);
 //   auto future = gate->get_output_future();
 //   gate_register_.register_gate(std::move(gate));
 //   return future;
@@ -254,7 +265,7 @@ BEAVYProvider::make_arithmetic_64_output_gate_my(std::size_t output_owner, const
 }
 
 void BEAVYProvider::make_arithmetic_output_gate_other(std::size_t output_owner,
-                                                    const WireVector& in) {
+                                                      const WireVector& in) {
   // if (output_owner == ALL_PARTIES || output_owner == my_id_) {
   //   throw std::logic_error("trying to create output gate for wrong party");
   // }
@@ -311,8 +322,8 @@ std::vector<std::shared_ptr<NewWire>> BEAVYProvider::make_binary_gate(
   switch (op) {
     case ENCRYPTO::PrimitiveOperationType::XOR:
       return make_xor_gate(in_a, in_b);
-    // case ENCRYPTO::PrimitiveOperationType::AND:
-    //   return make_and_gate(in_a, in_b);
+    case ENCRYPTO::PrimitiveOperationType::AND:
+      return make_and_gate(in_a, in_b);
     // case ENCRYPTO::PrimitiveOperationType::ADD:
     //   return make_add_gate(in_a, in_b);
     // case ENCRYPTO::PrimitiveOperationType::MUL:
@@ -330,24 +341,32 @@ WireVector BEAVYProvider::make_inv_gate(const WireVector& in_a) {
   return cast_wires(std::move(output));
 }
 
-WireVector BEAVYProvider::make_xor_gate(const WireVector&in_a,
-                                                const WireVector& in_b) {
+template <typename BinaryGate>
+WireVector BEAVYProvider::make_boolean_binary_gate(const WireVector& in_a, const WireVector& in_b) {
   BooleanBEAVYWireVector output;
   auto gate_id = gate_register_.get_next_gate_id();
-  auto gate = std::make_unique<BooleanBEAVYXORGate>(gate_id, cast_wires(in_a), cast_wires(in_b));
+  auto gate = std::make_unique<BinaryGate>(gate_id, *this, cast_wires(in_a), cast_wires(in_b));
   output = gate->get_output_wires();
   gate_register_.register_gate(std::move(gate));
   return cast_wires(std::move(output));
+}
+
+WireVector BEAVYProvider::make_xor_gate(const WireVector& in_a, const WireVector& in_b) {
+  return make_boolean_binary_gate<BooleanBEAVYXORGate>(in_a, in_b);
+}
+
+WireVector BEAVYProvider::make_and_gate(const WireVector& in_a, const WireVector& in_b) {
+  return make_boolean_binary_gate<BooleanBEAVYANDGate>(in_a, in_b);
 }
 
 // WireVector BEAVYProvider::make_and_gate(const WireVector& in_a,
 //                                                 const WireVector& in_b) {
 //   BooleanBEAVYWireVector output;
 //   auto gate_id = gate_register_.get_next_gate_id();
-//   auto gate = std::make_unique<BooleanBEAVYANDGate>(gate_id, *this, cast_wires(in_a), cast_wires(in_b));
-//   output = gate->get_output_wires();
+//   auto gate = std::make_unique<BooleanBEAVYANDGate>(gate_id, *this, cast_wires(in_a),
+//   cast_wires(in_b)); output = gate->get_output_wires();
 //   gate_register_.register_gate(std::move(gate));
 //   return cast_wires(std::move(output));
 // }
 
-}  // namespace MOTION::proto::gmw
+}  // namespace MOTION::proto::beavy
