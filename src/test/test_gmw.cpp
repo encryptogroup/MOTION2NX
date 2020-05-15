@@ -567,6 +567,47 @@ TYPED_TEST(ArithmeticGMWTest, OutputSingle) {
   ASSERT_EQ(inputs_b, outputs_b);
 }
 
+TYPED_TEST(ArithmeticGMWTest, OutputBoth) {
+  std::size_t num_simd = 10;
+  const auto inputs_a = this->generate_inputs(num_simd);
+  const auto inputs_b = this->generate_inputs(num_simd);
+
+  // input of party 0
+  auto [input_a_promise, wires_a_in_0] = this->make_arithmetic_T_input_gate_my(0, 0, num_simd);
+  auto wires_a_in_1 = this->make_arithmetic_T_input_gate_other(1, 0, num_simd);
+
+  // input of party 1
+  auto wires_b_in_0 = this->make_arithmetic_T_input_gate_other(0, 1, num_simd);
+  auto [input_b_promise, wires_b_in_1] = this->make_arithmetic_T_input_gate_my(1, 1, num_simd);
+
+  auto output_future_a_0 = this->make_arithmetic_T_output_gate_my(0, MOTION::ALL_PARTIES, wires_a_in_0);
+  auto output_future_a_1 = this->make_arithmetic_T_output_gate_my(1, MOTION::ALL_PARTIES, wires_a_in_1);
+  auto output_future_b_0 = this->make_arithmetic_T_output_gate_my(0, MOTION::ALL_PARTIES, wires_b_in_0);
+  auto output_future_b_1 = this->make_arithmetic_T_output_gate_my(1, MOTION::ALL_PARTIES, wires_b_in_1);
+
+  this->run_setup();
+  this->run_gates_setup();
+  input_a_promise.set_value(inputs_a);
+  input_b_promise.set_value(inputs_b);
+  this->run_gates_online();
+
+  auto outputs_a_0 = output_future_a_0.get();
+  auto outputs_a_1 = output_future_a_1.get();
+  auto outputs_b_0 = output_future_b_0.get();
+  auto outputs_b_1 = output_future_b_1.get();
+
+  ASSERT_EQ(outputs_a_0.size(), num_simd);
+  ASSERT_EQ(outputs_a_1.size(), num_simd);
+  ASSERT_EQ(outputs_b_0.size(), num_simd);
+  ASSERT_EQ(outputs_b_1.size(), num_simd);
+
+  // check outputs values
+  ASSERT_EQ(inputs_a, outputs_a_0);
+  ASSERT_EQ(inputs_a, outputs_a_1);
+  ASSERT_EQ(inputs_b, outputs_b_0);
+  ASSERT_EQ(inputs_b, outputs_b_1);
+}
+
 TYPED_TEST(ArithmeticGMWTest, NEG) {
   std::size_t num_simd = 10;
   const auto inputs = this->generate_inputs(num_simd);
