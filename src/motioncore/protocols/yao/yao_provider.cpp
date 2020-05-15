@@ -30,8 +30,10 @@
 #include "communication/fbs_headers/yao_message_generated.h"
 #include "communication/message.h"
 #include "communication/message_handler.h"
+#include "conversion.h"
 #include "crypto/garbling/half_gates.h"
 #include "gate.h"
+#include "protocols/gmw/wire.h"
 #include "utility/constants.h"
 #include "utility/logger.h"
 #include "utility/typedefs.h"
@@ -78,9 +80,9 @@ void YaoMessageHandler::received_message([[maybe_unused]] std::size_t party_id,
       }
       Crypto::garbling::HalfGatePublicData public_data;
       public_data.aes_key.load_from_memory(
-              reinterpret_cast<const std::byte *>(setup_message->aes_key()->data()));
+          reinterpret_cast<const std::byte *>(setup_message->aes_key()->data()));
       public_data.hash_key.load_from_memory(
-              reinterpret_cast<const std::byte *>(setup_message->hash_key()->data()));
+          reinterpret_cast<const std::byte *>(setup_message->hash_key()->data()));
       try {
         hg_public_data_promise_.set_value(std::move(public_data));
       } catch (std::future_error &e) {
@@ -478,6 +480,36 @@ void YaoProvider::evaluate_garbled_tables(std::size_t gate_id,
                                           ENCRYPTO::block128_vector &keys_out) const noexcept {
   assert(hg_evaluator_);
   hg_evaluator_->batch_evaluate_and(keys_out, tables, gate_id, keys_a, keys_b);
+}
+
+static std::vector<std::shared_ptr<NewWire>> cast_wires(gmw::BooleanGMWWireVector &&wires) {
+  return std::vector<std::shared_ptr<NewWire>>(std::begin(wires), std::end(wires));
+}
+
+WireVector YaoProvider::make_convert_to_boolean_gmw_gate(YaoWireVector &&in_a) {
+  auto gate_id = gate_register_.get_next_gate_id();
+  gmw::BooleanGMWWireVector output;
+  if (role_ == Role::garbler) {
+    auto gate = std::make_unique<YaoToBooleanGMWGateGarbler>(gate_id, *this, std::move(in_a));
+    output = gate->get_output_wires();
+    gate_register_.register_gate(std::move(gate));
+  } else {
+    auto gate = std::make_unique<YaoToBooleanGMWGateEvaluator>(gate_id, *this, std::move(in_a));
+    output = gate->get_output_wires();
+    gate_register_.register_gate(std::move(gate));
+  }
+  return cast_wires(std::move(output));
+}
+
+WireVector YaoProvider::convert(MPCProtocol proto, const WireVector &in) {
+  auto input = cast_wires(in);
+
+  switch (proto) {
+    case MPCProtocol::BooleanGMW:
+      return make_convert_to_boolean_gmw_gate(std::move(input));
+    default:
+      throw std::logic_error(fmt::format("Yao does not support conversion to {}", ToString(proto)));
+  }
 }
 
 }  // namespace MOTION::proto::yao

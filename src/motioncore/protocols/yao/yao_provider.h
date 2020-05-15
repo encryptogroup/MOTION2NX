@@ -99,6 +99,8 @@ class YaoProvider : public GateFactory {
       ENCRYPTO::PrimitiveOperationType op, const std::vector<std::shared_ptr<NewWire>>&,
       const std::vector<std::shared_ptr<NewWire>>&) override;
 
+  WireVector convert(MPCProtocol proto, const WireVector&) override;
+
   void setup();
   ENCRYPTO::block128_t get_global_offset() const;
 
@@ -126,6 +128,7 @@ class YaoProvider : public GateFactory {
   YaoWireVector make_inv_gate(YaoWireVector&& in_a);
   YaoWireVector make_xor_gate(YaoWireVector&& in_a, YaoWireVector&& in_b);
   YaoWireVector make_and_gate(YaoWireVector&& in_a, YaoWireVector&& in_b);
+  WireVector make_convert_to_boolean_gmw_gate(YaoWireVector&& in_a);
 
  private:
   Communication::CommunicationLayer& communication_layer_;

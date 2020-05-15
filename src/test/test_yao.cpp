@@ -31,6 +31,7 @@
 #include "crypto/motion_base_provider.h"
 #include "crypto/oblivious_transfer/ot_provider.h"
 #include "gate/new_gate.h"
+#include "protocols/gmw/wire.h"
 #include "protocols/yao/wire.h"
 #include "protocols/yao/yao_provider.h"
 #include "utility/logger.h"
@@ -406,4 +407,39 @@ TEST_F(YaoTest, AND) {
 
   // check output values
   ASSERT_EQ(expected_output, outputs);
+}
+
+TEST_F(YaoTest, YaoToBooleanGMW) {
+  std::size_t num_wires = 8;
+  std::size_t num_simd = 10;
+  const auto inputs = generate_inputs(num_wires, num_simd);
+
+  auto [input_promise, wires_g_in] =
+      yao_providers_[garbler_i_]->make_boolean_input_gate_my(garbler_i_, num_wires, num_simd);
+  auto wires_e_in =
+      yao_providers_[evaluator_i_]->make_boolean_input_gate_other(garbler_i_, num_wires, num_simd);
+
+  auto wires_g = yao_providers_[garbler_i_]->convert(MOTION::MPCProtocol::BooleanGMW, wires_g_in);
+  auto wires_e = yao_providers_[evaluator_i_]->convert(MOTION::MPCProtocol::BooleanGMW, wires_e_in);
+
+  run_setup();
+  run_gates_setup();
+  input_promise.set_value(inputs);
+  run_gates_online();
+
+  // check wire values
+  for (std::size_t wire_i = 0; wire_i < num_wires; ++wire_i) {
+    const auto& expected_output_bits = inputs.at(wire_i);
+    const auto wire_g =
+        std::dynamic_pointer_cast<MOTION::proto::gmw::BooleanGMWWire>(wires_g.at(wire_i));
+    const auto wire_e =
+        std::dynamic_pointer_cast<MOTION::proto::gmw::BooleanGMWWire>(wires_e.at(wire_i));
+    wire_g->wait_online();
+    wire_e->wait_online();
+    const auto& share_g = wire_g->get_share();
+    const auto& share_e = wire_e->get_share();
+    ASSERT_EQ(share_g.GetSize(), num_simd);
+    ASSERT_EQ(share_e.GetSize(), num_simd);
+    ASSERT_EQ(expected_output_bits, share_g ^ share_e);
+  }
 }
