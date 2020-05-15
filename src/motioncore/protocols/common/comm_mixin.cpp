@@ -380,4 +380,39 @@ template std::vector<ENCRYPTO::ReusableFiberFuture<std::vector<std::uint32_t>>>
 template std::vector<ENCRYPTO::ReusableFiberFuture<std::vector<std::uint64_t>>>
     CommMixin::register_for_ints_messages(std::size_t, std::size_t);
 
+template <typename T>
+[[nodiscard]] ENCRYPTO::ReusableFiberFuture<std::vector<T>> CommMixin::register_for_ints_message(
+    std::size_t party_id, std::size_t gate_id, std::size_t num_elements) {
+  assert(party_id != my_id_);
+  auto& mh = *message_handler_;
+  ENCRYPTO::ReusableFiberPromise<std::vector<T>> promise;
+  ENCRYPTO::ReusableFiberFuture<std::vector<T>> future = promise.get_future();
+  auto type = GateMessageHandler::get_msg_value_type<T>();
+  auto [_, success] = mh.expected_messages_.insert({gate_id, std::make_pair(num_elements, type)});
+  if (!success) {
+    throw std::logic_error(fmt::format("tried to register twice for message for gate {}", gate_id));
+  }
+  {
+    auto& promise_map = mh.get_promise_map<T>().at(party_id);
+    auto [_, success] = promise_map.insert({gate_id, std::move(promise)});
+    assert(success);
+  }
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    if (logger_) {
+      logger_->LogTrace(
+          fmt::format("Gate {}: registered for int message of size {}", gate_id, num_elements));
+    }
+  }
+  return future;
+}
+
+template ENCRYPTO::ReusableFiberFuture<std::vector<std::uint8_t>>
+    CommMixin::register_for_ints_message(std::size_t, std::size_t, std::size_t);
+template ENCRYPTO::ReusableFiberFuture<std::vector<std::uint16_t>>
+    CommMixin::register_for_ints_message(std::size_t, std::size_t, std::size_t);
+template ENCRYPTO::ReusableFiberFuture<std::vector<std::uint32_t>>
+    CommMixin::register_for_ints_message(std::size_t, std::size_t, std::size_t);
+template ENCRYPTO::ReusableFiberFuture<std::vector<std::uint64_t>>
+    CommMixin::register_for_ints_message(std::size_t, std::size_t, std::size_t);
+
 }  // namespace MOTION::proto

@@ -60,6 +60,9 @@ class CommMixin {
   template <typename T>
   [[nodiscard]] std::vector<ENCRYPTO::ReusableFiberFuture<std::vector<T>>>
   register_for_ints_messages(std::size_t gate_id, std::size_t num_elements);
+  template <typename T>
+  [[nodiscard]] ENCRYPTO::ReusableFiberFuture<std::vector<T>>
+  register_for_ints_message(std::size_t party_id, std::size_t gate_id, std::size_t num_elements);
 
  private:
   flatbuffers::FlatBufferBuilder build_gate_message(std::size_t gate_id,
