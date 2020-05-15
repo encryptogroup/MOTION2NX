@@ -20,16 +20,19 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-#include "gate.h"
 #include <openssl/bn.h>
+#include <algorithm>
+#include <functional>
 #include <stdexcept>
+#include "gate.h"
 
 #include "base/gate_factory.h"
+#include "beavy_provider.h"
+#include "crypto/arithmetic_provider.h"
 #include "crypto/motion_base_provider.h"
 #include "crypto/oblivious_transfer/ot_flavors.h"
 #include "crypto/oblivious_transfer/ot_provider.h"
 #include "crypto/sharing_randomness_generator.h"
-#include "beavy_provider.h"
 #include "utility/helpers.h"
 #include "utility/logger.h"
 #include "wire.h"
@@ -45,8 +48,8 @@ static std::size_t count_bits(const BooleanBEAVYWireVector& wires) {
 namespace detail {
 
 BasicBooleanBEAVYBinaryGate::BasicBooleanBEAVYBinaryGate(std::size_t gate_id,
-                                                     BooleanBEAVYWireVector&& in_b,
-                                                     BooleanBEAVYWireVector&& in_a)
+                                                         BooleanBEAVYWireVector&& in_b,
+                                                         BooleanBEAVYWireVector&& in_a)
     : NewGate(gate_id),
       num_wires_(in_a.size()),
       inputs_a_(std::move(in_a)),
@@ -69,8 +72,8 @@ BasicBooleanBEAVYBinaryGate::BasicBooleanBEAVYBinaryGate(std::size_t gate_id,
                   [num_simd] { return std::make_shared<BooleanBEAVYWire>(num_simd); });
 }
 
-BasicBooleanBEAVYUnaryGate::BasicBooleanBEAVYUnaryGate(std::size_t gate_id, BooleanBEAVYWireVector&& in,
-                                                   bool forward)
+BasicBooleanBEAVYUnaryGate::BasicBooleanBEAVYUnaryGate(std::size_t gate_id,
+                                                       BooleanBEAVYWireVector&& in, bool forward)
     : NewGate(gate_id), num_wires_(in.size()), inputs_(std::move(in)) {
   if (num_wires_ == 0) {
     throw std::logic_error("number of wires need to be positive");
@@ -249,7 +252,8 @@ void BooleanBEAVYInputGateReceiver::evaluate_online() {
 }
 
 BooleanBEAVYOutputGate::BooleanBEAVYOutputGate(std::size_t gate_id, BEAVYProvider& beavy_provider,
-                                           BooleanBEAVYWireVector&& inputs, std::size_t output_owner)
+                                               BooleanBEAVYWireVector&& inputs,
+                                               std::size_t output_owner)
     : NewGate(gate_id),
       beavy_provider_(beavy_provider),
       num_wires_(inputs.size()),
@@ -285,6 +289,7 @@ void BooleanBEAVYOutputGate::evaluate_online() {
   }
 
   std::size_t my_id = beavy_provider_.get_my_id();
+  // TODO: move sending secret share to setup phase
   ENCRYPTO::BitVector<> my_secret_share;
   // auto num_bits = count_bits(inputs_);  // TODO: reserve
   for (const auto& wire : inputs_) {
@@ -311,7 +316,8 @@ void BooleanBEAVYOutputGate::evaluate_online() {
     std::size_t bit_offset = 0;
     for (std::size_t wire_i = 0; wire_i < num_wires_; ++wire_i) {
       auto num_simd = inputs_[wire_i]->get_num_simd();
-      auto& output = outputs.emplace_back(my_secret_share.Subset(bit_offset, bit_offset + num_simd));
+      auto& output =
+          outputs.emplace_back(my_secret_share.Subset(bit_offset, bit_offset + num_simd));
       output ^= inputs_[wire_i]->get_public_share();
       bit_offset += num_simd;
     }
@@ -321,14 +327,16 @@ void BooleanBEAVYOutputGate::evaluate_online() {
   if constexpr (MOTION_VERBOSE_DEBUG) {
     auto logger = beavy_provider_.get_logger();
     if (logger) {
-      logger->LogTrace(fmt::format("Gate {}: BooleanBEAVYOutputGate::evaluate_online end", gate_id_));
+      logger->LogTrace(
+          fmt::format("Gate {}: BooleanBEAVYOutputGate::evaluate_online end", gate_id_));
     }
   }
 }
 
 BooleanBEAVYINVGate::BooleanBEAVYINVGate(std::size_t gate_id, const BEAVYProvider& beavy_provider,
-                                     BooleanBEAVYWireVector&& in)
-    : detail::BasicBooleanBEAVYUnaryGate(gate_id, std::move(in), !beavy_provider.is_my_job(gate_id)),
+                                         BooleanBEAVYWireVector&& in)
+    : detail::BasicBooleanBEAVYUnaryGate(gate_id, std::move(in),
+                                         !beavy_provider.is_my_job(gate_id)),
       is_my_job_(beavy_provider.is_my_job(gate_id)) {}
 
 void BooleanBEAVYINVGate::evaluate_setup() {
@@ -360,7 +368,8 @@ void BooleanBEAVYINVGate::evaluate_online() {
 }
 
 BooleanBEAVYXORGate::BooleanBEAVYXORGate(std::size_t gate_id, BEAVYProvider&,
-                                     BooleanBEAVYWireVector&& in_a, BooleanBEAVYWireVector&& in_b)
+                                         BooleanBEAVYWireVector&& in_a,
+                                         BooleanBEAVYWireVector&& in_b)
     : detail::BasicBooleanBEAVYBinaryGate(gate_id, std::move(in_a), std::move(in_b)) {}
 
 void BooleanBEAVYXORGate::evaluate_setup() {
@@ -388,11 +397,12 @@ void BooleanBEAVYXORGate::evaluate_online() {
 }
 
 BooleanBEAVYANDGate::BooleanBEAVYANDGate(std::size_t gate_id, BEAVYProvider& beavy_provider,
-                                     BooleanBEAVYWireVector&& in_a, BooleanBEAVYWireVector&& in_b)
+                                         BooleanBEAVYWireVector&& in_a,
+                                         BooleanBEAVYWireVector&& in_b)
     : detail::BasicBooleanBEAVYBinaryGate(gate_id, std::move(in_a), std::move(in_b)),
       beavy_provider_(beavy_provider),
-      ot_sender_(nullptr), ot_receiver_(nullptr)
-{
+      ot_sender_(nullptr),
+      ot_receiver_(nullptr) {
   auto num_bits = count_bits(inputs_a_);
   auto my_id = beavy_provider_.get_my_id();
   share_future_ = beavy_provider_.register_for_bits_message(1 - my_id, gate_id_, num_bits);
@@ -407,8 +417,7 @@ void BooleanBEAVYANDGate::evaluate_setup() {
   if constexpr (MOTION_VERBOSE_DEBUG) {
     auto logger = beavy_provider_.get_logger();
     if (logger) {
-      logger->LogTrace(
-          fmt::format("Gate {}: BooleanBEAVYANDGate::evaluate_setup start", gate_id_));
+      logger->LogTrace(fmt::format("Gate {}: BooleanBEAVYANDGate::evaluate_setup start", gate_id_));
     }
   }
 
@@ -449,8 +458,7 @@ void BooleanBEAVYANDGate::evaluate_setup() {
   if constexpr (MOTION_VERBOSE_DEBUG) {
     auto logger = beavy_provider_.get_logger();
     if (logger) {
-      logger->LogTrace(
-          fmt::format("Gate {}: BooleanBEAVYANDGate::evaluate_setup end", gate_id_));
+      logger->LogTrace(fmt::format("Gate {}: BooleanBEAVYANDGate::evaluate_setup end", gate_id_));
     }
   }
 }
@@ -472,7 +480,7 @@ void BooleanBEAVYANDGate::evaluate_online() {
 
   Delta_y_share_ ^= (Delta_a & delta_b_share_);
   Delta_y_share_ ^= (Delta_b & delta_a_share_);
-  
+
   if (beavy_provider_.is_my_job(gate_id_)) {
     Delta_y_share_ ^= (Delta_a & Delta_b);
   }
@@ -488,137 +496,599 @@ void BooleanBEAVYANDGate::evaluate_online() {
   }
 }
 
-// template <typename T>
-// ArithmeticBEAVYInputGateSender<T>::ArithmeticBEAVYInputGateSender(
-//     std::size_t gate_id, BEAVYProvider& beavy_provider, std::size_t num_simd,
-//     ENCRYPTO::ReusableFiberFuture<std::vector<T>>&& input_future)
-//     : NewGate(gate_id),
-//       beavy_provider_(beavy_provider),
-//       num_simd_(num_simd),
-//       input_id_(beavy_provider.get_next_input_id(1)),
-//       input_future_(std::move(input_future)),
-//       output_(std::make_shared<ArithmeticBEAVYWire<T>>(num_simd)) {
-//   output_->get_public_share().resize(num_simd, 0);
-// }
-//
-// template <typename T>
-// void ArithmeticBEAVYInputGateSender<T>::evaluate_setup() {
-//   if constexpr (MOTION_VERBOSE_DEBUG) {
-//     auto logger = beavy_provider_.get_logger();
-//     if (logger) {
-//       logger->LogTrace(
-//           fmt::format("Gate {}: ArithmeticBEAVYInputGateSender<T>::evaluate_setup start", gate_id_));
-//     }
-//   }
-//
-//   auto my_id = beavy_provider_.get_my_id();
-//   auto num_parties = beavy_provider_.get_num_parties();
-//   auto& mbp = beavy_provider_.get_motion_base_provider();
-//   auto& my_secret_share = output_->get_secret_share();
-//   auto& my_public_share = output_->get_public_share();
-//   my_secret_share = Helpers::RandomVector<T>(num_simd_);
-//   output_->set_setup_ready();
-//   std::transform(std::begin(my_secret_share), std::end(my_secret_share), std::begin(my_public_share), std::negate{});
-//   for (std::size_t party_id = 0; party_id < num_parties; ++party_id) {
-//     if (party_id == my_id) {
-//       continue;
-//     }
-//     auto& rng = mbp.get_my_randomness_generator(party_id);
-//     std::transform(std::begin(my_public_share), std::end(my_public_share),
-//                    std::begin(rng.GetUnsigned<T>(input_id_, num_simd_)), std::begin(my_public_share),
-//                    std::minus{});
-//   }
-//
-//   if constexpr (MOTION_VERBOSE_DEBUG) {
-//     auto logger = beavy_provider_.get_logger();
-//     if (logger) {
-//       logger->LogTrace(
-//           fmt::format("Gate {}: ArithmeticBEAVYInputGateSender<T>::evaluate_setup end", gate_id_));
-//     }
-//   }
-// }
-//
-// template <typename T>
-// void ArithmeticBEAVYInputGateSender<T>::evaluate_online() {
-//   if constexpr (MOTION_VERBOSE_DEBUG) {
-//     auto logger = beavy_provider_.get_logger();
-//     if (logger) {
-//       logger->LogTrace(fmt::format(
-//           "Gate {}: ArithmeticBEAVYInputGateSender<T>::evaluate_online start", gate_id_));
-//     }
-//   }
-//
-//   // wait for input value
-//   const auto input = input_future_.get();
-//   if (input.size() != num_simd_) {
-//     throw std::runtime_error("size of input bit vector != num_simd_");
-//   }
-//
-//   // compute my share
-//   auto& my_public_share = output_->get_public_share();
-//   std::transform(std::begin(my_public_share), std::end(my_public_share), std::begin(input),
-//                  std::begin(my_public_share), std::plus{});
-//   output_->set_online_ready();
-//   beavy_provider_.broadcast_ints_message(gate_id_, my_public_share);
-//
-//   if constexpr (MOTION_VERBOSE_DEBUG) {
-//     auto logger = beavy_provider_.get_logger();
-//     if (logger) {
-//       logger->LogTrace(
-//           fmt::format("Gate {}: BooleanBEAVYInputGateSender::evaluate_online end", gate_id_));
-//     }
-//   }
-// }
-//
-// template class ArithmeticBEAVYInputGateSender<std::uint8_t>;
-// template class ArithmeticBEAVYInputGateSender<std::uint16_t>;
-// template class ArithmeticBEAVYInputGateSender<std::uint32_t>;
-// template class ArithmeticBEAVYInputGateSender<std::uint64_t>;
-//
-// template <typename T>
-// ArithmeticBEAVYInputGateReceiver<T>::ArithmeticBEAVYInputGateReceiver(std::size_t gate_id,
-//                                                                   BEAVYProvider& beavy_provider,
-//                                                                   std::size_t num_simd,
-//                                                                   std::size_t input_owner)
-//     : NewGate(gate_id),
-//       beavy_provider_(beavy_provider),
-//       num_simd_(num_simd),
-//       input_owner_(input_owner),
-//       input_id_(beavy_provider.get_next_input_id(1)),
-//       output_(std::make_shared<ArithmeticBEAVYWire<T>>(num_simd)) {}
-//
-// template <typename T>
-// void ArithmeticBEAVYInputGateReceiver<T>::evaluate_setup() {
-//   if constexpr (MOTION_VERBOSE_DEBUG) {
-//     auto logger = beavy_provider_.get_logger();
-//     if (logger) {
-//       logger->LogTrace(
-//           fmt::format("Gate {}: ArithmeticBEAVYInputGateReceiver::evaluate_setup start", gate_id_));
-//     }
-//   }
-//
-//   auto& mbp = beavy_provider_.get_motion_base_provider();
-//   auto& rng = mbp.get_their_randomness_generator(input_owner_);
-//   output_->get_share() = rng.GetUnsigned<T>(input_id_, num_simd_);
-//   output_->set_online_ready();
-//
-//   if constexpr (MOTION_VERBOSE_DEBUG) {
-//     auto logger = beavy_provider_.get_logger();
-//     if (logger) {
-//       logger->LogTrace(
-//           fmt::format("Gate {}: ArithmeticBEAVYInputGateReceiver::evaluate_setup end", gate_id_));
-//     }
-//   }
-// }
-//
-// template <typename T>
-// void ArithmeticBEAVYInputGateReceiver<T>::evaluate_online() {
-//   // nothing to do
-// }
-//
-// template class ArithmeticBEAVYInputGateReceiver<std::uint8_t>;
-// template class ArithmeticBEAVYInputGateReceiver<std::uint16_t>;
-// template class ArithmeticBEAVYInputGateReceiver<std::uint32_t>;
-// template class ArithmeticBEAVYInputGateReceiver<std::uint64_t>;
+template <typename T>
+ArithmeticBEAVYInputGateSender<T>::ArithmeticBEAVYInputGateSender(
+    std::size_t gate_id, BEAVYProvider& beavy_provider, std::size_t num_simd,
+    ENCRYPTO::ReusableFiberFuture<std::vector<T>>&& input_future)
+    : NewGate(gate_id),
+      beavy_provider_(beavy_provider),
+      num_simd_(num_simd),
+      input_id_(beavy_provider.get_next_input_id(1)),
+      input_future_(std::move(input_future)),
+      output_(std::make_shared<ArithmeticBEAVYWire<T>>(num_simd)) {
+  output_->get_public_share().resize(num_simd, 0);
+}
+
+template <typename T>
+void ArithmeticBEAVYInputGateSender<T>::evaluate_setup() {
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = beavy_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(fmt::format(
+          "Gate {}: ArithmeticBEAVYInputGateSender<T>::evaluate_setup start", gate_id_));
+    }
+  }
+
+  auto my_id = beavy_provider_.get_my_id();
+  auto num_parties = beavy_provider_.get_num_parties();
+  auto& mbp = beavy_provider_.get_motion_base_provider();
+  auto& my_secret_share = output_->get_secret_share();
+  auto& my_public_share = output_->get_public_share();
+  my_secret_share = Helpers::RandomVector<T>(num_simd_);
+  output_->set_setup_ready();
+  my_public_share = my_secret_share;
+  for (std::size_t party_id = 0; party_id < num_parties; ++party_id) {
+    if (party_id == my_id) {
+      continue;
+    }
+    auto& rng = mbp.get_my_randomness_generator(party_id);
+    std::transform(std::begin(my_public_share), std::end(my_public_share),
+                   std::begin(rng.GetUnsigned<T>(input_id_, num_simd_)),
+                   std::begin(my_public_share), std::plus{});
+  }
+
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = beavy_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(
+          fmt::format("Gate {}: ArithmeticBEAVYInputGateSender<T>::evaluate_setup end", gate_id_));
+    }
+  }
+}
+
+template <typename T>
+void ArithmeticBEAVYInputGateSender<T>::evaluate_online() {
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = beavy_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(fmt::format(
+          "Gate {}: ArithmeticBEAVYInputGateSender<T>::evaluate_online start", gate_id_));
+    }
+  }
+
+  // wait for input value
+  const auto input = input_future_.get();
+  if (input.size() != num_simd_) {
+    throw std::runtime_error("size of input bit vector != num_simd_");
+  }
+
+  // compute my share
+  auto& my_public_share = output_->get_public_share();
+  std::transform(std::begin(my_public_share), std::end(my_public_share), std::begin(input),
+                 std::begin(my_public_share), std::plus{});
+  output_->set_online_ready();
+  beavy_provider_.broadcast_ints_message(gate_id_, my_public_share);
+
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = beavy_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(
+          fmt::format("Gate {}: ArithmeticBEAVYInputGateSender<T>::evaluate_online end", gate_id_));
+    }
+  }
+}
+
+template class ArithmeticBEAVYInputGateSender<std::uint8_t>;
+template class ArithmeticBEAVYInputGateSender<std::uint16_t>;
+template class ArithmeticBEAVYInputGateSender<std::uint32_t>;
+template class ArithmeticBEAVYInputGateSender<std::uint64_t>;
+
+template <typename T>
+ArithmeticBEAVYInputGateReceiver<T>::ArithmeticBEAVYInputGateReceiver(std::size_t gate_id,
+                                                                      BEAVYProvider& beavy_provider,
+                                                                      std::size_t num_simd,
+                                                                      std::size_t input_owner)
+    : NewGate(gate_id),
+      beavy_provider_(beavy_provider),
+      num_simd_(num_simd),
+      input_owner_(input_owner),
+      input_id_(beavy_provider.get_next_input_id(1)),
+      output_(std::make_shared<ArithmeticBEAVYWire<T>>(num_simd)) {
+  public_share_future_ =
+      beavy_provider_.register_for_ints_message<T>(input_owner_, gate_id_, num_simd);
+}
+
+template <typename T>
+void ArithmeticBEAVYInputGateReceiver<T>::evaluate_setup() {
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = beavy_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(fmt::format(
+          "Gate {}: ArithmeticBEAVYInputGateReceiver<T>::evaluate_setup start", gate_id_));
+    }
+  }
+
+  auto& mbp = beavy_provider_.get_motion_base_provider();
+  auto& rng = mbp.get_their_randomness_generator(input_owner_);
+  output_->get_secret_share() = rng.GetUnsigned<T>(input_id_, num_simd_);
+  output_->set_setup_ready();
+
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = beavy_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(fmt::format(
+          "Gate {}: ArithmeticBEAVYInputGateReceiver<T>::evaluate_setup end", gate_id_));
+    }
+  }
+}
+
+template <typename T>
+void ArithmeticBEAVYInputGateReceiver<T>::evaluate_online() {
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = beavy_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(fmt::format(
+          "Gate {}: ArithmeticBEAVYInputGateReceiver<T>::evaluate_online start", gate_id_));
+    }
+  }
+
+  output_->get_public_share() = public_share_future_.get();
+  output_->set_online_ready();
+
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = beavy_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(fmt::format(
+          "Gate {}: ArithmeticBEAVYInputGateReceiver<T>::evaluate_online end", gate_id_));
+    }
+  }
+}
+
+template class ArithmeticBEAVYInputGateReceiver<std::uint8_t>;
+template class ArithmeticBEAVYInputGateReceiver<std::uint16_t>;
+template class ArithmeticBEAVYInputGateReceiver<std::uint32_t>;
+template class ArithmeticBEAVYInputGateReceiver<std::uint64_t>;
+
+template <typename T>
+ArithmeticBEAVYOutputGate<T>::ArithmeticBEAVYOutputGate(std::size_t gate_id,
+                                                        BEAVYProvider& beavy_provider,
+                                                        ArithmeticBEAVYWireP<T>&& input,
+                                                        std::size_t output_owner)
+    : NewGate(gate_id),
+      beavy_provider_(beavy_provider),
+      output_owner_(output_owner),
+      input_(std::move(input)) {
+  std::size_t my_id = beavy_provider_.get_my_id();
+  if (output_owner_ == ALL_PARTIES || output_owner_ == my_id) {
+    share_future_ =
+        beavy_provider_.register_for_ints_message<T>(1 - my_id, gate_id_, input_->get_num_simd());
+  }
+}
+
+template <typename T>
+ENCRYPTO::ReusableFiberFuture<std::vector<T>> ArithmeticBEAVYOutputGate<T>::get_output_future() {
+  std::size_t my_id = beavy_provider_.get_my_id();
+  if (output_owner_ == ALL_PARTIES || output_owner_ == my_id) {
+    return output_promise_.get_future();
+  } else {
+    throw std::logic_error("not this parties output");
+  }
+}
+
+template <typename T>
+void ArithmeticBEAVYOutputGate<T>::evaluate_setup() {
+  // nothing to do
+}
+
+template <typename T>
+void ArithmeticBEAVYOutputGate<T>::evaluate_online() {
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = beavy_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(
+          fmt::format("Gate {}: ArithmeticBEAVYOutputGate<T>::evaluate_online start", gate_id_));
+    }
+  }
+
+  std::size_t my_id = beavy_provider_.get_my_id();
+  // TODO: move sending secret share to setup phase
+  auto my_secret_share = input_->get_secret_share();
+  if (output_owner_ != my_id) {
+    if (output_owner_ == ALL_PARTIES) {
+      beavy_provider_.broadcast_ints_message(gate_id_, my_secret_share);
+    } else {
+      beavy_provider_.send_ints_message(output_owner_, gate_id_, my_secret_share);
+    }
+  }
+  if (output_owner_ == ALL_PARTIES || output_owner_ == my_id) {
+    const auto other_secret_share = share_future_.get();
+    std::transform(std::begin(my_secret_share), std::end(my_secret_share),
+                   std::begin(other_secret_share), std::begin(my_secret_share), std::plus{});
+    std::transform(std::begin(input_->get_public_share()), std::end(input_->get_public_share()),
+                   std::begin(my_secret_share), std::begin(my_secret_share), std::minus{});
+    output_promise_.set_value(std::move(my_secret_share));
+  }
+
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = beavy_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(
+          fmt::format("Gate {}: ArithmeticBEAVYOutputGate<T>::evaluate_online end", gate_id_));
+    }
+  }
+}
+
+template class ArithmeticBEAVYOutputGate<std::uint8_t>;
+template class ArithmeticBEAVYOutputGate<std::uint16_t>;
+template class ArithmeticBEAVYOutputGate<std::uint32_t>;
+template class ArithmeticBEAVYOutputGate<std::uint64_t>;
+
+namespace detail {
+
+template <typename T>
+BasicArithmeticBEAVYBinaryGate<T>::BasicArithmeticBEAVYBinaryGate(std::size_t gate_id,
+                                                                  BEAVYProvider&,
+                                                                  ArithmeticBEAVYWireP<T>&& in_a,
+                                                                  ArithmeticBEAVYWireP<T>&& in_b)
+    : NewGate(gate_id),
+      input_a_(std::move(in_a)),
+      input_b_(std::move(in_b)),
+      output_(std::make_shared<ArithmeticBEAVYWire<T>>(input_a_->get_num_simd())) {
+  if (input_a_->get_num_simd() != input_b_->get_num_simd()) {
+    throw std::logic_error("number of SIMD values need to be the same for all wires");
+  }
+}
+
+template class BasicArithmeticBEAVYBinaryGate<std::uint8_t>;
+template class BasicArithmeticBEAVYBinaryGate<std::uint16_t>;
+template class BasicArithmeticBEAVYBinaryGate<std::uint32_t>;
+template class BasicArithmeticBEAVYBinaryGate<std::uint64_t>;
+
+template <typename T>
+BasicArithmeticBEAVYUnaryGate<T>::BasicArithmeticBEAVYUnaryGate(std::size_t gate_id, BEAVYProvider&,
+                                                                ArithmeticBEAVYWireP<T>&& in)
+    : NewGate(gate_id),
+      input_(std::move(in)),
+      output_(std::make_shared<ArithmeticBEAVYWire<T>>(input_->get_num_simd())) {}
+
+template class BasicArithmeticBEAVYUnaryGate<std::uint8_t>;
+template class BasicArithmeticBEAVYUnaryGate<std::uint16_t>;
+template class BasicArithmeticBEAVYUnaryGate<std::uint32_t>;
+template class BasicArithmeticBEAVYUnaryGate<std::uint64_t>;
+
+}  // namespace detail
+
+template <typename T>
+ArithmeticBEAVYNEGGate<T>::ArithmeticBEAVYNEGGate(std::size_t gate_id,
+                                                  BEAVYProvider& beavy_provider,
+                                                  ArithmeticBEAVYWireP<T>&& in)
+    : detail::BasicArithmeticBEAVYUnaryGate<T>(gate_id, beavy_provider, std::move(in)) {
+  this->output_->get_public_share().resize(this->input_->get_num_simd());
+  this->output_->get_secret_share().resize(this->input_->get_num_simd());
+}
+
+template <typename T>
+void ArithmeticBEAVYNEGGate<T>::evaluate_setup() {
+  this->input_->wait_setup();
+  assert(this->output_->get_secret_share().size() == this->input_->get_num_simd());
+  std::transform(std::begin(this->input_->get_secret_share()),
+                 std::end(this->input_->get_secret_share()),
+                 std::begin(this->output_->get_secret_share()), std::negate{});
+  this->output_->set_setup_ready();
+}
+
+template <typename T>
+void ArithmeticBEAVYNEGGate<T>::evaluate_online() {
+  this->input_->wait_online();
+  assert(this->output_->get_public_share().size() == this->input_->get_num_simd());
+  std::transform(std::begin(this->input_->get_public_share()),
+                 std::end(this->input_->get_public_share()),
+                 std::begin(this->output_->get_public_share()), std::negate{});
+  this->output_->set_online_ready();
+}
+
+template class ArithmeticBEAVYNEGGate<std::uint8_t>;
+template class ArithmeticBEAVYNEGGate<std::uint16_t>;
+template class ArithmeticBEAVYNEGGate<std::uint32_t>;
+template class ArithmeticBEAVYNEGGate<std::uint64_t>;
+
+template <typename T>
+ArithmeticBEAVYADDGate<T>::ArithmeticBEAVYADDGate(std::size_t gate_id,
+                                                  BEAVYProvider& beavy_provider,
+                                                  ArithmeticBEAVYWireP<T>&& in_a,
+                                                  ArithmeticBEAVYWireP<T>&& in_b)
+    : detail::BasicArithmeticBEAVYBinaryGate<T>(gate_id, beavy_provider, std::move(in_a),
+                                                std::move(in_b)) {
+  this->output_->get_public_share().resize(this->input_a_->get_num_simd());
+  this->output_->get_secret_share().resize(this->input_a_->get_num_simd());
+}
+
+template <typename T>
+void ArithmeticBEAVYADDGate<T>::evaluate_setup() {
+  this->input_a_->wait_setup();
+  this->input_b_->wait_setup();
+  assert(this->output_->get_secret_share().size() == this->input_a_->get_num_simd());
+  assert(this->output_->get_secret_share().size() == this->input_b_->get_num_simd());
+  std::transform(std::begin(this->input_a_->get_secret_share()),
+                 std::end(this->input_a_->get_secret_share()),
+                 std::begin(this->input_b_->get_secret_share()),
+                 std::begin(this->output_->get_secret_share()), std::plus{});
+  this->output_->set_setup_ready();
+}
+
+template <typename T>
+void ArithmeticBEAVYADDGate<T>::evaluate_online() {
+  this->input_a_->wait_online();
+  this->input_b_->wait_online();
+  assert(this->output_->get_public_share().size() == this->input_a_->get_num_simd());
+  std::transform(std::begin(this->input_a_->get_public_share()),
+                 std::end(this->input_a_->get_public_share()),
+                 std::begin(this->input_b_->get_public_share()),
+                 std::begin(this->output_->get_public_share()), std::plus{});
+  this->output_->set_online_ready();
+}
+
+template class ArithmeticBEAVYADDGate<std::uint8_t>;
+template class ArithmeticBEAVYADDGate<std::uint16_t>;
+template class ArithmeticBEAVYADDGate<std::uint32_t>;
+template class ArithmeticBEAVYADDGate<std::uint64_t>;
+
+template <typename T>
+ArithmeticBEAVYMULGate<T>::ArithmeticBEAVYMULGate(std::size_t gate_id,
+                                                  BEAVYProvider& beavy_provider,
+                                                  ArithmeticBEAVYWireP<T>&& in_a,
+                                                  ArithmeticBEAVYWireP<T>&& in_b)
+    : detail::BasicArithmeticBEAVYBinaryGate<T>(gate_id, beavy_provider, std::move(in_a),
+                                                std::move(in_b)),
+      beavy_provider_(beavy_provider) {
+  auto my_id = beavy_provider_.get_my_id();
+  auto num_simd = this->input_a_->get_num_simd();
+  share_future_ = beavy_provider_.register_for_ints_message<T>(1 - my_id, this->gate_id_,
+                                                               this->input_a_->get_num_simd());
+  auto& ap = beavy_provider_.get_arith_manager().get_provider(1 - my_id);
+  mult_sender_ = ap.template register_integer_multiplication_send<T>(num_simd);
+  mult_receiver_ = ap.template register_integer_multiplication_receive<T>(num_simd);
+}
+
+template <typename T>
+ArithmeticBEAVYMULGate<T>::~ArithmeticBEAVYMULGate() = default;
+
+template <typename T>
+void ArithmeticBEAVYMULGate<T>::evaluate_setup() {
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = beavy_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(
+          fmt::format("Gate {}: ArithmeticBEAVYMULGate<T>::evaluate_setup start", this->gate_id_));
+    }
+  }
+
+  auto num_simd = this->input_a_->get_num_simd();
+
+  this->output_->get_secret_share() = Helpers::RandomVector<T>(num_simd);
+  this->output_->set_setup_ready();
+
+  const auto& delta_a_share = this->input_a_->get_secret_share();
+  const auto& delta_b_share = this->input_b_->get_secret_share();
+  const auto& delta_y_share = this->output_->get_secret_share();
+
+  mult_receiver_->set_inputs(delta_a_share);
+  mult_sender_->set_inputs(delta_b_share);
+
+  Delta_y_share_.resize(num_simd);
+  // [Delta_y]_i = [delta_a]_i * [delta_b]_i
+  std::transform(std::begin(delta_a_share), std::end(delta_a_share), std::begin(delta_b_share),
+                 std::begin(Delta_y_share_), std::multiplies{});
+  // [Delta_y]_i += [delta_y]_i
+  std::transform(std::begin(Delta_y_share_), std::end(Delta_y_share_), std::begin(delta_y_share),
+                 std::begin(Delta_y_share_), std::plus{});
+
+  mult_receiver_->compute_outputs();
+  mult_sender_->compute_outputs();
+  // [[delta_a]_i * [delta_b]_(1-i)]_i
+  auto delta_ab_share1 = mult_receiver_->get_outputs();
+  // [[delta_b]_i * [delta_a]_(1-i)]_i
+  auto delta_ab_share2 = mult_sender_->get_outputs();
+  // [Delta_y]_i += [[delta_a]_i * [delta_b]_(1-i)]_i
+  std::transform(std::begin(Delta_y_share_), std::end(Delta_y_share_), std::begin(delta_ab_share1),
+                 std::begin(Delta_y_share_), std::plus{});
+  // [Delta_y]_i += [[delta_b]_i * [delta_a]_(1-i)]_i
+  std::transform(std::begin(Delta_y_share_), std::end(Delta_y_share_), std::begin(delta_ab_share2),
+                 std::begin(Delta_y_share_), std::plus{});
+
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = beavy_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(
+          fmt::format("Gate {}: ArithmeticBEAVYMULGate::evaluate_setup end", this->gate_id_));
+    }
+  }
+}
+
+template <typename T>
+void ArithmeticBEAVYMULGate<T>::evaluate_online() {
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = beavy_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(
+          fmt::format("Gate {}: ArithmeticBEAVYMULGate<T>::evaluate_online start", this->gate_id_));
+    }
+  }
+
+  auto num_simd = this->input_a_->get_num_simd();
+  const auto& Delta_a = this->input_a_->get_public_share();
+  const auto& Delta_b = this->input_b_->get_public_share();
+  const auto& delta_a_share = this->input_a_->get_secret_share();
+  const auto& delta_b_share = this->input_b_->get_secret_share();
+  std::vector<T> tmp(num_simd);
+
+  // after setup phase, `Delta_y_share_` contains [delta_y]_i + [delta_ab]_i
+
+  // [Delta_y]_i -= Delta_a * [delta_b]_i
+  std::transform(std::begin(Delta_a), std::end(Delta_a), std::begin(delta_b_share), std::begin(tmp),
+                 std::multiplies{});
+  std::transform(std::begin(Delta_y_share_), std::end(Delta_y_share_), std::begin(tmp),
+                 std::begin(Delta_y_share_), std::minus{});
+
+  // [Delta_y]_i -= Delta_b * [delta_a]_i
+  std::transform(std::begin(Delta_b), std::end(Delta_b), std::begin(delta_a_share), std::begin(tmp),
+                 std::multiplies{});
+  std::transform(std::begin(Delta_y_share_), std::end(Delta_y_share_), std::begin(tmp),
+                 std::begin(Delta_y_share_), std::minus{});
+
+  // [Delta_y]_i += Delta_ab (== Delta_a * Delta_b)
+  if (beavy_provider_.is_my_job(this->gate_id_)) {
+    std::transform(std::begin(Delta_a), std::end(Delta_a), std::begin(Delta_b), std::begin(tmp),
+                   std::multiplies{});
+    std::transform(std::begin(Delta_y_share_), std::end(Delta_y_share_), std::begin(tmp),
+                   std::begin(Delta_y_share_), std::plus{});
+  }
+  // broadcast [Delta_y]_i
+  beavy_provider_.broadcast_ints_message(this->gate_id_, Delta_y_share_);
+  // Delta_y = [Delta_y]_i + [Delta_y]_(1-i)
+  std::transform(std::begin(Delta_y_share_), std::end(Delta_y_share_),
+                 std::begin(share_future_.get()), std::begin(Delta_y_share_), std::plus{});
+  this->output_->get_public_share() = std::move(Delta_y_share_);
+  this->output_->set_online_ready();
+
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = beavy_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(
+          fmt::format("Gate {}: ArithmeticBEAVYMULGate<T>::evaluate_online end", this->gate_id_));
+    }
+  }
+}
+
+template class ArithmeticBEAVYMULGate<std::uint8_t>;
+template class ArithmeticBEAVYMULGate<std::uint16_t>;
+template class ArithmeticBEAVYMULGate<std::uint32_t>;
+template class ArithmeticBEAVYMULGate<std::uint64_t>;
+
+template <typename T>
+ArithmeticBEAVYSQRGate<T>::ArithmeticBEAVYSQRGate(std::size_t gate_id,
+                                                  BEAVYProvider& beavy_provider,
+                                                  ArithmeticBEAVYWireP<T>&& in)
+    : detail::BasicArithmeticBEAVYUnaryGate<T>(gate_id, beavy_provider, std::move(in)),
+      beavy_provider_(beavy_provider) {
+  auto my_id = beavy_provider_.get_my_id();
+  auto num_simd = this->input_->get_num_simd();
+  share_future_ = beavy_provider_.register_for_ints_message<T>(1 - my_id, this->gate_id_, num_simd);
+  auto& ap = beavy_provider_.get_arith_manager().get_provider(1 - my_id);
+  if (my_id == 0) {
+    mult_sender_ = ap.template register_integer_multiplication_send<T>(num_simd);
+    mult_receiver_ = nullptr;
+  } else {
+    mult_receiver_ = ap.template register_integer_multiplication_receive<T>(num_simd);
+    mult_sender_ = nullptr;
+  }
+}
+
+template <typename T>
+ArithmeticBEAVYSQRGate<T>::~ArithmeticBEAVYSQRGate() = default;
+
+template <typename T>
+void ArithmeticBEAVYSQRGate<T>::evaluate_setup() {
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = beavy_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(
+          fmt::format("Gate {}: ArithmeticBEAVYSQRGate<T>::evaluate_setup start", this->gate_id_));
+    }
+  }
+
+  auto num_simd = this->input_->get_num_simd();
+
+  this->output_->get_secret_share() = Helpers::RandomVector<T>(num_simd);
+  this->output_->set_setup_ready();
+
+  const auto& delta_a_share = this->input_->get_secret_share();
+  const auto& delta_y_share = this->output_->get_secret_share();
+
+  if (mult_sender_) {
+    mult_sender_->set_inputs(delta_a_share);
+  } else {
+    mult_receiver_->set_inputs(delta_a_share);
+  }
+
+  Delta_y_share_.resize(num_simd);
+  // [Delta_y]_i = [delta_a]_i * [delta_a]_i
+  std::transform(std::begin(delta_a_share), std::end(delta_a_share), std::begin(Delta_y_share_),
+                 [](auto x) { return x * x; });
+  // [Delta_y]_i += [delta_y]_i
+  std::transform(std::begin(Delta_y_share_), std::end(Delta_y_share_), std::begin(delta_y_share),
+                 std::begin(Delta_y_share_), std::plus{});
+
+  // [[delta_a]_i * [delta_a]_(1-i)]_i
+  std::vector<T> delta_aa_share;
+  if (mult_sender_) {
+    mult_sender_->compute_outputs();
+    delta_aa_share = mult_sender_->get_outputs();
+  } else {
+    mult_receiver_->compute_outputs();
+    delta_aa_share = mult_receiver_->get_outputs();
+  }
+  // [Delta_y]_i += 2 * [[delta_a]_i * [delta_a]_(1-i)]_i
+  std::transform(std::begin(Delta_y_share_), std::end(Delta_y_share_), std::begin(delta_aa_share),
+                 std::begin(Delta_y_share_), [](auto x, auto y) { return x + 2 * y; });
+
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = beavy_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(
+          fmt::format("Gate {}: ArithmeticBEAVYSQRGate::evaluate_setup end", this->gate_id_));
+    }
+  }
+}
+
+template <typename T>
+void ArithmeticBEAVYSQRGate<T>::evaluate_online() {
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = beavy_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(
+          fmt::format("Gate {}: ArithmeticBEAVYSQRGate<T>::evaluate_online start", this->gate_id_));
+    }
+  }
+
+  auto num_simd = this->input_->get_num_simd();
+  const auto& Delta_a = this->input_->get_public_share();
+  const auto& delta_a_share = this->input_->get_secret_share();
+  std::vector<T> tmp(num_simd);
+
+  // after setup phase, `Delta_y_share_` contains [delta_y]_i + [delta_ab]_i
+
+  // [Delta_y]_i -= 2 * Delta_a * [delta_a]_i
+  std::transform(std::begin(Delta_a), std::end(Delta_a), std::begin(delta_a_share), std::begin(tmp),
+                 [](auto x, auto y) { return 2 * x * y; });
+  std::transform(std::begin(Delta_y_share_), std::end(Delta_y_share_), std::begin(tmp),
+                 std::begin(Delta_y_share_), std::minus{});
+
+  // [Delta_y]_i += Delta_aa (== Delta_a * Delta_a)
+  if (beavy_provider_.is_my_job(this->gate_id_)) {
+    std::transform(std::begin(Delta_y_share_), std::end(Delta_y_share_), std::begin(Delta_a),
+                   std::begin(Delta_y_share_), [](auto x, auto y) { return x + y * y; });
+  }
+  // broadcast [Delta_y]_i
+  beavy_provider_.broadcast_ints_message(this->gate_id_, Delta_y_share_);
+  // Delta_y = [Delta_y]_i + [Delta_y]_(1-i)
+  std::transform(std::begin(Delta_y_share_), std::end(Delta_y_share_),
+                 std::begin(share_future_.get()), std::begin(Delta_y_share_), std::plus{});
+  this->output_->get_public_share() = std::move(Delta_y_share_);
+  this->output_->set_online_ready();
+
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = beavy_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(
+          fmt::format("Gate {}: ArithmeticBEAVYSQRGate<T>::evaluate_online end", this->gate_id_));
+    }
+  }
+}
+
+template class ArithmeticBEAVYSQRGate<std::uint8_t>;
+template class ArithmeticBEAVYSQRGate<std::uint16_t>;
+template class ArithmeticBEAVYSQRGate<std::uint32_t>;
+template class ArithmeticBEAVYSQRGate<std::uint64_t>;
 
 }  // namespace MOTION::proto::beavy

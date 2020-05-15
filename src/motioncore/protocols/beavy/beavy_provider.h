@@ -36,6 +36,7 @@ class OTProviderManager;
 
 namespace MOTION {
 
+class ArithmeticProviderManager;
 class GateRegister;
 class Logger;
 class NewWire;
@@ -62,7 +63,8 @@ class BEAVYProvider : public GateFactory, public ENCRYPTO::enable_wait_setup, pu
   struct my_input_t {};
 
   BEAVYProvider(Communication::CommunicationLayer&, GateRegister&, Crypto::MotionBaseProvider&,
-                ENCRYPTO::ObliviousTransfer::OTProviderManager&, std::shared_ptr<Logger>);
+                ENCRYPTO::ObliviousTransfer::OTProviderManager&, ArithmeticProviderManager&,
+                std::shared_ptr<Logger>);
   ~BEAVYProvider();
 
   std::string get_provider_name() const noexcept override { return "BEAVYProvider"; }
@@ -70,6 +72,7 @@ class BEAVYProvider : public GateFactory, public ENCRYPTO::enable_wait_setup, pu
   void setup();
   Crypto::MotionBaseProvider& get_motion_base_provider() noexcept { return motion_base_provider_; }
   ENCRYPTO::ObliviousTransfer::OTProviderManager& get_ot_manager() noexcept { return ot_manager_; }
+  ArithmeticProviderManager& get_arith_manager() noexcept { return arith_manager_; }
   std::shared_ptr<Logger> get_logger() const noexcept { return logger_; }
   bool is_my_job(std::size_t gate_id) const noexcept;
   std::size_t get_my_id() const noexcept { return my_id_; }
@@ -130,37 +133,39 @@ class BEAVYProvider : public GateFactory, public ENCRYPTO::enable_wait_setup, pu
       const std::vector<std::shared_ptr<NewWire>>&) override;
 
  private:
-  // template <typename T>
-  // std::pair<ENCRYPTO::ReusableFiberPromise<IntegerValues<T>>, WireVector>
-  // basic_make_arithmetic_input_gate_my(std::size_t input_owner, std::size_t num_simd);
-  // template <typename T>
-  // WireVector basic_make_arithmetic_input_gate_other(std::size_t input_owner, std::size_t
-  // num_simd); template <typename T> ENCRYPTO::ReusableFiberFuture<IntegerValues<T>>
-  // basic_make_arithmetic_output_gate_my(std::size_t output_owner, const WireVector& in);
+  template <typename T>
+  std::pair<ENCRYPTO::ReusableFiberPromise<IntegerValues<T>>, WireVector>
+  basic_make_arithmetic_input_gate_my(std::size_t input_owner, std::size_t num_simd);
+  template <typename T>
+  WireVector basic_make_arithmetic_input_gate_other(std::size_t input_owner, std::size_t num_simd);
+  template <typename T>
+  ENCRYPTO::ReusableFiberFuture<IntegerValues<T>> basic_make_arithmetic_output_gate_my(
+      std::size_t output_owner, const WireVector& in);
   template <typename BinaryGate>
   WireVector make_boolean_binary_gate(const WireVector& in_a, const WireVector& in_b);
   WireVector make_inv_gate(const WireVector& in_a);
   WireVector make_xor_gate(const WireVector& in_a, const WireVector& in_b);
   WireVector make_and_gate(const WireVector& in_a, const WireVector& in_b);
-  //
-  // template <template <typename> class BinaryGate, typename T>
-  // WireVector make_arithmetic_unary_gate(const NewWireP& in_a);
-  // template <template <typename> class BinaryGate>
-  // WireVector make_arithmetic_unary_gate(const WireVector& in_a);
-  // template <template <typename> class BinaryGate, typename T>
-  // WireVector make_arithmetic_binary_gate(const NewWireP& in_a, const NewWireP& in_b);
-  // template <template <typename> class BinaryGate>
-  // WireVector make_arithmetic_binary_gate(const WireVector& in_a, const WireVector& in_b);
-  // WireVector make_neg_gate(const WireVector& in_a);
-  // WireVector make_add_gate(const WireVector& in_a, const WireVector& in_b);
-  // WireVector make_mul_gate(const WireVector& in_a, const WireVector& in_b);
-  // WireVector make_sqr_gate(const WireVector& in_a);
+
+  template <template <typename> class BinaryGate, typename T>
+  WireVector make_arithmetic_unary_gate(const NewWireP& in_a);
+  template <template <typename> class BinaryGate>
+  WireVector make_arithmetic_unary_gate(const WireVector& in_a);
+  template <template <typename> class BinaryGate, typename T>
+  WireVector make_arithmetic_binary_gate(const NewWireP& in_a, const NewWireP& in_b);
+  template <template <typename> class BinaryGate>
+  WireVector make_arithmetic_binary_gate(const WireVector& in_a, const WireVector& in_b);
+  WireVector make_neg_gate(const WireVector& in_a);
+  WireVector make_add_gate(const WireVector& in_a, const WireVector& in_b);
+  WireVector make_mul_gate(const WireVector& in_a, const WireVector& in_b);
+  WireVector make_sqr_gate(const WireVector& in_a);
 
  private:
   Communication::CommunicationLayer& communication_layer_;
   GateRegister& gate_register_;
   Crypto::MotionBaseProvider& motion_base_provider_;
   ENCRYPTO::ObliviousTransfer::OTProviderManager& ot_manager_;
+  ArithmeticProviderManager& arith_manager_;
   std::size_t my_id_;
   std::size_t num_parties_;
   std::size_t next_input_id_;
