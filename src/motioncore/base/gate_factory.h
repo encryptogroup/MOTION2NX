@@ -99,6 +99,9 @@ class GateFactory {
 
   virtual WireVector make_binary_gate(ENCRYPTO::PrimitiveOperationType op, const WireVector&,
                                       const WireVector&) = 0;
+
+  // conversions
+  virtual WireVector convert(MPCProtocol protocol, const WireVector&) {};
 };
 
 }  // namespace MOTION
