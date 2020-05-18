@@ -35,6 +35,10 @@ namespace MOTION::proto {
 namespace gmw {
 class BooleanGMWWire;
 using BooleanGMWWireVector = std::vector<std::shared_ptr<BooleanGMWWire>>;
+template <typename T>
+class ArithmeticGMWWire;
+template <typename T>
+using ArithmeticGMWWireP = std::shared_ptr<ArithmeticGMWWire<T>>;
 }  // namespace gmw
 
 namespace yao {
@@ -69,6 +73,45 @@ class YaoToBooleanGMWGateEvaluator : public NewGate {
  private:
   const YaoWireVector inputs_;
   gmw::BooleanGMWWireVector outputs_;
+};
+
+template <typename T>
+class YaoToArithmeticGMWGateGarbler : public NewGate {
+ public:
+  YaoToArithmeticGMWGateGarbler(std::size_t gate_id, YaoProvider&, std::size_t num_simd);
+  bool need_setup() const noexcept override { return true; }
+  bool need_online() const noexcept override { return false; }
+  void evaluate_setup() override;
+  void evaluate_online() override {}
+  ENCRYPTO::ReusableFiberFuture<std::vector<ENCRYPTO::BitVector<>>> get_mask_future() noexcept {
+    return mask_promise_.get_future();
+  };
+  gmw::ArithmeticGMWWireP<T>& get_output_wire() noexcept { return output_; };
+
+ private:
+  gmw::ArithmeticGMWWireP<T> output_;
+  ENCRYPTO::ReusableFiberPromise<std::vector<ENCRYPTO::BitVector<>>> mask_promise_;
+  YaoProvider& yao_provider_;
+};
+
+template <typename T>
+class YaoToArithmeticGMWGateEvaluator : public NewGate {
+ public:
+  YaoToArithmeticGMWGateEvaluator(std::size_t gate_id, YaoProvider&, std::size_t num_simd);
+  bool need_setup() const noexcept override { return true; }
+  bool need_online() const noexcept override { return true; }
+  void evaluate_setup() override;
+  void evaluate_online() override;
+  gmw::ArithmeticGMWWireP<T>& get_output_wire() noexcept { return output_; };
+  void set_masked_value_future(
+      ENCRYPTO::ReusableFiberFuture<std::vector<ENCRYPTO::BitVector<>>>&& future) {
+    masked_value_future_ = std::move(future);
+  }
+
+ private:
+  gmw::ArithmeticGMWWireP<T> output_;
+  ENCRYPTO::ReusableFiberFuture<std::vector<ENCRYPTO::BitVector<>>> masked_value_future_;
+  YaoProvider& yao_provider_;
 };
 
 }  // namespace yao

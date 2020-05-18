@@ -21,10 +21,12 @@
 // SOFTWARE.
 
 #include "conversion.h"
-
 #include <cstdint>
 
+#include "crypto/motion_base_provider.h"
+#include "crypto/sharing_randomness_generator.h"
 #include "protocols/gmw/wire.h"
+#include "utility/helpers.h"
 #include "wire.h"
 #include "yao_provider.h"
 
@@ -97,5 +99,65 @@ void YaoToBooleanGMWGateEvaluator::evaluate_online() {
     outputs_[wire_i]->set_online_ready();
   }
 }
+
+template <typename T>
+YaoToArithmeticGMWGateGarbler<T>::YaoToArithmeticGMWGateGarbler(std::size_t gate_id,
+                                                                YaoProvider& yao_provider,
+                                                                std::size_t num_simd)
+    : NewGate(gate_id),
+      output_(std::make_shared<gmw::ArithmeticGMWWire<T>>(num_simd)),
+      yao_provider_(yao_provider) {}
+
+template <typename T>
+void YaoToArithmeticGMWGateGarbler<T>::evaluate_setup() {
+  auto num_simd = output_->get_num_simd();
+  auto mask = Helpers::RandomVector<T>(output_->get_num_simd());
+  auto& mbp = yao_provider_.get_motion_base_provider();
+  auto& rng = mbp.get_their_randomness_generator(0);
+  auto& share = output_->get_share();
+  share = rng.GetUnsigned<T>(gate_id_, num_simd);
+  std::transform(std::begin(share), std::end(share), std::begin(mask), std::begin(share), std::minus{});
+  output_->set_online_ready();
+
+  // TODO:
+  // - transpose mask into vector of bitvectors
+  // - set value of mask_promise_
+}
+
+template class YaoToArithmeticGMWGateGarbler<std::uint8_t>;
+template class YaoToArithmeticGMWGateGarbler<std::uint16_t>;
+template class YaoToArithmeticGMWGateGarbler<std::uint32_t>;
+template class YaoToArithmeticGMWGateGarbler<std::uint64_t>;
+
+template <typename T>
+YaoToArithmeticGMWGateEvaluator<T>::YaoToArithmeticGMWGateEvaluator(
+    std::size_t gate_id, YaoProvider& yao_provider, std::size_t num_simd)
+    : NewGate(gate_id),
+      output_(std::make_shared<gmw::ArithmeticGMWWire<T>>(num_simd)),
+      yao_provider_(yao_provider) {}
+
+template <typename T>
+void YaoToArithmeticGMWGateEvaluator<T>::evaluate_setup() {
+  auto& mbp = yao_provider_.get_motion_base_provider();
+  auto& rng = mbp.get_my_randomness_generator(1);
+  auto num_simd = output_->get_num_simd();
+  output_->get_share() = rng.GetUnsigned<T>(gate_id_, num_simd);
+}
+
+template <typename T>
+void YaoToArithmeticGMWGateEvaluator<T>::evaluate_online() {
+  auto masked_value = masked_value_future_.get();
+  // TODO: transpose masked value to vector of T
+  std::vector<T> masked_value_int_;
+  auto& share = output_->get_share();
+  std::transform(std::begin(masked_value_int_), std::end(masked_value_int_), std::begin(share),
+                 std::begin(share), std::minus{});
+  output_->set_online_ready();
+}
+
+template class YaoToArithmeticGMWGateEvaluator<std::uint8_t>;
+template class YaoToArithmeticGMWGateEvaluator<std::uint16_t>;
+template class YaoToArithmeticGMWGateEvaluator<std::uint32_t>;
+template class YaoToArithmeticGMWGateEvaluator<std::uint64_t>;
 
 }  // namespace MOTION::proto::yao

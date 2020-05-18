@@ -51,9 +51,9 @@ class YaoTest : public ::testing::Test {
       ot_provider_managers_[i] = std::make_unique<ENCRYPTO::ObliviousTransfer::OTProviderManager>(
           *comm_layers_[i], *base_ot_providers_[i], *motion_base_providers_[i], nullptr);
       gate_registers_[i] = std::make_unique<MOTION::GateRegister>();
-      yao_providers_[i] =
-          std::make_unique<YaoProvider>(*comm_layers_[i], *gate_registers_[i],
-                                        ot_provider_managers_[i]->get_provider(1 - i), loggers_[i]);
+      yao_providers_[i] = std::make_unique<YaoProvider>(
+          *comm_layers_[i], *gate_registers_[i], *motion_base_providers_[i],
+          ot_provider_managers_[i]->get_provider(1 - i), loggers_[i]);
     }
   }
 

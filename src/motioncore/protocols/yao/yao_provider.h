@@ -51,10 +51,13 @@ namespace Communication {
 class CommunicationLayer;
 }
 
-namespace Crypto::garbling {
+namespace Crypto {
+class MotionBaseProvider;
+namespace garbling {
 class HalfGateGarbler;
 class HalfGateEvaluator;
-}  // namespace Crypto::garbling
+}  // namespace garbling
+}  // namespace Crypto
 
 namespace proto::yao {
 
@@ -70,7 +73,7 @@ class YaoProvider : public GateFactory {
   enum class Role { garbler, evaluator };
   struct my_input_t {};
 
-  YaoProvider(Communication::CommunicationLayer&, GateRegister&,
+  YaoProvider(Communication::CommunicationLayer&, GateRegister&, Crypto::MotionBaseProvider&,
               ENCRYPTO::ObliviousTransfer::OTProvider&, std::shared_ptr<Logger>);
   ~YaoProvider();
 
@@ -121,6 +124,7 @@ class YaoProvider : public GateFactory {
                                ENCRYPTO::block128_vector& keys_out) const noexcept;
   constexpr static std::size_t garbled_table_size = 2;
 
+  Crypto::MotionBaseProvider& get_motion_base_provider() const noexcept { return motion_base_provider_; }
   ENCRYPTO::ObliviousTransfer::OTProvider& get_ot_provider() const noexcept { return ot_provider_; }
   std::shared_ptr<Logger> get_logger() const noexcept { return logger_; }
 
@@ -129,10 +133,14 @@ class YaoProvider : public GateFactory {
   YaoWireVector make_xor_gate(YaoWireVector&& in_a, YaoWireVector&& in_b);
   YaoWireVector make_and_gate(YaoWireVector&& in_a, YaoWireVector&& in_b);
   WireVector make_convert_to_boolean_gmw_gate(YaoWireVector&& in_a);
+  template <typename T>
+  WireVector basic_make_convert_to_arithmetic_gmw_gate(YaoWireVector&& in_a);
+  WireVector make_convert_to_arithmetic_gmw_gate(YaoWireVector&& in_a);
 
  private:
   Communication::CommunicationLayer& communication_layer_;
   GateRegister& gate_register_;
+  Crypto::MotionBaseProvider& motion_base_provider_;
   ENCRYPTO::ObliviousTransfer::OTProvider& ot_provider_;
   std::unique_ptr<Crypto::garbling::HalfGateGarbler> hg_garbler_;
   std::unique_ptr<Crypto::garbling::HalfGateEvaluator> hg_evaluator_;
