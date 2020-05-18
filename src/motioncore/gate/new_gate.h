@@ -46,4 +46,22 @@ class NewGate : public ENCRYPTO::enable_wait_setup, public ENCRYPTO::enable_wait
   std::size_t gate_id_;
 };
 
+// Convert a GateClass to one that is evaluated purely during the setup phase.
+template <typename GateClass>
+class SetupGate : public GateClass {
+  using is_enabled_ = std::enable_if_t<std::is_base_of_v<NewGate, GateClass>>;
+
+ public:
+  using GateClass::GateClass;
+  bool need_setup() const noexcept override {
+    return GateClass::need_setup() || GateClass::need_online();
+  }
+  bool need_online() const noexcept override { return false; }
+  virtual void evaluate_setup() override {
+    GateClass::evaluate_setup();
+    GateClass::evaluate_online();
+  }
+  virtual void evaluate_online() override {}
+};
+
 }  // namespace MOTION
