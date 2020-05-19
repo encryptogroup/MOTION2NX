@@ -546,11 +546,11 @@ WireVector YaoProvider::make_convert_to_arithmetic_gmw_gate(YaoWireVector &&in_a
     case 8:
       return basic_make_convert_to_arithmetic_gmw_gate<std::uint8_t>(std::move(in_a));
     case 16:
-      return basic_make_convert_to_arithmetic_gmw_gate<std::uint8_t>(std::move(in_a));
+      return basic_make_convert_to_arithmetic_gmw_gate<std::uint16_t>(std::move(in_a));
     case 32:
-      return basic_make_convert_to_arithmetic_gmw_gate<std::uint8_t>(std::move(in_a));
+      return basic_make_convert_to_arithmetic_gmw_gate<std::uint32_t>(std::move(in_a));
     case 64:
-      return basic_make_convert_to_arithmetic_gmw_gate<std::uint8_t>(std::move(in_a));
+      return basic_make_convert_to_arithmetic_gmw_gate<std::uint64_t>(std::move(in_a));
     default:
       throw std::logic_error(fmt::format("unsupported bit size {} for Yao to Arithmetic GMW conversion\n", bit_size));
   }
