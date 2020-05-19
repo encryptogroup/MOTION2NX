@@ -50,6 +50,8 @@ struct SharedBitsData;
 // sharings of a random bit 0 or 1 in Z/2^kZ
 class SBProvider {
  public:
+  virtual ~SBProvider() = default;
+
   bool NeedSBs() const noexcept;
 
   template <typename T>
