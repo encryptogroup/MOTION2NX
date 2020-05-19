@@ -29,6 +29,8 @@
 #include "communication/fbs_headers/shared_bits_message_generated.h"
 #include "communication/message_handler.h"
 #include "communication/shared_bits_message.h"
+#include "crypto/oblivious_transfer/ot_flavors.h"
+#include "crypto/oblivious_transfer/ot_provider.h"
 #include "data_storage/shared_bits_data.h"
 #include "sb_impl.h"
 #include "sb_provider.h"
@@ -313,6 +315,174 @@ void SBProviderFromSPs::ComputeSBs() noexcept {
   detail::compute_sbs_phase_3<std::uint16_t>(wb1_16, wb2_16, sbs_16_, my_id_);
   detail::compute_sbs_phase_3<std::uint32_t>(wb1_32, wb2_32, sbs_32_, my_id_);
   detail::compute_sbs_phase_3<std::uint64_t>(wb1_64, wb2_64, sbs_64_, my_id_);
+}
+
+TwoPartySBProvider::TwoPartySBProvider(Communication::CommunicationLayer& communication_layer,
+                                       ENCRYPTO::ObliviousTransfer::OTProvider& ot_provider,
+                                       Statistics::RunTimeStats& run_time_stats,
+                                       std::shared_ptr<Logger> logger)
+    : SBProvider(communication_layer.get_my_id()),
+      ot_provider_(ot_provider),
+      run_time_stats_(run_time_stats),
+      logger_(std::move(logger)) {
+  if (communication_layer.get_num_parties() != 2) {
+    throw std::logic_error("TwoPartySBProvider implements a two-party protocol");
+  }
+}
+
+TwoPartySBProvider::~TwoPartySBProvider() = default;
+
+template <typename T>
+static std::unique_ptr<ENCRYPTO::ObliviousTransfer::ACOTSender<T>> two_party_setup_sender_register(
+    std::size_t num_sbs, ENCRYPTO::ObliviousTransfer::OTProvider& ot_provider,
+    std::vector<T>& sbs) {
+  if (num_sbs == 0) {
+    return nullptr;
+  }
+  sbs.resize(num_sbs);
+  return ot_provider.RegisterSendACOT<T>(num_sbs);
+}
+
+template <typename T>
+static std::unique_ptr<ENCRYPTO::ObliviousTransfer::ACOTReceiver<T>>
+two_party_setup_receiver_register(std::size_t num_sbs,
+                                  ENCRYPTO::ObliviousTransfer::OTProvider& ot_provider) {
+  if (num_sbs == 0) {
+    return nullptr;
+  }
+  return ot_provider.RegisterReceiveACOT<T>(num_sbs);
+}
+
+void TwoPartySBProvider::PreSetup() {
+  if constexpr (MOTION_DEBUG) {
+    if (logger_) {
+      logger_->LogDebug("TwoPartySBProvider::PreSetup start");
+    }
+  }
+  run_time_stats_.record_start<Statistics::RunTimeStats::StatID::sb_presetup>();
+
+  if (my_id_ == 0) {
+    acot_sender_8_ =
+        two_party_setup_sender_register<std::uint8_t>(num_sbs_8_, ot_provider_, sbs_8_);
+    acot_sender_16_ =
+        two_party_setup_sender_register<std::uint16_t>(num_sbs_16_, ot_provider_, sbs_16_);
+    acot_sender_32_ =
+        two_party_setup_sender_register<std::uint32_t>(num_sbs_32_, ot_provider_, sbs_32_);
+    acot_sender_64_ =
+        two_party_setup_sender_register<std::uint64_t>(num_sbs_64_, ot_provider_, sbs_64_);
+  } else {
+    acot_receiver_8_ = two_party_setup_receiver_register<std::uint8_t>(num_sbs_8_, ot_provider_);
+    acot_receiver_16_ = two_party_setup_receiver_register<std::uint16_t>(num_sbs_16_, ot_provider_);
+    acot_receiver_32_ = two_party_setup_receiver_register<std::uint32_t>(num_sbs_32_, ot_provider_);
+    acot_receiver_64_ = two_party_setup_receiver_register<std::uint64_t>(num_sbs_64_, ot_provider_);
+  }
+
+  run_time_stats_.record_end<Statistics::RunTimeStats::StatID::sb_presetup>();
+  if constexpr (MOTION_DEBUG) {
+    if (logger_) {
+      logger_->LogDebug("TwoPartySBProvider::PreSetup end");
+    }
+  }
+}
+
+template <typename T>
+static ENCRYPTO::BitVector<> two_party_setup_sender_phase1(
+    std::size_t num_sbs, ENCRYPTO::ObliviousTransfer::ACOTSender<T>& acot_sender) {
+  if (num_sbs == 0) {
+    return ENCRYPTO::BitVector<>();
+  }
+  auto r0 = ENCRYPTO::BitVector<>::Random(num_sbs);
+  std::vector<T> correlations(num_sbs);
+  for (std::size_t sb_i = 0; sb_i < num_sbs; ++sb_i) {
+    correlations[sb_i] = r0.Get(sb_i) ? T(-1) : T(1);
+  }
+  acot_sender.SetCorrelations(std::move(correlations));
+  acot_sender.SendMessages();
+  return r0;
+}
+
+template <typename T>
+static void two_party_setup_sender_phase2(std::size_t num_sbs,
+                                          ENCRYPTO::ObliviousTransfer::ACOTSender<T>& acot_sender,
+                                          const ENCRYPTO::BitVector<>& r0, std::vector<T>& sbs) {
+  if (num_sbs == 0) {
+    return;
+  }
+  acot_sender.ComputeOutputs();
+  auto tmp = acot_sender.GetOutputs();
+  std::transform(std::begin(tmp), std::end(tmp), std::begin(sbs), std::negate{});
+  for (std::size_t sb_i = 0; sb_i < num_sbs; ++sb_i) {
+    if (r0.Get(sb_i)) {
+      sbs[sb_i] += T(1);
+    }
+  }
+}
+
+template <typename T>
+static void two_party_setup_receiver_phase1(
+    std::size_t num_sbs, ENCRYPTO::ObliviousTransfer::ACOTReceiver<T>& acot_receiver) {
+  // TODO: implement OT with random receiver input
+  if (num_sbs == 0) {
+    return;
+  }
+  auto r1 = ENCRYPTO::BitVector<>::Random(num_sbs);
+  acot_receiver.SetChoices(r1);
+  acot_receiver.SendCorrections();
+}
+
+template <typename T>
+static void two_party_setup_receiver_phase2(
+    std::size_t num_sbs, ENCRYPTO::ObliviousTransfer::ACOTReceiver<T>& acot_receiver,
+    std::vector<T>& sbs) {
+  if (num_sbs == 0) {
+    return;
+  }
+  acot_receiver.ComputeOutputs();
+  sbs = acot_receiver.GetOutputs();
+}
+
+void TwoPartySBProvider::Setup() {
+  // TODO: wait for OTs to finish
+
+  if constexpr (MOTION_DEBUG) {
+    if (logger_) {
+      logger_->LogDebug("TwoPartySBProvider::Setup start");
+    }
+  }
+  run_time_stats_.record_start<Statistics::RunTimeStats::StatID::sb_setup>();
+
+  if (my_id_ == 0) {
+    auto r0_8 = two_party_setup_sender_phase1(num_sbs_8_, *acot_sender_8_);
+    auto r0_16 = two_party_setup_sender_phase1(num_sbs_16_, *acot_sender_16_);
+    auto r0_32 = two_party_setup_sender_phase1(num_sbs_32_, *acot_sender_32_);
+    auto r0_64 = two_party_setup_sender_phase1(num_sbs_64_, *acot_sender_64_);
+    two_party_setup_sender_phase2(num_sbs_8_, *acot_sender_8_, r0_8, sbs_8_);
+    two_party_setup_sender_phase2(num_sbs_16_, *acot_sender_16_, r0_16, sbs_16_);
+    two_party_setup_sender_phase2(num_sbs_32_, *acot_sender_32_, r0_32, sbs_32_);
+    two_party_setup_sender_phase2(num_sbs_64_, *acot_sender_64_, r0_64, sbs_64_);
+  } else {
+    two_party_setup_receiver_phase1(num_sbs_8_, *acot_receiver_8_);
+    two_party_setup_receiver_phase1(num_sbs_16_, *acot_receiver_16_);
+    two_party_setup_receiver_phase1(num_sbs_32_, *acot_receiver_32_);
+    two_party_setup_receiver_phase1(num_sbs_64_, *acot_receiver_64_);
+    two_party_setup_receiver_phase2(num_sbs_8_, *acot_receiver_8_, sbs_8_);
+    two_party_setup_receiver_phase2(num_sbs_16_, *acot_receiver_16_, sbs_16_);
+    two_party_setup_receiver_phase2(num_sbs_32_, *acot_receiver_32_, sbs_32_);
+    two_party_setup_receiver_phase2(num_sbs_64_, *acot_receiver_64_, sbs_64_);
+  }
+
+  {
+    std::scoped_lock lock(finished_condition_->GetMutex());
+    finished_ = true;
+  }
+  finished_condition_->NotifyAll();
+
+  run_time_stats_.record_end<Statistics::RunTimeStats::StatID::sb_setup>();
+  if constexpr (MOTION_DEBUG) {
+    if (logger_) {
+      logger_->LogDebug("TwoPartySBProvider::Setup end");
+    }
+  }
 }
 
 }  // namespace MOTION

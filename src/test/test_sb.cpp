@@ -28,6 +28,10 @@
 #include "crypto/multiplication_triple/sb_impl.h"
 #include "crypto/multiplication_triple/sb_provider.h"
 #include "crypto/multiplication_triple/sp_provider.h"
+#include "crypto/base_ots/base_ot_provider.h"
+#include "crypto/oblivious_transfer/ot_provider.h"
+#include "statistics/run_time_stats.h"
+#include "utility/type_traits.hpp"
 
 namespace {
 
@@ -268,6 +272,102 @@ TEST(SharedBitsImpl, Phase3) {
   auto bits = MOTION::Helpers::AddVectors(sbs_8);
   reduce_mod(bits, 8);
   EXPECT_TRUE(std::all_of(bits.cbegin(), bits.cend(), [] (auto b) { return b == 0 || b == 1; }));
+}
+
+template <typename T>
+class TwoPartySBProviderTest : public ::testing::Test {
+  using is_enabled_t_ = ENCRYPTO::is_unsigned_int_t<T>;
+
+ protected:
+  void SetUp() override {
+    comm_layers_ = MOTION::Communication::make_dummy_communication_layers(2);
+    base_ot_providers_.resize(2);
+    motion_base_providers_.resize(2);
+    ot_provider_managers_.resize(2);
+    sb_providers_.resize(2);
+    for (std::size_t i = 0; i < 2; ++i) {
+      base_ot_providers_[i] = std::make_unique<MOTION::BaseOTProvider>(*comm_layers_[i], nullptr);
+      motion_base_providers_[i] =
+          std::make_unique<MOTION::Crypto::MotionBaseProvider>(*comm_layers_[i], nullptr);
+      ot_provider_managers_[i] = std::make_unique<ENCRYPTO::ObliviousTransfer::OTProviderManager>(
+          *comm_layers_[i], *base_ot_providers_[i], *motion_base_providers_[i], nullptr);
+      sb_providers_[i] = std::make_unique<MOTION::TwoPartySBProvider>(
+          *comm_layers_[i], ot_provider_managers_[i]->get_provider(1 - i), stats_[i], nullptr);
+    }
+
+    std::vector<std::future<void>> futs;
+    for (std::size_t i = 0; i < 2; ++i) {
+      futs.emplace_back(std::async(std::launch::async, [this, i] {
+        comm_layers_[i]->start();
+        motion_base_providers_[i]->setup();
+        base_ot_providers_[i]->ComputeBaseOTs();
+      }));
+    }
+    std::for_each(std::begin(futs), std::end(futs), [](auto& f) { f.get(); });
+  }
+
+  void TearDown() override {
+    std::vector<std::future<void>> futs;
+    for (std::size_t i = 0; i < 2; ++i) {
+      futs.emplace_back(std::async(std::launch::async, [this, i] { comm_layers_[i]->shutdown(); }));
+    }
+    std::for_each(std::begin(futs), std::end(futs), [](auto& f) { f.get(); });
+  }
+
+  void run_setup() {
+    std::vector<std::future<void>> futs;
+    for (std::size_t i = 0; i < 2; ++i) {
+      futs.emplace_back(std::async(std::launch::async, [this, i] {
+        comm_layers_[i]->start();
+        motion_base_providers_[i]->setup();
+        base_ot_providers_[i]->ComputeBaseOTs();
+        sb_providers_[i]->PreSetup();
+        auto f = std::async(std::launch::async, [this, i] {
+          ot_provider_managers_[i]->get_provider(1 - i).SendSetup();
+        });
+        ot_provider_managers_[i]->get_provider(1 - i).ReceiveSetup();
+        f.get();
+        sb_providers_[i]->Setup();
+      }));
+    }
+    std::for_each(std::begin(futs), std::end(futs), [](auto& f) { f.get(); });
+  }
+
+  std::vector<std::unique_ptr<MOTION::Communication::CommunicationLayer>> comm_layers_;
+  std::vector<std::unique_ptr<MOTION::BaseOTProvider>> base_ot_providers_;
+  std::vector<std::unique_ptr<MOTION::Crypto::MotionBaseProvider>> motion_base_providers_;
+  std::vector<std::unique_ptr<ENCRYPTO::ObliviousTransfer::OTProviderManager>>
+      ot_provider_managers_;
+  std::vector<std::unique_ptr<MOTION::SBProvider>> sb_providers_;
+  std::array<MOTION::Statistics::RunTimeStats, 2> stats_;
+};
+
+using integer_types = ::testing::Types<std::uint8_t, std::uint16_t, std::uint32_t, std::uint64_t>;
+TYPED_TEST_SUITE(TwoPartySBProviderTest, integer_types);
+
+TYPED_TEST(TwoPartySBProviderTest, SBs) {
+  std::size_t num_sbs_a = 47;
+  std::size_t num_sbs_b = 42;
+  auto& sb_provider_0 = *this->sb_providers_[0];
+  auto& sb_provider_1 = *this->sb_providers_[1];
+  auto offset_a_0 = sb_provider_0.template RequestSBs<TypeParam>(num_sbs_a);
+  auto offset_a_1 = sb_provider_1.template RequestSBs<TypeParam>(num_sbs_a);
+  ASSERT_EQ(offset_a_0, offset_a_1);
+  auto offset_b_0 = sb_provider_0.template RequestSBs<TypeParam>(num_sbs_b);
+  auto offset_b_1 = sb_provider_1.template RequestSBs<TypeParam>(num_sbs_b);
+  ASSERT_EQ(offset_b_0, offset_b_1);
+
+  this->run_setup();
+
+  const auto& sbs_all_0 = sb_provider_0.template GetSBsAll<TypeParam>();
+  const auto& sbs_all_1 = sb_provider_1.template GetSBsAll<TypeParam>();
+  ASSERT_EQ(sbs_all_0.size(), num_sbs_a + num_sbs_b);
+  ASSERT_EQ(sbs_all_1.size(), num_sbs_a + num_sbs_b);
+
+  for (std::size_t sb_i = 0; sb_i < num_sbs_a + num_sbs_b; ++sb_i) {
+    TypeParam bit = sbs_all_0.at(sb_i) + sbs_all_1.at(sb_i);
+    ASSERT_TRUE(bit == TypeParam(0) || bit == TypeParam(1));
+  }
 }
 
 }  // namespace

@@ -32,6 +32,14 @@
 #include "utility/fiber_condition.h"
 #include "utility/reusable_future.h"
 
+namespace ENCRYPTO::ObliviousTransfer {
+template <typename T>
+class ACOTSender;
+template <typename T>
+class ACOTReceiver;
+class OTProvider;
+}  // namespace ENCRYPTO::ObliviousTransfer
+
 namespace MOTION {
 
 namespace Communication {
@@ -195,6 +203,29 @@ class SBProviderFromSPs final : public SBProvider {
 
   Logger& logger_;
   Statistics::RunTimeStats& run_time_stats_;
+};
+
+class TwoPartySBProvider : public SBProvider {
+ public:
+  TwoPartySBProvider(Communication::CommunicationLayer& communication_layer,
+                    ENCRYPTO::ObliviousTransfer::OTProvider& ot_provider,
+                    Statistics::RunTimeStats& run_time_stats, std::shared_ptr<Logger> logger);
+  ~TwoPartySBProvider();
+
+  void PreSetup();
+  void Setup();
+ private:
+  ENCRYPTO::ObliviousTransfer::OTProvider& ot_provider_;
+  std::unique_ptr<ENCRYPTO::ObliviousTransfer::ACOTSender<std::uint8_t>> acot_sender_8_;
+  std::unique_ptr<ENCRYPTO::ObliviousTransfer::ACOTReceiver<std::uint8_t>> acot_receiver_8_;
+  std::unique_ptr<ENCRYPTO::ObliviousTransfer::ACOTSender<std::uint16_t>> acot_sender_16_;
+  std::unique_ptr<ENCRYPTO::ObliviousTransfer::ACOTReceiver<std::uint16_t>> acot_receiver_16_;
+  std::unique_ptr<ENCRYPTO::ObliviousTransfer::ACOTSender<std::uint32_t>> acot_sender_32_;
+  std::unique_ptr<ENCRYPTO::ObliviousTransfer::ACOTReceiver<std::uint32_t>> acot_receiver_32_;
+  std::unique_ptr<ENCRYPTO::ObliviousTransfer::ACOTSender<std::uint64_t>> acot_sender_64_;
+  std::unique_ptr<ENCRYPTO::ObliviousTransfer::ACOTReceiver<std::uint64_t>> acot_receiver_64_;
+  Statistics::RunTimeStats& run_time_stats_;
+  std::shared_ptr<Logger> logger_;
 };
 
 }  // namespace MOTION
