@@ -35,6 +35,7 @@ namespace MOTION {
 class GateRegister;
 class Logger;
 class MTProvider;
+class SBProvider;
 class SPProvider;
 class NewWire;
 using NewWireP = std::shared_ptr<NewWire>;
@@ -60,7 +61,7 @@ class GMWProvider : public GateFactory, public ENCRYPTO::enable_wait_setup, publ
   struct my_input_t {};
 
   GMWProvider(Communication::CommunicationLayer&, GateRegister&, Crypto::MotionBaseProvider&,
-              MTProvider&, SPProvider&, std::shared_ptr<Logger>);
+              MTProvider&, SPProvider&, SBProvider&, std::shared_ptr<Logger>);
   ~GMWProvider();
 
   std::string get_provider_name() const noexcept override { return "GMWProvider"; }
@@ -69,6 +70,7 @@ class GMWProvider : public GateFactory, public ENCRYPTO::enable_wait_setup, publ
   Crypto::MotionBaseProvider& get_motion_base_provider() noexcept { return motion_base_provider_; }
   MTProvider& get_mt_provider() noexcept { return mt_provider_; }
   SPProvider& get_sp_provider() noexcept { return sp_provider_; }
+  SBProvider& get_sb_provider() noexcept { return sb_provider_; }
   std::shared_ptr<Logger> get_logger() const noexcept { return logger_; }
   bool is_my_job(std::size_t gate_id) const noexcept;
   std::size_t get_my_id() const noexcept { return my_id_; }
@@ -128,6 +130,8 @@ class GMWProvider : public GateFactory, public ENCRYPTO::enable_wait_setup, publ
       ENCRYPTO::PrimitiveOperationType op, const std::vector<std::shared_ptr<NewWire>>&,
       const std::vector<std::shared_ptr<NewWire>>&) override;
 
+  WireVector convert(MPCProtocol proto, const WireVector&) override;
+
  private:
   template <typename T>
   std::pair<ENCRYPTO::ReusableFiberPromise<IntegerValues<T>>, WireVector>
@@ -153,6 +157,10 @@ class GMWProvider : public GateFactory, public ENCRYPTO::enable_wait_setup, publ
   WireVector make_add_gate(const WireVector& in_a, const WireVector& in_b);
   WireVector make_mul_gate(const WireVector& in_a, const WireVector& in_b);
   WireVector make_sqr_gate(const WireVector& in_a);
+  template <typename T>
+  WireVector basic_make_convert_to_arithmetic_gmw_gate(BooleanGMWWireVector&& in_a);
+  WireVector make_convert_to_arithmetic_gmw_gate(BooleanGMWWireVector&& in_a);
+  WireVector convert_boolean(MPCProtocol proto, const WireVector&);
 
  private:
   Communication::CommunicationLayer& communication_layer_;
@@ -160,6 +168,7 @@ class GMWProvider : public GateFactory, public ENCRYPTO::enable_wait_setup, publ
   Crypto::MotionBaseProvider& motion_base_provider_;
   MTProvider& mt_provider_;
   SPProvider& sp_provider_;
+  SBProvider& sb_provider_;
   std::size_t my_id_;
   std::size_t num_parties_;
   std::size_t next_input_id_;

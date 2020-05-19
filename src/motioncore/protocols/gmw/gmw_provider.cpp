@@ -29,6 +29,7 @@
 #include "communication/fbs_headers/gmw_message_generated.h"
 #include "communication/message.h"
 #include "communication/message_handler.h"
+#include "conversion.h"
 #include "crypto/motion_base_provider.h"
 #include "crypto/multiplication_triple/mt_provider.h"
 #include "crypto/multiplication_triple/sp_provider.h"
@@ -42,7 +43,8 @@ namespace MOTION::proto::gmw {
 
 GMWProvider::GMWProvider(Communication::CommunicationLayer& communication_layer,
                          GateRegister& gate_register,
-                         Crypto::MotionBaseProvider& motion_base_provider, MTProvider& mt_provider, SPProvider& sp_provider,
+                         Crypto::MotionBaseProvider& motion_base_provider, MTProvider& mt_provider,
+                         SPProvider& sp_provider, SBProvider& sb_provider,
                          std::shared_ptr<Logger> logger)
     : CommMixin(communication_layer, Communication::MessageType::GMWGate, logger),
       communication_layer_(communication_layer),
@@ -50,11 +52,11 @@ GMWProvider::GMWProvider(Communication::CommunicationLayer& communication_layer,
       motion_base_provider_(motion_base_provider),
       mt_provider_(mt_provider),
       sp_provider_(sp_provider),
+      sb_provider_(sb_provider),
       my_id_(communication_layer_.get_my_id()),
       num_parties_(communication_layer_.get_num_parties()),
       next_input_id_(0),
-      logger_(std::move(logger)) {
-}
+      logger_(std::move(logger)) {}
 
 GMWProvider::~GMWProvider() = default;
 
@@ -442,6 +444,59 @@ WireVector GMWProvider::make_mul_gate(const WireVector& in_a, const WireVector& 
 
 WireVector GMWProvider::make_sqr_gate(const WireVector& in) {
   return make_arithmetic_unary_gate<ArithmeticGMWSQRGate>(in);
+}
+
+template <typename T>
+WireVector GMWProvider::basic_make_convert_to_arithmetic_gmw_gate(BooleanGMWWireVector&& in_a) {
+  [[maybe_unused]] auto num_wires = in_a.size();
+  assert(num_wires == ENCRYPTO::bit_size_v<T>);
+  auto gate_id = gate_register_.get_next_gate_id();
+  auto gate = std::make_unique<BooleanToArithmeticGMWGate<T>>(gate_id, *this, std::move(in_a));
+  auto output = gate->get_output_wire();
+  gate_register_.register_gate(std::move(gate));
+  return {std::dynamic_pointer_cast<NewWire>(output)};
+}
+
+WireVector GMWProvider::make_convert_to_arithmetic_gmw_gate(BooleanGMWWireVector &&in_a) {
+  auto bit_size = in_a.size();
+  switch (bit_size) {
+    case 8:
+      return basic_make_convert_to_arithmetic_gmw_gate<std::uint8_t>(std::move(in_a));
+    case 16:
+      return basic_make_convert_to_arithmetic_gmw_gate<std::uint16_t>(std::move(in_a));
+    case 32:
+      return basic_make_convert_to_arithmetic_gmw_gate<std::uint32_t>(std::move(in_a));
+    case 64:
+      return basic_make_convert_to_arithmetic_gmw_gate<std::uint64_t>(std::move(in_a));
+    default:
+      throw std::logic_error(fmt::format("unsupported bit size {} for Boolean to Arithmetic GMW conversion\n", bit_size));
+  }
+}
+
+WireVector GMWProvider::convert_boolean(MPCProtocol proto, const WireVector &in) {
+  auto input = cast_wires(in);
+
+  switch (proto) {
+    case MPCProtocol::ArithmeticGMW:
+      return make_convert_to_arithmetic_gmw_gate(std::move(input));
+    default:
+      throw std::logic_error(fmt::format("GMW does not support conversion to {}", ToString(proto)));
+  }
+}
+
+WireVector GMWProvider::convert(MPCProtocol proto, const WireVector &in) {
+  auto input = cast_wires(in);
+  assert(input.size() > 0);
+  auto src_proto = input.at(0)->get_protocol();
+
+  switch (src_proto) {
+    case MPCProtocol::ArithmeticGMW:
+      throw std::logic_error("not yet implemented");
+    case MPCProtocol::BooleanGMW:
+      return convert_boolean(proto, in);
+    default:
+      throw std::logic_error("expected GMW protocol");
+  }
 }
 
 }  // namespace MOTION::proto::gmw
