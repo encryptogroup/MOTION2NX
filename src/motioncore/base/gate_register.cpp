@@ -46,14 +46,14 @@ void GateRegister::register_gate(std::unique_ptr<NewGate>&& gate) {
 }
 
 void GateRegister::increment_gate_setup_counter() noexcept {
-  auto new_count = ++num_gates_with_setup_;
+  auto new_count = ++num_evaluated_setup_;
   if (new_count == num_gates_with_setup_) {
     set_setup_ready();
   }
 }
 
 void GateRegister::increment_gate_online_counter() noexcept {
-  auto new_count = ++num_gates_with_online_;
+  auto new_count = ++num_evaluated_online_;
   if (new_count == num_gates_with_online_) {
     set_online_ready();
   }
