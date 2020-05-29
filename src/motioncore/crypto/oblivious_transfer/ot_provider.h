@@ -32,6 +32,7 @@
 #include <flatbuffers/flatbuffers.h>
 
 #include "utility/bit_vector.h"
+#include "utility/enable_wait.h"
 
 namespace MOTION {
 
@@ -469,7 +470,7 @@ class OTProviderFromMultipleThirdParties : public OTProvider {
   // TODO
 };
 
-class OTProviderManager {
+class OTProviderManager : public enable_wait_setup {
  public:
   OTProviderManager(MOTION::Communication::CommunicationLayer &, const MOTION::BaseOTProvider &,
                     MOTION::Crypto::MotionBaseProvider &, std::shared_ptr<MOTION::Logger> logger);
@@ -477,9 +478,13 @@ class OTProviderManager {
 
   std::vector<std::unique_ptr<OTProvider>> &get_providers() { return providers_; }
   OTProvider &get_provider(std::size_t party_id) { return *providers_.at(party_id); }
+  void run_setup();
 
  private:
   MOTION::Communication::CommunicationLayer &communication_layer_;
+  const MOTION::BaseOTProvider &base_ot_provider_;
+  MOTION::Crypto::MotionBaseProvider &motion_base_provider_;
+  std::shared_ptr<MOTION::Logger> logger_;
   std::size_t num_parties_;
   std::vector<std::unique_ptr<OTProvider>> providers_;
   std::vector<std::unique_ptr<MOTION::OTExtensionData>> data_;

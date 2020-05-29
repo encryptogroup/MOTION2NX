@@ -1252,6 +1252,9 @@ OTProviderManager::OTProviderManager(MOTION::Communication::CommunicationLayer &
                                      MOTION::Crypto::MotionBaseProvider &motion_base_provider,
                                      std::shared_ptr<MOTION::Logger> logger)
     : communication_layer_(communication_layer),
+      base_ot_provider_(base_ot_provider),
+      motion_base_provider_(motion_base_provider),
+      logger_(logger),
       num_parties_(communication_layer_.get_num_parties()),
       providers_(num_parties_),
       data_(num_parties_) {
@@ -1283,6 +1286,39 @@ OTProviderManager::~OTProviderManager() {
       {MOTION::Communication::MessageType::OTExtensionReceiverMasks,
        MOTION::Communication::MessageType::OTExtensionReceiverCorrections,
        MOTION::Communication::MessageType::OTExtensionSender});
+}
+
+void OTProviderManager::run_setup() {
+  motion_base_provider_.wait_setup();
+  base_ot_provider_.wait_setup();
+
+  if constexpr (MOTION::MOTION_DEBUG) {
+    logger_->LogDebug("Start computing setup for OTExtensions");
+  }
+
+  // run_time_stats_.back().record_start<Statistics::RunTimeStats::StatID::ot_extension_setup>();
+
+  std::vector<std::future<void>> task_futures;
+  task_futures.reserve(2 * (communication_layer_.get_num_parties() - 1));
+
+  for (auto party_i = 0ull; party_i < communication_layer_.get_num_parties(); ++party_i) {
+    if (party_i == communication_layer_.get_my_id()) {
+      continue;
+    }
+    task_futures.emplace_back(std::async(
+        std::launch::async, [this, party_i] { providers_.at(party_i)->SendSetup(); }));
+    task_futures.emplace_back(std::async(
+        std::launch::async, [this, party_i] { providers_.at(party_i)->ReceiveSetup(); }));
+  }
+
+  std::for_each(task_futures.begin(), task_futures.end(), [](auto &f) { f.get(); });
+  set_setup_ready();
+
+  // run_time_stats_.back().record_end<Statistics::RunTimeStats::StatID::ot_extension_setup>();
+
+  if constexpr (MOTION::MOTION_DEBUG) {
+    logger_->LogDebug("Finished setup for OTExtensions");
+  }
 }
 
 }  // namespace ENCRYPTO::ObliviousTransfer
