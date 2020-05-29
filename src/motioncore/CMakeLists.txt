@@ -137,7 +137,7 @@ endif ()
 #endif ()
 
 
-target_compile_features(motion PRIVATE cxx_std_17)
+target_compile_features(motion PUBLIC cxx_std_17)
 target_compile_options(motion PRIVATE
         ${MOTION_EXTRA_FLAGS}
         -Wall -Wextra
