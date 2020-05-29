@@ -445,4 +445,8 @@ WireVector BEAVYProvider::make_sqr_gate(const WireVector& in) {
   return make_arithmetic_unary_gate<ArithmeticBEAVYSQRGate>(in);
 }
 
+WireVector BEAVYProvider::convert(MPCProtocol, const WireVector&) {
+  throw std::logic_error("BEAVYProvider::convert is not yet implemented");
+}
+
 }  // namespace MOTION::proto::beavy
