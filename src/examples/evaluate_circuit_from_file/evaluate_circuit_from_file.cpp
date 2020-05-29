@@ -59,10 +59,12 @@ int main(int ac, char* av[]) {
     auto logger = std::make_shared<MOTION::Logger>(my_id, boost::log::trivial::severity_level::trace);
     comm_layer->set_logger(logger);
     MOTION::TwoPartyBackend backend(*comm_layer, logger);
-    std::string circuit_path(MOTION::MOTION_ROOT_DIR);
-    // circuit_path += std::string("/circuits/int/int_add8_size.bristol");
-    circuit_path += std::string("/circuits/advanced/aes_128.bristol");
-    auto algo = ENCRYPTO::AlgorithmDescription::FromBristol(circuit_path);
+    ENCRYPTO::AlgorithmDescription algo;
+    if (vm.count("fashion")) {
+      algo = ENCRYPTO::AlgorithmDescription::FromBristolFashion(vm["circuit"].as<std::string>());
+    } else {
+      algo = ENCRYPTO::AlgorithmDescription::FromBristol(vm["circuit"].as<std::string>());
+    }
     auto& yao_provider = backend.get_gate_factory(MOTION::MPCProtocol::Yao);
     ENCRYPTO::ReusableFiberPromise<std::vector<ENCRYPTO::BitVector<>>> input_promise;
     MOTION::WireVector w_in_a;
@@ -132,7 +134,9 @@ std::pair<po::variables_map, bool> ParseProgramOptions(int ac, char* av[]) {
       ("help,h", po::bool_switch(&help)->default_value(false),"produce help message")
       ("config-file,f", po::value<std::string>(), config_file_msg.data())
       ("my-id", po::value<std::size_t>(), "my party id")
-      ("other-parties", po::value<std::vector<std::string>>()->multitoken(), "(other party id, IP, port, my role), e.g., --other-parties 1,127.0.0.1,7777");
+      ("other-parties", po::value<std::vector<std::string>>()->multitoken(), "(other party id, IP, port, my role), e.g., --other-parties 1,127.0.0.1,7777")
+      ("circuit", po::value<std::string>()->required(), "path to a circuit file in the Bristol format")
+      ("fashion", "use the newer Bristol *Fashion* format");
   // clang-format on
 
   po::variables_map vm;
