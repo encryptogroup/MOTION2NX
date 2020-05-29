@@ -30,6 +30,7 @@
 #include "data_storage/base_ot_data.h"
 #include "utility/bit_vector.h"
 #include "utility/constants.h"
+#include "utility/enable_wait.h"
 
 namespace MOTION {
 
@@ -53,7 +54,7 @@ struct ReceiverMsgs {
   ENCRYPTO::BitVector<> c_;
 };
 
-class BaseOTProvider {
+class BaseOTProvider : public ENCRYPTO::enable_wait_setup {
  public:
   BaseOTProvider(Communication::CommunicationLayer&, std::shared_ptr<Logger>);
   ~BaseOTProvider();

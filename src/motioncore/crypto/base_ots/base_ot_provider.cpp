@@ -156,6 +156,7 @@ void BaseOTProvider::ComputeBaseOTs() {
 
   std::for_each(task_futures.begin(), task_futures.end(), [](auto &f) { f.get(); });
   finished_ = true;
+  set_setup_ready();
 
   if constexpr (MOTION_DEBUG) {
     if (logger_) {
