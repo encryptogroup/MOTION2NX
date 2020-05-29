@@ -2,6 +2,7 @@ add_library(motion
         algorithm/algorithm_description.cpp
         algorithm/tree.cpp
         base/backend.cpp
+        base/circuit_builder.cpp
         base/configuration.cpp
         base/gate_factory.cpp
         base/gate_register.cpp
