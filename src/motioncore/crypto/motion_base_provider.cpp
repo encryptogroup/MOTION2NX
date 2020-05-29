@@ -90,10 +90,7 @@ MotionBaseProvider::MotionBaseProvider(Communication::CommunicationLayer& commun
       my_randomness_generators_(num_parties_),
       their_randomness_generators_(num_parties_),
       hello_message_handler_(std::make_shared<HelloMessageHandler>(num_parties_, logger_)),
-      output_message_handlers_(num_parties_),
-      setup_ready_(false),
-      setup_ready_cond_(
-          std::make_unique<ENCRYPTO::FiberCondition>([this] { return setup_ready_; })) {
+      output_message_handlers_(num_parties_) {
   for (std::size_t party_id = 0; party_id < num_parties_; ++party_id) {
     if (party_id == my_id_) {
       continue;
@@ -122,7 +119,7 @@ void MotionBaseProvider::setup() {
         logger_->LogDebug("MotionBaseProvider::setup: waiting for setup being completed");
       }
     }
-    setup_ready_cond_->Wait();
+    wait_setup();
     return;
   }
   if constexpr (MOTION_DEBUG) {
@@ -171,11 +168,8 @@ void MotionBaseProvider::setup() {
     // initialize randomness generator of the other party
     their_randomness_generators_.at(party_id)->Initialize(their_seed.data());
   }
-  {
-    std::scoped_lock lock(setup_ready_cond_->GetMutex());
-    setup_ready_ = true;
-  }
-  setup_ready_cond_->NotifyAll();
+  set_setup_ready();
+
   if constexpr (MOTION_DEBUG) {
     if (logger_) {
       logger_->LogDebug("MotionBaseProvider::setup: setup completed");
@@ -183,7 +177,7 @@ void MotionBaseProvider::setup() {
   }
 }
 
-void MotionBaseProvider::wait_for_setup() const { setup_ready_cond_->Wait(); }
+void MotionBaseProvider::wait_for_setup() const { wait_setup(); }
 
 std::vector<ENCRYPTO::ReusableFiberFuture<std::vector<std::uint8_t>>>
 MotionBaseProvider::register_for_output_messages(std::size_t gate_id) {

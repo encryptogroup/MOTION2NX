@@ -24,6 +24,7 @@
 
 #include <atomic>
 #include <memory>
+#include "utility/enable_wait.h"
 #include "utility/reusable_future.h"
 
 namespace ENCRYPTO {
@@ -44,13 +45,13 @@ class SharingRandomnessGenerator;
 struct HelloMessageHandler;
 class OutputMessageHandler;
 
-class MotionBaseProvider {
+class MotionBaseProvider : public ENCRYPTO::enable_wait_setup {
  public:
   MotionBaseProvider(Communication::CommunicationLayer&, std::shared_ptr<Logger> logger);
   ~MotionBaseProvider();
 
   void setup();
-  void wait_for_setup() const;
+  [[deprecated("use `wait_setup()` instead")]] void wait_for_setup() const;
 
   const std::vector<std::uint8_t>& get_aes_fixed_key() const { return aes_fixed_key_; }
   SharingRandomnessGenerator& get_my_randomness_generator(std::size_t party_id) {
@@ -73,10 +74,7 @@ class MotionBaseProvider {
   std::vector<std::unique_ptr<SharingRandomnessGenerator>> their_randomness_generators_;
   std::shared_ptr<HelloMessageHandler> hello_message_handler_;
   std::vector<std::shared_ptr<OutputMessageHandler>> output_message_handlers_;
-
   std::atomic_flag execute_setup_flag_ = ATOMIC_FLAG_INIT;
-  bool setup_ready_;
-  std::unique_ptr<ENCRYPTO::FiberCondition> setup_ready_cond_;
 };
 
 }  // namespace Crypto
