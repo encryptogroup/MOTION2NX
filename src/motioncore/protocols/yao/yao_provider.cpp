@@ -294,19 +294,17 @@ std::vector<std::shared_ptr<NewWire>> YaoProvider::make_binary_gate(
 }
 
 YaoWireVector YaoProvider::make_inv_gate(YaoWireVector &&in_a) {
+  YaoWireVector output;
+  auto gate_id = gate_register_.get_next_gate_id();
+  std::unique_ptr<detail::BasicYaoUnaryGate> gate;
   if (role_ == Role::garbler) {
-    auto num_wires = in_a.size();
-    auto num_simd = in_a.at(0)->get_num_simd();
-    YaoWireVector output(num_wires);
-    for (std::size_t wire_i = 0; wire_i < num_wires; ++wire_i) {
-      auto wire = std::make_shared<YaoWire>(num_simd);
-      wire->get_keys() = in_a.at(wire_i)->get_keys() ^ get_global_offset();
-      output.at(wire_i) = std::move(wire);
-    }
-    return output;
+    gate = std::make_unique<YaoINVGateGarbler>(gate_id, *this, std::move(in_a));
   } else {
-    return std::move(in_a);
+    gate = std::make_unique<YaoINVGateEvaluator>(gate_id, *this, std::move(in_a));
   }
+  output = gate->get_output_wires();
+  gate_register_.register_gate(std::move(gate));
+  return output;
 }
 
 YaoWireVector YaoProvider::make_xor_gate(YaoWireVector &&in_a, YaoWireVector &&in_b) {
