@@ -717,8 +717,24 @@ YaoANDGateEvaluator::YaoANDGateEvaluator(std::size_t gate_id, YaoProvider& yao_p
 }
 
 void YaoANDGateEvaluator::evaluate_setup() {
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = yao_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(
+          fmt::format("Gate {}: YaoANDGateEvaluator::evaluate_setup start", gate_id_));
+    }
+  }
+
   // nothing to do
   garbled_tables_fut_.wait();
+
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = yao_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(
+          fmt::format("Gate {}: YaoANDGateEvaluator::evaluate_setup end", gate_id_));
+    }
+  }
 }
 
 void YaoANDGateEvaluator::evaluate_online() {
