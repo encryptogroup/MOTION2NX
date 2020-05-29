@@ -101,7 +101,7 @@ class GateFactory {
                                       const WireVector&) = 0;
 
   // conversions
-  virtual WireVector convert(MPCProtocol protocol, const WireVector&) {};
+  virtual WireVector convert(MPCProtocol protocol, const WireVector&) = 0;
 };
 
 }  // namespace MOTION
