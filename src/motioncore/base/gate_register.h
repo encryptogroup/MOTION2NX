@@ -42,6 +42,9 @@ class GateRegister : public ENCRYPTO::enable_wait_setup, public ENCRYPTO::enable
   void increment_gate_setup_counter() noexcept;
   void increment_gate_online_counter() noexcept;
 
+  std::size_t get_num_gates() const noexcept { return next_gate_id_; }
+  std::size_t get_num_gates_with_setup() const noexcept { return num_gates_with_setup_; }
+  std::size_t get_num_gates_with_online() const noexcept { return num_gates_with_online_; }
   std::vector<std::unique_ptr<NewGate>>& get_gates() noexcept { return gates_; }
   const std::vector<std::unique_ptr<NewGate>>& get_gates() const noexcept { return gates_; }
 
