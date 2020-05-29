@@ -30,8 +30,11 @@ namespace ENCRYPTO {
 class enable_wait_online {
  public:
   void set_online_ready() noexcept {
-    std::scoped_lock lock(online_cond_.GetMutex());
-    online_ready_ = true;
+    {
+      std::scoped_lock lock(online_cond_.GetMutex());
+      online_ready_ = true;
+    }
+    online_cond_.NotifyAll();
   }
   void wait_online() const noexcept { online_cond_.Wait(); }
 
@@ -44,8 +47,11 @@ class enable_wait_online {
 class enable_wait_setup {
  public:
   void set_setup_ready() noexcept {
-    std::scoped_lock lock(setup_cond_.GetMutex());
-    setup_ready_ = true;
+    {
+      std::scoped_lock lock(setup_cond_.GetMutex());
+      setup_ready_ = true;
+    }
+    setup_cond_.NotifyAll();
   }
   void wait_setup() const noexcept { setup_cond_.Wait(); }
 
