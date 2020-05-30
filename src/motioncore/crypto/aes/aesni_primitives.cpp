@@ -181,7 +181,7 @@ void aesni_ctr_stream_blocks_128_unaligned(const void* round_keys_in, std::uint6
     for (std::size_t j = 0; j < 4; ++j) wb[j] = _mm_aesenc_si128(wb[j], round_keys[8]);
     for (std::size_t j = 0; j < 4; ++j) wb[j] = _mm_aesenc_si128(wb[j], round_keys[9]);
     for (std::size_t j = 0; j < 4; ++j) wb[j] = _mm_aesenclast_si128(wb[j], round_keys[10]);
-    for (std::size_t j = 0; j < 4; ++j) output[i + j] = wb[j];
+    for (std::size_t j = 0; j < 4; ++j) _mm_storeu_si128(output + i + j, wb[j]);
     counter += 4;
   }
 
@@ -199,7 +199,7 @@ void aesni_ctr_stream_blocks_128_unaligned(const void* round_keys_in, std::uint6
     wb[0] = _mm_aesenc_si128(wb[0], round_keys[8]);
     wb[0] = _mm_aesenc_si128(wb[0], round_keys[9]);
     wb[0] = _mm_aesenclast_si128(wb[0], round_keys[10]);
-    output[i] = wb[0];
+    _mm_storeu_si128(output + i, wb[0]);
     ++counter;
   }
 
@@ -274,13 +274,13 @@ void aesni_tmmo_batch_4(const void* round_keys_in, void* input, __uint128_t twea
 }
 
 void aesni_mmo_single(const void* round_keys_in, void* input) {
-  alignas(16) __m128i input_block;
-  alignas(16) __m128i wb_1;
+  __m128i input_block;
+  __m128i wb_1;
   auto input_ptr = reinterpret_cast<__m128i*>(input);
   auto round_keys = reinterpret_cast<__m128i*>(__builtin_assume_aligned(round_keys_in, aes_block_size));
 
   // load x
-  input_block = *input_ptr;
+  input_block = _mm_loadu_si128(input_ptr);
   // compute wb_1 <- \pi(x)
   wb_1 = _mm_xor_si128(input_block, round_keys[0]);
   wb_1 = _mm_aesenc_si128(wb_1, round_keys[1]);
@@ -294,7 +294,8 @@ void aesni_mmo_single(const void* round_keys_in, void* input) {
   wb_1 = _mm_aesenc_si128(wb_1, round_keys[9]);
   wb_1 = _mm_aesenclast_si128(wb_1, round_keys[10]);
   // store \pi(x) ^ x
-  *input_ptr = _mm_xor_si128(wb_1, input_block);
+  wb_1 = _mm_xor_si128(wb_1, input_block);
+  _mm_storeu_si128(input_ptr, wb_1);
 }
 
 static __m128i aesni_mix_keys(__m128i key_a, __m128i key_b) {
