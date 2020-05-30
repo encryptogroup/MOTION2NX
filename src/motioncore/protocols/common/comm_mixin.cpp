@@ -245,7 +245,9 @@ flatbuffers::FlatBufferBuilder CommMixin::build_gate_message(std::size_t gate_id
 
 flatbuffers::FlatBufferBuilder CommMixin::build_gate_message(
     std::size_t gate_id, const ENCRYPTO::BitVector<>& message) const {
-  return build_gate_message(gate_id, message.GetData());
+  auto vector = message.GetData();
+  return build_gate_message(gate_id, reinterpret_cast<const std::uint8_t*>(vector.data()),
+                            vector.size());
 }
 
 void CommMixin::broadcast_bits_message(std::size_t gate_id,
