@@ -790,6 +790,7 @@ void ArithmeticGMWSQRGate<T>::evaluate_online() {
   auto num_simd = this->input_->get_num_simd();
   const auto& spp = gmw_provider_.get_sp_provider();
   const auto& all_sps = spp.GetSPsAll<T>();
+  this->input_->wait_online();
   const auto& x = this->input_->get_share();
 
   //  mask inputs
