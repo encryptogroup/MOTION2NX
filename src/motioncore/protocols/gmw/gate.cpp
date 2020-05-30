@@ -155,6 +155,7 @@ void BooleanGMWInputGateSender::evaluate_online() {
     }
     share ^= input_bits;
     w_o->set_online_ready();
+    assert(w_o->get_share().GetSize() == num_simd_);
   }
 
   if constexpr (MOTION_VERBOSE_DEBUG) {
@@ -196,6 +197,7 @@ void BooleanGMWInputGateReceiver::evaluate_setup() {
   for (std::size_t wire_i = 0; wire_i < num_wires_; ++wire_i) {
     auto& wire = outputs_[wire_i];
     wire->get_share() = rng.GetBits(input_id_ + wire_i, num_simd_);
+    assert(wire->get_share().GetSize() == num_simd_);
     wire->set_online_ready();
   }
 
@@ -258,6 +260,7 @@ void BooleanGMWOutputGate::evaluate_online() {
   ENCRYPTO::BitVector<> my_share;
   // auto num_bits = count_bits(inputs_);  // TODO: reserve
   for (const auto& wire : inputs_) {
+    wire->wait_online();
     my_share.Append(wire->get_share());
   }
   if (output_owner_ != my_id) {
@@ -330,6 +333,7 @@ void BooleanGMWXORGate::evaluate_online() {
     w_b->wait_online();
     auto& w_o = outputs_[wire_i];
     w_o->get_share() = w_a->get_share() ^ w_b->get_share();
+    assert(w_o->get_share().GetSize() == w_a->get_num_simd());
     w_o->set_online_ready();
   }
 }
@@ -338,8 +342,9 @@ BooleanGMWANDGate::BooleanGMWANDGate(std::size_t gate_id, GMWProvider& gmw_provi
                                      BooleanGMWWireVector&& in_a, BooleanGMWWireVector&& in_b)
     : detail::BasicBooleanGMWBinaryGate(gate_id, std::move(in_a), std::move(in_b)),
       gmw_provider_(gmw_provider) {
-  auto num_bits = count_bits(inputs_a_);
-  mt_offset_ = gmw_provider_.get_mt_provider().RequestBinaryMTs(num_bits);
+  auto num_wires = inputs_a_.size();
+  auto num_simd = inputs_a_.at(0)->get_num_simd();
+  mt_offset_ = gmw_provider_.get_mt_provider().RequestBinaryMTs(num_wires * num_simd);
   share_futures_ = gmw_provider_.register_for_bits_messages(gate_id_, 2 * count_bits(inputs_a_));
 }
 
@@ -348,8 +353,8 @@ void BooleanGMWANDGate::evaluate_setup() {
 }
 
 void BooleanGMWANDGate::evaluate_online() {
-  auto num_bits = count_bits(inputs_a_);
   auto num_simd = inputs_a_[0]->get_num_simd();
+  auto num_bits = num_wires_ * num_simd;
   const auto& mtp = gmw_provider_.get_mt_provider();
   auto mts = mtp.GetBinary(mt_offset_, num_bits);
   ENCRYPTO::BitVector<> x;
@@ -360,8 +365,12 @@ void BooleanGMWANDGate::evaluate_online() {
   // collect all shares into a single buffer
   for (std::size_t wire_i = 0; wire_i < num_wires_; ++wire_i) {
     const auto& wire_x = inputs_a_[wire_i];
+    wire_x->wait_online();
+    assert(wire_x->get_share().GetSize() == num_simd);
     x.Append(wire_x->get_share());
     const auto& wire_y = inputs_b_[wire_i];
+    wire_y->wait_online();
+    assert(wire_y->get_share().GetSize() == num_simd);
     y.Append(wire_y->get_share());
   }
   // mask values with a, b
@@ -394,6 +403,7 @@ void BooleanGMWANDGate::evaluate_online() {
   for (std::size_t wire_i = 0; wire_i < num_wires_; ++wire_i) {
     auto& wire_o = outputs_[wire_i];
     wire_o->get_share() = result.Subset(wire_i * num_simd, (wire_i + 1) * num_simd);
+    assert(wire_o->get_share().GetSize() == num_simd);
     wire_o->set_online_ready();
   }
 }
@@ -600,6 +610,7 @@ void ArithmeticGMWOutputGate<T>::evaluate_online() {
   }
 
   std::size_t my_id = gmw_provider_.get_my_id();
+  input_->wait_online();
   auto my_share = input_->get_share();
   if (output_owner_ != my_id) {
     if (output_owner_ == ALL_PARTIES) {
@@ -713,6 +724,8 @@ void ArithmeticGMWMULGate<T>::evaluate_online() {
   auto num_simd = this->input_a_->get_num_simd();
   const auto& mtp = gmw_provider_.get_mt_provider();
   const auto& all_mts = mtp.GetIntegerAll<T>();
+  this->input_a_->wait_online();
+  this->input_b_->wait_online();
   const auto& x = this->input_a_->get_share();
   const auto& y = this->input_b_->get_share();
 
