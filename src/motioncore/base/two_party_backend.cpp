@@ -29,12 +29,18 @@
 
 #include "base/gate_register.h"
 #include "communication/communication_layer.h"
+#include "crypto/arithmetic_provider.h"
 #include "crypto/base_ots/base_ot_provider.h"
 #include "crypto/motion_base_provider.h"
+#include "crypto/multiplication_triple/mt_provider.h"
+#include "crypto/multiplication_triple/sb_provider.h"
+#include "crypto/multiplication_triple/sp_provider.h"
 #include "crypto/oblivious_transfer/ot_provider.h"
 #include "executor/new_gate_executor.h"
+#include "protocols/gmw/gmw_provider.h"
 #include "protocols/yao/yao_provider.h"
 #include "statistics/run_time_stats.h"
+#include "utility/logger.h"
 #include "utility/typedefs.h"
 
 namespace MOTION {
@@ -45,14 +51,30 @@ TwoPartyBackend::TwoPartyBackend(Communication::CommunicationLayer& comm_layer,
       my_id_(comm_layer_.get_my_id()),
       logger_(logger),
       gate_register_(std::make_unique<GateRegister>()),
-      gate_executor_(std::make_unique<NewGateExecutor>(*gate_register_, [] {}, logger_)),
+      gate_executor_(std::make_unique<NewGateExecutor>(
+          *gate_register_, [] {}, logger_)),
+      run_time_stats_(1),
       motion_base_provider_(std::make_unique<Crypto::MotionBaseProvider>(comm_layer_, logger_)),
       base_ot_provider_(std::make_unique<BaseOTProvider>(comm_layer_, logger_)),
       ot_manager_(std::make_unique<ENCRYPTO::ObliviousTransfer::OTProviderManager>(
           comm_layer_, *base_ot_provider_, *motion_base_provider_, logger_)),
+      arithmetic_manager_(
+          std::make_unique<ArithmeticProviderManager>(comm_layer_, *ot_manager_, logger_)),
+      mt_provider_(std::make_unique<MTProviderFromOTs>(my_id_, comm_layer_.get_num_parties(),
+                                                       *arithmetic_manager_, *ot_manager_,
+                                                       run_time_stats_.back(), logger_)),
+      sp_provider_(std::make_unique<SPProviderFromOTs>(ot_manager_->get_providers(), my_id_,
+                                                       run_time_stats_.back(), logger_)),
+      sb_provider_(std::make_unique<TwoPartySBProvider>(
+          comm_layer_, ot_manager_->get_provider(1 - my_id_), run_time_stats_.back(), logger_)),
+      gmw_provider_(std::make_unique<proto::gmw::GMWProvider>(
+          comm_layer_, *gate_register_, *motion_base_provider_, *mt_provider_, *sp_provider_,
+          *sb_provider_, logger_)),
       yao_provider_(std::make_unique<proto::yao::YaoProvider>(
           comm_layer_, *gate_register_, *motion_base_provider_,
           ot_manager_->get_provider(1 - my_id_), logger_)) {
+  gate_factories_.emplace(MPCProtocol::ArithmeticGMW, *gmw_provider_);
+  gate_factories_.emplace(MPCProtocol::BooleanGMW, *gmw_provider_);
   gate_factories_.emplace(MPCProtocol::Yao, *yao_provider_);
   comm_layer_.start();
 }
@@ -60,16 +82,26 @@ TwoPartyBackend::TwoPartyBackend(Communication::CommunicationLayer& comm_layer,
 TwoPartyBackend::~TwoPartyBackend() = default;
 
 void TwoPartyBackend::run_preprocessing() {
+  run_time_stats_.back().record_start<Statistics::RunTimeStats::StatID::preprocessing>();
+
   motion_base_provider_->setup();
   base_ot_provider_->ComputeBaseOTs();
+  mt_provider_->PreSetup();
+  sp_provider_->PreSetup();
+  sb_provider_->PreSetup();
   ot_manager_->run_setup();
+  mt_provider_->Setup();
+  sp_provider_->Setup();
+  sb_provider_->Setup();
   yao_provider_->setup();
+  gmw_provider_->setup();
+
+  run_time_stats_.back().record_end<Statistics::RunTimeStats::StatID::preprocessing>();
 }
 
 void TwoPartyBackend::run() {
-  Statistics::RunTimeStats stats;
-  gate_executor_->evaluate_setup_online(stats);
-  std::cout << stats.print_human_readable();
+  gate_executor_->evaluate_setup_online(run_time_stats_.back());
+  std::cout << run_time_stats_.back().print_human_readable();
 }
 
 GateFactory& TwoPartyBackend::get_gate_factory(MPCProtocol proto) {
