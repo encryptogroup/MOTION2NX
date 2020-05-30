@@ -31,6 +31,7 @@
 #include <boost/lexical_cast.hpp>
 #include <boost/log/trivial.hpp>
 #include <boost/program_options.hpp>
+#include <stdexcept>
 
 #include "algorithm/algorithm_description.h"
 #include "base/two_party_backend.h"
@@ -45,7 +46,8 @@ bool CheckPartyArgumentSyntax(const std::string& p);
 
 std::pair<po::variables_map, bool> ParseProgramOptions(int ac, char* av[]);
 
-std::unique_ptr<MOTION::Communication::CommunicationLayer> setup_communication(const po::variables_map& vm);
+std::unique_ptr<MOTION::Communication::CommunicationLayer> setup_communication(
+    const po::variables_map& vm);
 
 int main(int ac, char* av[]) {
   try {
@@ -56,7 +58,8 @@ int main(int ac, char* av[]) {
     auto comm_layer = setup_communication(vm);
     auto my_id = comm_layer->get_my_id();
 
-    auto logger = std::make_shared<MOTION::Logger>(my_id, boost::log::trivial::severity_level::trace);
+    auto logger =
+        std::make_shared<MOTION::Logger>(my_id, boost::log::trivial::severity_level::trace);
     comm_layer->set_logger(logger);
     MOTION::TwoPartyBackend backend(*comm_layer, logger);
     ENCRYPTO::AlgorithmDescription algo;
@@ -65,31 +68,47 @@ int main(int ac, char* av[]) {
     } else {
       algo = ENCRYPTO::AlgorithmDescription::FromBristol(vm["circuit"].as<std::string>());
     }
-    auto& yao_provider = backend.get_gate_factory(MOTION::MPCProtocol::Yao);
+    auto proto = [] (auto& vm) {
+      auto proto = vm["protocol"].template as<std::string>();
+      std::transform(std::begin(proto), std::end(proto), std::begin(proto),
+                     [](char x) { return std::tolower(x); });
+      if (proto == "yao") {
+        return MOTION::MPCProtocol::Yao;
+      } else if (proto == "gmw") {
+        return MOTION::MPCProtocol::BooleanGMW;
+      } else {
+        throw std::invalid_argument("unknown protocol");
+      }
+    }(vm);
+    auto& gate_factory = backend.get_gate_factory(proto);
     ENCRYPTO::ReusableFiberPromise<std::vector<ENCRYPTO::BitVector<>>> input_promise;
     MOTION::WireVector w_in_a;
     MOTION::WireVector w_in_b;
     if (my_id == 0) {
-      auto pair = yao_provider.make_boolean_input_gate_my(my_id, algo.n_input_wires_parent_a_, 1);
+      auto pair = gate_factory.make_boolean_input_gate_my(my_id, algo.n_input_wires_parent_a_, 1);
       input_promise = std::move(pair.first);
       w_in_a = std::move(pair.second);
-      w_in_b = yao_provider.make_boolean_input_gate_other(1 - my_id, *algo.n_input_wires_parent_b_, 1);
+      w_in_b =
+          gate_factory.make_boolean_input_gate_other(1 - my_id, *algo.n_input_wires_parent_b_, 1);
     } else {
-      w_in_a = yao_provider.make_boolean_input_gate_other(1 - my_id, algo.n_input_wires_parent_a_, 1);
-      auto pair = yao_provider.make_boolean_input_gate_my(my_id, *algo.n_input_wires_parent_b_, 1);
+      w_in_a =
+          gate_factory.make_boolean_input_gate_other(1 - my_id, algo.n_input_wires_parent_a_, 1);
+      auto pair = gate_factory.make_boolean_input_gate_my(my_id, *algo.n_input_wires_parent_b_, 1);
       input_promise = std::move(pair.first);
       w_in_b = std::move(pair.second);
     }
     auto w_out = backend.make_circuit(algo, w_in_a, w_in_b);
-    auto output_future = yao_provider.make_boolean_output_gate_my(MOTION::ALL_PARTIES, w_out);
+    auto output_future = gate_factory.make_boolean_output_gate_my(MOTION::ALL_PARTIES, w_out);
 
     backend.run_preprocessing();
 
     std::vector<ENCRYPTO::BitVector<>> inputs;
     if (my_id == 0) {
-      std::generate_n(std::back_inserter(inputs), algo.n_input_wires_parent_a_, [] { return ENCRYPTO::BitVector<>(1); });
+      std::generate_n(std::back_inserter(inputs), algo.n_input_wires_parent_a_,
+                      [] { return ENCRYPTO::BitVector<>(1); });
     } else {
-      std::generate_n(std::back_inserter(inputs), *algo.n_input_wires_parent_b_, [] { return ENCRYPTO::BitVector<>(1); });
+      std::generate_n(std::back_inserter(inputs), *algo.n_input_wires_parent_b_,
+                      [] { return ENCRYPTO::BitVector<>(1); });
     }
     input_promise.set_value(inputs);
 
@@ -135,6 +154,7 @@ std::pair<po::variables_map, bool> ParseProgramOptions(int ac, char* av[]) {
       ("config-file,f", po::value<std::string>(), config_file_msg.data())
       ("my-id", po::value<std::size_t>(), "my party id")
       ("other-parties", po::value<std::vector<std::string>>()->multitoken(), "(other party id, IP, port, my role), e.g., --other-parties 1,127.0.0.1,7777")
+      ("protocol", po::value<std::string>()->required(), "protocol to use")
       ("circuit", po::value<std::string>()->required(), "path to a circuit file in the Bristol format")
       ("fashion", "use the newer Bristol *Fashion* format");
   // clang-format on
@@ -188,7 +208,8 @@ std::pair<po::variables_map, bool> ParseProgramOptions(int ac, char* av[]) {
   return std::make_pair(vm, help);
 }
 
-std::unique_ptr<MOTION::Communication::CommunicationLayer> setup_communication(const po::variables_map& vm) {
+std::unique_ptr<MOTION::Communication::CommunicationLayer> setup_communication(
+    const po::variables_map& vm) {
   const auto parties_str{vm["other-parties"].as<const std::vector<std::string>>()};
   const auto num_parties{parties_str.size()};
   const auto my_id{vm["my-id"].as<std::size_t>()};
@@ -211,5 +232,6 @@ std::unique_ptr<MOTION::Communication::CommunicationLayer> setup_communication(c
     parties_config.at(party_id) = std::make_pair(host, port);
   }
   MOTION::Communication::TCPSetupHelper helper(my_id, parties_config);
-  return std::make_unique<MOTION::Communication::CommunicationLayer>(my_id, helper.setup_connections());
+  return std::make_unique<MOTION::Communication::CommunicationLayer>(my_id,
+                                                                     helper.setup_connections());
 }
