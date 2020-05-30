@@ -82,7 +82,7 @@ class IntegerMultiplicationReceiver {
   std::size_t batch_size_;
   std::vector<T> inputs_;
   std::vector<T> outputs_;
-  std::unique_ptr<ENCRYPTO::ObliviousTransfer::ACOTReceiver<T>> ot_sender_;
+  std::unique_ptr<ENCRYPTO::ObliviousTransfer::ACOTReceiver<T>> ot_receiver_;
   std::shared_ptr<Logger> logger_;
 };
 

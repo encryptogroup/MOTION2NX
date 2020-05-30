@@ -98,7 +98,7 @@ template <typename T>
 IntegerMultiplicationReceiver<T>::IntegerMultiplicationReceiver(
     std::size_t batch_size, ENCRYPTO::ObliviousTransfer::OTProvider& ot_provider)
     : batch_size_(batch_size),
-      ot_sender_(ot_provider.RegisterReceiveACOT<T>(batch_size * ENCRYPTO::bit_size_v<T>)) {}
+      ot_receiver_(ot_provider.RegisterReceiveACOT<T>(batch_size * ENCRYPTO::bit_size_v<T>)) {}
 
 template <typename T>
 IntegerMultiplicationReceiver<T>::~IntegerMultiplicationReceiver() = default;
@@ -120,15 +120,15 @@ template <typename T>
 void IntegerMultiplicationReceiver<T>::set_inputs(const T* inputs) {
   ENCRYPTO::BitVector<> ot_choices(batch_size_ * ENCRYPTO::bit_size_v<T>);
   std::copy_n(inputs, batch_size_, reinterpret_cast<T*>(ot_choices.GetMutableData().data()));
-  ot_sender_->SetChoices(std::move(ot_choices));
-  ot_sender_->SendCorrections();
+  ot_receiver_->SetChoices(std::move(ot_choices));
+  ot_receiver_->SendCorrections();
 }
 
 template <typename T>
 void IntegerMultiplicationReceiver<T>::compute_outputs() {
   constexpr auto bit_size = ENCRYPTO::bit_size_v<T>;
-  ot_sender_->ComputeOutputs();
-  auto ot_outputs = ot_sender_->GetOutputs();
+  ot_receiver_->ComputeOutputs();
+  auto ot_outputs = ot_receiver_->GetOutputs();
   assert(ot_outputs.size() == batch_size_ * bit_size);
   outputs_.resize(batch_size_);
   for (std::size_t output_i = 0; output_i < batch_size_; ++output_i) {
