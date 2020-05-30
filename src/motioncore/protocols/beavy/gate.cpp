@@ -318,6 +318,7 @@ void BooleanBEAVYOutputGate::evaluate_online() {
       auto num_simd = inputs_[wire_i]->get_num_simd();
       auto& output =
           outputs.emplace_back(my_secret_share.Subset(bit_offset, bit_offset + num_simd));
+      inputs_[wire_i]->wait_online();
       output ^= inputs_[wire_i]->get_public_share();
       bit_offset += num_simd;
     }
@@ -473,8 +474,10 @@ void BooleanBEAVYANDGate::evaluate_online() {
 
   for (std::size_t wire_i = 0; wire_i < num_wires_; ++wire_i) {
     const auto& wire_a = inputs_a_[wire_i];
+    wire_a->wait_online();
     Delta_a.Append(wire_a->get_public_share());
     const auto& wire_b = inputs_b_[wire_i];
+    wire_b->wait_online();
     Delta_b.Append(wire_b->get_public_share());
   }
 
@@ -704,6 +707,7 @@ void ArithmeticBEAVYOutputGate<T>::evaluate_online() {
     const auto other_secret_share = share_future_.get();
     std::transform(std::begin(my_secret_share), std::end(my_secret_share),
                    std::begin(other_secret_share), std::begin(my_secret_share), std::plus{});
+    input_->wait_online();
     std::transform(std::begin(input_->get_public_share()), std::end(input_->get_public_share()),
                    std::begin(my_secret_share), std::begin(my_secret_share), std::minus{});
     output_promise_.set_value(std::move(my_secret_share));
@@ -916,6 +920,8 @@ void ArithmeticBEAVYMULGate<T>::evaluate_online() {
   }
 
   auto num_simd = this->input_a_->get_num_simd();
+  this->input_a_->wait_online();
+  this->input_b_->wait_online();
   const auto& Delta_a = this->input_a_->get_public_share();
   const auto& Delta_b = this->input_b_->get_public_share();
   const auto& delta_a_share = this->input_a_->get_secret_share();
@@ -1052,6 +1058,7 @@ void ArithmeticBEAVYSQRGate<T>::evaluate_online() {
   }
 
   auto num_simd = this->input_->get_num_simd();
+  this->input_->wait_online();
   const auto& Delta_a = this->input_->get_public_share();
   const auto& delta_a_share = this->input_->get_secret_share();
   std::vector<T> tmp(num_simd);
