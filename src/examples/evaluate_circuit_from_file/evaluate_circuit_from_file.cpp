@@ -76,6 +76,8 @@ int main(int ac, char* av[]) {
         return MOTION::MPCProtocol::Yao;
       } else if (proto == "gmw") {
         return MOTION::MPCProtocol::BooleanGMW;
+      } else if (proto == "beavy") {
+        return MOTION::MPCProtocol::BooleanBEAVY;
       } else {
         throw std::invalid_argument("unknown protocol");
       }
