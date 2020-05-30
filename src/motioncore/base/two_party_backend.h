@@ -54,6 +54,9 @@ class MotionBaseProvider;
 }
 
 namespace proto {
+namespace beavy {
+class BEAVYProvider;
+}
 namespace gmw {
 class GMWProvider;
 }
@@ -93,6 +96,7 @@ class TwoPartyBackend : public CircuitBuilder {
   std::unique_ptr<SPProvider> sp_provider_;
   std::unique_ptr<SBProvider> sb_provider_;
 
+  std::unique_ptr<proto::beavy::BEAVYProvider> beavy_provider_;
   std::unique_ptr<proto::gmw::GMWProvider> gmw_provider_;
   std::unique_ptr<proto::yao::YaoProvider> yao_provider_;
 };

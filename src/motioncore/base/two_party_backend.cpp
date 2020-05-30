@@ -37,6 +37,7 @@
 #include "crypto/multiplication_triple/sp_provider.h"
 #include "crypto/oblivious_transfer/ot_provider.h"
 #include "executor/new_gate_executor.h"
+#include "protocols/beavy/beavy_provider.h"
 #include "protocols/gmw/gmw_provider.h"
 #include "protocols/yao/yao_provider.h"
 #include "statistics/run_time_stats.h"
@@ -67,12 +68,17 @@ TwoPartyBackend::TwoPartyBackend(Communication::CommunicationLayer& comm_layer,
                                                        run_time_stats_.back(), logger_)),
       sb_provider_(std::make_unique<TwoPartySBProvider>(
           comm_layer_, ot_manager_->get_provider(1 - my_id_), run_time_stats_.back(), logger_)),
+      beavy_provider_(std::make_unique<proto::beavy::BEAVYProvider>(
+          comm_layer_, *gate_register_, *motion_base_provider_, *ot_manager_, *arithmetic_manager_,
+          logger_)),
       gmw_provider_(std::make_unique<proto::gmw::GMWProvider>(
           comm_layer_, *gate_register_, *motion_base_provider_, *mt_provider_, *sp_provider_,
           *sb_provider_, logger_)),
       yao_provider_(std::make_unique<proto::yao::YaoProvider>(
           comm_layer_, *gate_register_, *motion_base_provider_,
           ot_manager_->get_provider(1 - my_id_), logger_)) {
+  gate_factories_.emplace(MPCProtocol::ArithmeticBEAVY, *beavy_provider_);
+  gate_factories_.emplace(MPCProtocol::BooleanBEAVY, *beavy_provider_);
   gate_factories_.emplace(MPCProtocol::ArithmeticGMW, *gmw_provider_);
   gate_factories_.emplace(MPCProtocol::BooleanGMW, *gmw_provider_);
   gate_factories_.emplace(MPCProtocol::Yao, *yao_provider_);
@@ -93,8 +99,9 @@ void TwoPartyBackend::run_preprocessing() {
   mt_provider_->Setup();
   sp_provider_->Setup();
   sb_provider_->Setup();
-  yao_provider_->setup();
+  beavy_provider_->setup();
   gmw_provider_->setup();
+  yao_provider_->setup();
 
   run_time_stats_.back().record_end<Statistics::RunTimeStats::StatID::preprocessing>();
 }
