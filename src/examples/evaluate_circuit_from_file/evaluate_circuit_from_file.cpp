@@ -82,20 +82,21 @@ int main(int ac, char* av[]) {
         throw std::invalid_argument("unknown protocol");
       }
     }(vm);
+    auto num_simd = vm["num-simd"].as<std::size_t>();
     auto& gate_factory = backend.get_gate_factory(proto);
     ENCRYPTO::ReusableFiberPromise<std::vector<ENCRYPTO::BitVector<>>> input_promise;
     MOTION::WireVector w_in_a;
     MOTION::WireVector w_in_b;
     if (my_id == 0) {
-      auto pair = gate_factory.make_boolean_input_gate_my(my_id, algo.n_input_wires_parent_a_, 1);
+      auto pair = gate_factory.make_boolean_input_gate_my(my_id, algo.n_input_wires_parent_a_, num_simd);
       input_promise = std::move(pair.first);
       w_in_a = std::move(pair.second);
       w_in_b =
-          gate_factory.make_boolean_input_gate_other(1 - my_id, *algo.n_input_wires_parent_b_, 1);
+          gate_factory.make_boolean_input_gate_other(1 - my_id, *algo.n_input_wires_parent_b_, num_simd);
     } else {
       w_in_a =
-          gate_factory.make_boolean_input_gate_other(1 - my_id, algo.n_input_wires_parent_a_, 1);
-      auto pair = gate_factory.make_boolean_input_gate_my(my_id, *algo.n_input_wires_parent_b_, 1);
+          gate_factory.make_boolean_input_gate_other(1 - my_id, algo.n_input_wires_parent_a_, num_simd);
+      auto pair = gate_factory.make_boolean_input_gate_my(my_id, *algo.n_input_wires_parent_b_, num_simd);
       input_promise = std::move(pair.first);
       w_in_b = std::move(pair.second);
     }
@@ -107,10 +108,10 @@ int main(int ac, char* av[]) {
     std::vector<ENCRYPTO::BitVector<>> inputs;
     if (my_id == 0) {
       std::generate_n(std::back_inserter(inputs), algo.n_input_wires_parent_a_,
-                      [] { return ENCRYPTO::BitVector<>(1); });
+                      [num_simd] { return ENCRYPTO::BitVector<>(num_simd); });
     } else {
       std::generate_n(std::back_inserter(inputs), *algo.n_input_wires_parent_b_,
-                      [] { return ENCRYPTO::BitVector<>(1); });
+                      [num_simd] { return ENCRYPTO::BitVector<>(num_simd); });
     }
     input_promise.set_value(inputs);
 
@@ -156,6 +157,7 @@ std::pair<po::variables_map, bool> ParseProgramOptions(int ac, char* av[]) {
       ("config-file,f", po::value<std::string>(), config_file_msg.data())
       ("my-id", po::value<std::size_t>(), "my party id")
       ("other-parties", po::value<std::vector<std::string>>()->multitoken(), "(other party id, IP, port, my role), e.g., --other-parties 1,127.0.0.1,7777")
+      ("num-simd", po::value<std::size_t>()->default_value(1), "# simd values")
       ("protocol", po::value<std::string>()->required(), "protocol to use")
       ("circuit", po::value<std::string>()->required(), "path to a circuit file in the Bristol format")
       ("fashion", "use the newer Bristol *Fashion* format");
