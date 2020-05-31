@@ -92,7 +92,7 @@ static void worker_fctn(std::shared_ptr<pool_ctx> pool_ctx,
     // create a fiber from the task we retrieved and store its handle
     // cleanup_channel.enqueue(boost::fibers::fiber(std::allocator_arg_t{}, stack_allocator, task));
     cleanup_channel.enqueue(
-        boost::fibers::fiber(std::allocator_arg_t{}, stack_allocator, [&task, &task_queue] {
+        boost::fibers::fiber(std::allocator_arg_t{}, stack_allocator, [task = std::move(task), &task_queue] {
           task();
           FiberThreadPool::task_t next_task;
           while (task_queue.try_pop(next_task) == boost::fibers::channel_op_status::success) {
