@@ -200,6 +200,7 @@ target_include_directories(motion PUBLIC
         )
 
 target_compile_definitions(motion PUBLIC FMT_HEADER_ONLY BOOST_ERROR_CODE_HEADER_ONLY)
+target_compile_definitions(motion PUBLIC BOOST_FIBERS_SPINLOCK_STD_MUTEX)
 
 target_link_libraries(motion
         PRIVATE
