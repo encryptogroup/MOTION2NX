@@ -77,8 +77,8 @@ static void worker_fctn(std::shared_ptr<pool_ctx> pool_ctx,
   });
 
   // register this thread with the pool
-  // boost::fibers::use_scheduling_algorithm<pooled_work_stealing>(pool_ctx);
-  (void)pool_ctx;
+  boost::fibers::use_scheduling_algorithm<pooled_work_stealing>(pool_ctx);
+  // (void)pool_ctx;
 
   FiberThreadPool::task_t task;
 
