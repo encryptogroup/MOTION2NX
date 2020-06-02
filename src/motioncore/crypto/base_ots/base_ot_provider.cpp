@@ -31,6 +31,7 @@
 #include "communication/message_handler.h"
 #include "crypto/base_ots/ot_hl17.h"
 #include "data_storage/base_ot_data.h"
+#include "statistics/run_time_stats.h"
 #include "utility/fiber_condition.h"
 #include "utility/logger.h"
 
@@ -74,11 +75,13 @@ void BaseOTMessageHandler::received_message(std::size_t, std::vector<std::uint8_
 // Implementation of BaseOTProvider: -------------------------------------------
 
 BaseOTProvider::BaseOTProvider(Communication::CommunicationLayer &communication_layer,
+                               Statistics::RunTimeStats *stats,
                                std::shared_ptr<Logger> logger)
     : communication_layer_(communication_layer),
       num_parties_(communication_layer.get_num_parties()),
       my_id_(communication_layer.get_my_id()),
       data_(num_parties_),
+      stats_(stats),
       logger_(logger),
       finished_(false) {
   communication_layer_.register_message_handler(
@@ -100,6 +103,10 @@ void BaseOTProvider::ComputeBaseOTs() {
     if (logger_) {
       logger_->LogDebug("Start computing base OTs");
     }
+  }
+
+  if (stats_) {
+    stats_->record_start<Statistics::RunTimeStats::StatID::base_ots>();
   }
 
   std::vector<std::future<void>> task_futures;
@@ -157,6 +164,10 @@ void BaseOTProvider::ComputeBaseOTs() {
   std::for_each(task_futures.begin(), task_futures.end(), [](auto &f) { f.get(); });
   finished_ = true;
   set_setup_ready();
+
+  if (stats_) {
+    stats_->record_end<Statistics::RunTimeStats::StatID::base_ots>();
+  }
 
   if constexpr (MOTION_DEBUG) {
     if (logger_) {

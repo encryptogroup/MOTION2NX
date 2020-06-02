@@ -38,6 +38,10 @@ namespace Communication {
 class CommunicationLayer;
 }
 
+namespace Statistics {
+struct RunTimeStats;
+}
+
 class Configuration;
 class Logger;
 class Register;
@@ -56,7 +60,8 @@ struct ReceiverMsgs {
 
 class BaseOTProvider : public ENCRYPTO::enable_wait_setup {
  public:
-  BaseOTProvider(Communication::CommunicationLayer&, std::shared_ptr<Logger>);
+  BaseOTProvider(Communication::CommunicationLayer&, Statistics::RunTimeStats*,
+                 std::shared_ptr<Logger>);
   ~BaseOTProvider();
   void ComputeBaseOTs();
   void ImportBaseOTs(std::size_t party_id, const ReceiverMsgs& msgs);
@@ -70,6 +75,7 @@ class BaseOTProvider : public ENCRYPTO::enable_wait_setup {
   std::size_t num_parties_;
   std::size_t my_id_;
   std::vector<BaseOTsData> data_;
+  Statistics::RunTimeStats* stats_;
   std::shared_ptr<Logger> logger_;
   bool finished_;
 
