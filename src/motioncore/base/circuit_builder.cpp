@@ -27,6 +27,7 @@
 #include <fmt/format.h>
 
 #include "algorithm/algorithm_description.h"
+#include "algorithm/make_circuit.h"
 #include "gate_factory.h"
 #include "wire/new_wire.h"
 
@@ -60,38 +61,7 @@ WireVector CircuitBuilder::make_binary_gate(ENCRYPTO::PrimitiveOperationType op,
 WireVector CircuitBuilder::make_circuit(const ENCRYPTO::AlgorithmDescription& algo,
                                         const WireVector& wires_in_a,
                                         const WireVector& wires_in_b) {
-  if (!algo.n_input_wires_parent_b_.has_value()) {
-    throw std::invalid_argument("AlgorithmDescription expects 1 input but 2 are provided");
-  }
-  if (algo.n_input_wires_parent_a_ != wires_in_a.size()) {
-    throw std::invalid_argument(
-        fmt::format("AlgorithmDescription expects {} wires for input a, but {} are provided",
-                    algo.n_input_wires_parent_a_, wires_in_a.size()));
-  }
-  if (*algo.n_input_wires_parent_b_ != wires_in_b.size()) {
-    throw std::invalid_argument(
-        fmt::format("AlgorithmDescription expects {} wires for input b, but {} are provided",
-                    *algo.n_input_wires_parent_b_, wires_in_b.size()));
-  }
-  WireVector circuit_wires(algo.n_wires_);
-  // load the input wires into vector
-  auto it = std::copy(std::begin(wires_in_a), std::end(wires_in_a), std::begin(circuit_wires));
-  std::copy(std::begin(wires_in_b), std::end(wires_in_b), it);
-  // create all the gates gate
-  for (const auto& prim_op : algo.gates_) {
-    auto op_type = prim_op.type_;
-    const auto& gate_input_wire_a = circuit_wires.at(prim_op.parent_a_);
-    WireVector gate_output_wires;
-    if (prim_op.parent_b_.has_value()) {
-      const auto& gate_input_wire_b = circuit_wires.at(*prim_op.parent_b_);
-      gate_output_wires = make_binary_gate(op_type, {gate_input_wire_a}, {gate_input_wire_b});
-    } else {
-      gate_output_wires = make_unary_gate(op_type, {gate_input_wire_a});
-    }
-    circuit_wires.at(prim_op.output_wire_) = std::move(gate_output_wires.at(0));
-  }
-  WireVector output_wires(std::end(circuit_wires) - algo.n_output_wires_, std::end(circuit_wires));
-  return output_wires;
+  return ::MOTION::make_circuit(*this, algo, wires_in_a, wires_in_b);
 }
 
 }  // namespace MOTION
