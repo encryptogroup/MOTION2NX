@@ -51,6 +51,10 @@ namespace Crypto {
 class MotionBaseProvider;
 }
 
+namespace Statistics {
+struct RunTimeStats;
+}
+
 }  // namespace MOTION
 
 namespace ENCRYPTO {
@@ -473,7 +477,8 @@ class OTProviderFromMultipleThirdParties : public OTProvider {
 class OTProviderManager : public enable_wait_setup {
  public:
   OTProviderManager(MOTION::Communication::CommunicationLayer &, const MOTION::BaseOTProvider &,
-                    MOTION::Crypto::MotionBaseProvider &, std::shared_ptr<MOTION::Logger> logger);
+                    MOTION::Crypto::MotionBaseProvider &, MOTION::Statistics::RunTimeStats *,
+                    std::shared_ptr<MOTION::Logger>);
   ~OTProviderManager();
 
   std::vector<std::unique_ptr<OTProvider>> &get_providers() { return providers_; }
@@ -484,6 +489,7 @@ class OTProviderManager : public enable_wait_setup {
   MOTION::Communication::CommunicationLayer &communication_layer_;
   const MOTION::BaseOTProvider &base_ot_provider_;
   MOTION::Crypto::MotionBaseProvider &motion_base_provider_;
+  MOTION::Statistics::RunTimeStats *stats_;
   std::shared_ptr<MOTION::Logger> logger_;
   std::size_t num_parties_;
   std::vector<std::unique_ptr<OTProvider>> providers_;

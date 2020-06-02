@@ -34,6 +34,7 @@
 #include "data_storage/base_ot_data.h"
 #include "data_storage/ot_extension_data.h"
 #include "ot_flavors.h"
+#include "statistics/run_time_stats.h"
 #include "utility/bit_matrix.h"
 #include "utility/config.h"
 #include "utility/fiber_condition.h"
@@ -1250,10 +1251,12 @@ void OTExtensionMessageHandler::received_message(std::size_t,
 OTProviderManager::OTProviderManager(MOTION::Communication::CommunicationLayer &communication_layer,
                                      const MOTION::BaseOTProvider &base_ot_provider,
                                      MOTION::Crypto::MotionBaseProvider &motion_base_provider,
+                                     MOTION::Statistics::RunTimeStats *stats,
                                      std::shared_ptr<MOTION::Logger> logger)
     : communication_layer_(communication_layer),
       base_ot_provider_(base_ot_provider),
       motion_base_provider_(motion_base_provider),
+      stats_(stats),
       logger_(logger),
       num_parties_(communication_layer_.get_num_parties()),
       providers_(num_parties_),
@@ -1296,7 +1299,9 @@ void OTProviderManager::run_setup() {
     logger_->LogDebug("Start computing setup for OTExtensions");
   }
 
-  // run_time_stats_.back().record_start<Statistics::RunTimeStats::StatID::ot_extension_setup>();
+  if (stats_) {
+    stats_->record_start<MOTION::Statistics::RunTimeStats::StatID::ot_extension_setup>();
+  }
 
   std::vector<std::future<void>> task_futures;
   task_futures.reserve(2 * (communication_layer_.get_num_parties() - 1));
@@ -1314,7 +1319,9 @@ void OTProviderManager::run_setup() {
   std::for_each(task_futures.begin(), task_futures.end(), [](auto &f) { f.get(); });
   set_setup_ready();
 
-  // run_time_stats_.back().record_end<Statistics::RunTimeStats::StatID::ot_extension_setup>();
+  if (stats_) {
+    stats_->record_end<MOTION::Statistics::RunTimeStats::StatID::ot_extension_setup>();
+  }
 
   if constexpr (MOTION::MOTION_DEBUG) {
     logger_->LogDebug("Finished setup for OTExtensions");
