@@ -1,5 +1,6 @@
 add_library(motion
         algorithm/algorithm_description.cpp
+        algorithm/circuit_loader.cpp
         algorithm/tree.cpp
         base/backend.cpp
         base/circuit_builder.cpp
