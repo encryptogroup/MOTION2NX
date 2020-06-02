@@ -40,11 +40,12 @@ class OTFlavorTest : public ::testing::Test {
     motion_base_providers_.resize(2);
     ot_provider_wrappers_.resize(2);
     for (std::size_t i = 0; i < 2; ++i) {
-      base_ot_providers_[i] = std::make_unique<MOTION::BaseOTProvider>(*comm_layers_[i], nullptr);
+      base_ot_providers_[i] =
+          std::make_unique<MOTION::BaseOTProvider>(*comm_layers_[i], nullptr, nullptr);
       motion_base_providers_[i] =
           std::make_unique<MOTION::Crypto::MotionBaseProvider>(*comm_layers_[i], nullptr);
       ot_provider_wrappers_[i] = std::make_unique<ENCRYPTO::ObliviousTransfer::OTProviderManager>(
-          *comm_layers_[i], *base_ot_providers_[i], *motion_base_providers_[i], nullptr);
+          *comm_layers_[i], *base_ot_providers_[i], *motion_base_providers_[i], nullptr, nullptr);
     }
 
     std::vector<std::future<void>> futs;

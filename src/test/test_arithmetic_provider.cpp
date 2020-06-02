@@ -31,6 +31,7 @@
 template <typename T>
 class ArithmeticProviderTest : public ::testing::Test {
   using is_enabled_t_ = ENCRYPTO::is_unsigned_int_t<T>;
+
  protected:
   void SetUp() override {
     comm_layers_ = MOTION::Communication::make_dummy_communication_layers(2);
@@ -39,11 +40,12 @@ class ArithmeticProviderTest : public ::testing::Test {
     ot_provider_managers_.resize(2);
     arithmetic_provider_managers_.resize(2);
     for (std::size_t i = 0; i < 2; ++i) {
-      base_ot_providers_[i] = std::make_unique<MOTION::BaseOTProvider>(*comm_layers_[i], nullptr);
+      base_ot_providers_[i] =
+          std::make_unique<MOTION::BaseOTProvider>(*comm_layers_[i], nullptr, nullptr);
       motion_base_providers_[i] =
           std::make_unique<MOTION::Crypto::MotionBaseProvider>(*comm_layers_[i], nullptr);
       ot_provider_managers_[i] = std::make_unique<ENCRYPTO::ObliviousTransfer::OTProviderManager>(
-          *comm_layers_[i], *base_ot_providers_[i], *motion_base_providers_[i], nullptr);
+          *comm_layers_[i], *base_ot_providers_[i], *motion_base_providers_[i], nullptr, nullptr);
       arithmetic_provider_managers_[i] = std::make_unique<MOTION::ArithmeticProviderManager>(
           *comm_layers_[i], *ot_provider_managers_[i], nullptr);
     }
@@ -94,8 +96,7 @@ class ArithmeticProviderTest : public ::testing::Test {
   std::vector<std::unique_ptr<MOTION::Crypto::MotionBaseProvider>> motion_base_providers_;
   std::vector<std::unique_ptr<ENCRYPTO::ObliviousTransfer::OTProviderManager>>
       ot_provider_managers_;
-  std::vector<std::unique_ptr<MOTION::ArithmeticProviderManager>>
-      arithmetic_provider_managers_;
+  std::vector<std::unique_ptr<MOTION::ArithmeticProviderManager>> arithmetic_provider_managers_;
 };
 
 using integer_types =

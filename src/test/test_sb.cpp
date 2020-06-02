@@ -286,11 +286,12 @@ class TwoPartySBProviderTest : public ::testing::Test {
     ot_provider_managers_.resize(2);
     sb_providers_.resize(2);
     for (std::size_t i = 0; i < 2; ++i) {
-      base_ot_providers_[i] = std::make_unique<MOTION::BaseOTProvider>(*comm_layers_[i], nullptr);
+      base_ot_providers_[i] =
+          std::make_unique<MOTION::BaseOTProvider>(*comm_layers_[i], nullptr, nullptr);
       motion_base_providers_[i] =
           std::make_unique<MOTION::Crypto::MotionBaseProvider>(*comm_layers_[i], nullptr);
       ot_provider_managers_[i] = std::make_unique<ENCRYPTO::ObliviousTransfer::OTProviderManager>(
-          *comm_layers_[i], *base_ot_providers_[i], *motion_base_providers_[i], nullptr);
+          *comm_layers_[i], *base_ot_providers_[i], *motion_base_providers_[i], nullptr, nullptr);
       sb_providers_[i] = std::make_unique<MOTION::TwoPartySBProvider>(
           *comm_layers_[i], ot_provider_managers_[i]->get_provider(1 - i), stats_[i], nullptr);
     }

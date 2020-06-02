@@ -48,11 +48,13 @@ class BEAVYTest : public ::testing::Test {
     for (std::size_t i = 0; i < 2; ++i) {
       loggers_[i] = std::make_shared<MOTION::Logger>(i, boost::log::trivial::severity_level::trace);
       comm_layers_[i]->set_logger(loggers_[i]);
-      base_ot_providers_[i] = std::make_unique<MOTION::BaseOTProvider>(*comm_layers_[i], loggers_[i]);
+      base_ot_providers_[i] =
+          std::make_unique<MOTION::BaseOTProvider>(*comm_layers_[i], nullptr, loggers_[i]);
       motion_base_providers_[i] =
           std::make_unique<MOTION::Crypto::MotionBaseProvider>(*comm_layers_[i], loggers_[i]);
       ot_provider_managers_[i] = std::make_unique<ENCRYPTO::ObliviousTransfer::OTProviderManager>(
-          *comm_layers_[i], *base_ot_providers_[i], *motion_base_providers_[i], loggers_[i]);
+          *comm_layers_[i], *base_ot_providers_[i], *motion_base_providers_[i], nullptr,
+          loggers_[i]);
       arithmetic_provider_managers_[i] = std::make_unique<MOTION::ArithmeticProviderManager>(
           *comm_layers_[i], *ot_provider_managers_[i], loggers_[i]);
       gate_registers_[i] = std::make_unique<MOTION::GateRegister>();
