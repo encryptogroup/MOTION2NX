@@ -66,7 +66,7 @@ class YaoProvider;
 }  // namespace proto
 
 namespace Statistics {
-class RunTimeStats;
+struct RunTimeStats;
 }
 
 class TwoPartyBackend : public CircuitBuilder {

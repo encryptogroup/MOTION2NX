@@ -56,9 +56,11 @@ TwoPartyBackend::TwoPartyBackend(Communication::CommunicationLayer& comm_layer,
           *gate_register_, [] {}, logger_)),
       run_time_stats_(1),
       motion_base_provider_(std::make_unique<Crypto::MotionBaseProvider>(comm_layer_, logger_)),
-      base_ot_provider_(std::make_unique<BaseOTProvider>(comm_layer_, logger_)),
+      base_ot_provider_(
+          std::make_unique<BaseOTProvider>(comm_layer_, &run_time_stats_.back(), logger_)),
       ot_manager_(std::make_unique<ENCRYPTO::ObliviousTransfer::OTProviderManager>(
-          comm_layer_, *base_ot_provider_, *motion_base_provider_, logger_)),
+          comm_layer_, *base_ot_provider_, *motion_base_provider_, &run_time_stats_.back(),
+          logger_)),
       arithmetic_manager_(
           std::make_unique<ArithmeticProviderManager>(comm_layer_, *ot_manager_, logger_)),
       mt_provider_(std::make_unique<MTProviderFromOTs>(my_id_, comm_layer_.get_num_parties(),
