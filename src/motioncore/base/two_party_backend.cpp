@@ -27,6 +27,7 @@
 
 #include <fmt/format.h>
 
+#include "algorithm/circuit_loader.h"
 #include "base/gate_register.h"
 #include "communication/communication_layer.h"
 #include "crypto/arithmetic_provider.h"
@@ -54,6 +55,7 @@ TwoPartyBackend::TwoPartyBackend(Communication::CommunicationLayer& comm_layer,
       gate_register_(std::make_unique<GateRegister>()),
       gate_executor_(std::make_unique<NewGateExecutor>(
           *gate_register_, [this] { run_preprocessing(); }, logger_)),
+      circuit_loader_(std::make_unique<CircuitLoader>()),
       run_time_stats_(1),
       motion_base_provider_(std::make_unique<Crypto::MotionBaseProvider>(comm_layer_, logger_)),
       base_ot_provider_(
@@ -77,7 +79,7 @@ TwoPartyBackend::TwoPartyBackend(Communication::CommunicationLayer& comm_layer,
           comm_layer_, *gate_register_, *motion_base_provider_, *mt_provider_, *sp_provider_,
           *sb_provider_, logger_)),
       yao_provider_(std::make_unique<proto::yao::YaoProvider>(
-          comm_layer_, *gate_register_, *motion_base_provider_,
+          comm_layer_, *gate_register_, *circuit_loader_, *motion_base_provider_,
           ot_manager_->get_provider(1 - my_id_), logger_)) {
   gate_factories_.emplace(MPCProtocol::ArithmeticBEAVY, *beavy_provider_);
   gate_factories_.emplace(MPCProtocol::BooleanBEAVY, *beavy_provider_);

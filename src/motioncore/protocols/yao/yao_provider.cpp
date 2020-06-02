@@ -24,7 +24,10 @@
 
 #include <fmt/format.h>
 #include <memory>
+#include <type_traits>
 
+#include "algorithm/circuit_loader.h"
+#include "algorithm/make_circuit.h"
 #include "base/gate_register.h"
 #include "communication/communication_layer.h"
 #include "communication/fbs_headers/yao_message_generated.h"
@@ -135,12 +138,13 @@ void YaoMessageHandler::received_message([[maybe_unused]] std::size_t party_id,
 }
 
 YaoProvider::YaoProvider(Communication::CommunicationLayer &communication_layer,
-                         GateRegister &gate_register,
+                         GateRegister &gate_register, CircuitLoader &circuit_loader,
                          Crypto::MotionBaseProvider &motion_base_provider,
                          ENCRYPTO::ObliviousTransfer::OTProvider &ot_provider,
                          std::shared_ptr<Logger> logger)
     : communication_layer_(communication_layer),
       gate_register_(gate_register),
+      circuit_loader_(circuit_loader),
       motion_base_provider_(motion_base_provider),
       ot_provider_(ot_provider),
       hg_garbler_(nullptr),
@@ -172,7 +176,7 @@ static YaoWireVector cast_wires(std::vector<std::shared_ptr<NewWire>> wires) {
   return result;
 }
 
-static std::vector<std::shared_ptr<NewWire>> cast_wires(YaoWireVector &&wires) {
+static std::vector<std::shared_ptr<NewWire>> cast_wires(const YaoWireVector &wires) {
   return std::vector<std::shared_ptr<NewWire>>(std::begin(wires), std::end(wires));
 }
 
@@ -533,9 +537,18 @@ WireVector YaoProvider::basic_make_convert_to_arithmetic_gmw_gate(YaoWireVector&
     gate_register_.register_gate(std::move(conv_gate));
     gate_register_.register_gate(std::move(input_gate));
   }
-  // TODO: build addition circuit: out <- in_a + in_b
+
+  // sum up the additive shares in a Boolean circuit
+  const auto circuit_name = fmt::format("int_add{}_size.bristol", ENCRYPTO::bit_size_v<T>);
+  const auto& algo = circuit_loader_.load_circuit(circuit_name, CircuitFormat::Bristol);
+  auto sum_wires = make_circuit(*this, algo, cast_wires(in_a), cast_wires(in_b));
+
+  // the output is given to the evaluator
   if (role_ == Role::garbler) {
-    // TODO:  y2a_gate_evaluator->set_masked_value_future(/* output gate's future */);
+    make_boolean_output_gate_other(1, sum_wires);
+  } else {
+    auto future = make_boolean_output_gate_my(1, sum_wires);
+    y2a_gate_evaluator->set_masked_value_future(std::move(future));
   }
   return {std::dynamic_pointer_cast<NewWire>(output)};
 }

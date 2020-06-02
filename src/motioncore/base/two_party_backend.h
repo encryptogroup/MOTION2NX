@@ -36,6 +36,7 @@ namespace MOTION {
 
 class ArithmeticProviderManager;
 class BaseOTProvider;
+class CircuitLoader;
 class GateFactory;
 class GateRegister;
 class Logger;
@@ -85,6 +86,7 @@ class TwoPartyBackend : public CircuitBuilder {
   std::shared_ptr<Logger> logger_;
   std::unique_ptr<GateRegister> gate_register_;
   std::unique_ptr<NewGateExecutor> gate_executor_;
+  std::unique_ptr<CircuitLoader> circuit_loader_;
   std::unordered_map<MPCProtocol, std::reference_wrapper<GateFactory>> gate_factories_;
   std::vector<Statistics::RunTimeStats> run_time_stats_;
 

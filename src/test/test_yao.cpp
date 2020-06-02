@@ -22,9 +22,12 @@
 
 #include <gtest/gtest.h>
 #include <array>
+#include <boost/fiber/future/async.hpp>
+#include <boost/fiber/future/future.hpp>
 #include <iterator>
 #include <memory>
 
+#include "algorithm/circuit_loader.h"
 #include "base/gate_register.h"
 #include "communication/communication_layer.h"
 #include "crypto/base_ots/base_ot_provider.h"
@@ -53,7 +56,7 @@ class YaoTest : public ::testing::Test {
           *comm_layers_[i], *base_ot_providers_[i], *motion_base_providers_[i], nullptr, nullptr);
       gate_registers_[i] = std::make_unique<MOTION::GateRegister>();
       yao_providers_[i] = std::make_unique<YaoProvider>(
-          *comm_layers_[i], *gate_registers_[i], *motion_base_providers_[i],
+          *comm_layers_[i], *gate_registers_[i], circuit_loader_, *motion_base_providers_[i],
           ot_provider_managers_[i]->get_provider(1 - i), loggers_[i]);
     }
   }
@@ -118,6 +121,7 @@ class YaoTest : public ::testing::Test {
     fut_e.get();
   }
 
+  MOTION::CircuitLoader circuit_loader_;
   std::vector<std::unique_ptr<MOTION::Communication::CommunicationLayer>> comm_layers_;
   std::array<std::unique_ptr<MOTION::BaseOTProvider>, 2> base_ot_providers_;
   std::array<std::unique_ptr<MOTION::Crypto::MotionBaseProvider>, 2> motion_base_providers_;
@@ -442,5 +446,83 @@ TEST_F(YaoTest, YaoToBooleanGMW) {
     ASSERT_EQ(share_g.GetSize(), num_simd);
     ASSERT_EQ(share_e.GetSize(), num_simd);
     ASSERT_EQ(expected_output_bits, share_g ^ share_e);
+  }
+}
+
+template <typename T>
+class YaoToArithmeticTest : public YaoTest {
+  using is_enabled_t_ = ENCRYPTO::is_unsigned_int_t<T>;
+
+ public:
+  static std::vector<T> generate_inputs(std::size_t num_simd) {
+    return MOTION::Helpers::RandomVector<T>(num_simd);
+  }
+  void run_gates_online() {
+    std::vector<boost::fibers::future<void>> futs;
+    for (auto& gate : gate_registers_[garbler_i_]->get_gates()) {
+      futs.emplace_back(boost::fibers::async([&gate] { gate->evaluate_online(); }));
+    }
+    for (auto& gate : gate_registers_[evaluator_i_]->get_gates()) {
+      futs.emplace_back(boost::fibers::async([&gate] { gate->evaluate_online(); }));
+    }
+    std::for_each(std::begin(futs), std::end(futs), [](auto& f) { f.get(); });
+  }
+};
+
+using integer_types =
+    ::testing::Types<std::uint8_t, std::uint16_t, std::uint32_t, std::uint64_t>;
+TYPED_TEST_SUITE(YaoToArithmeticTest, integer_types);
+
+// naive transposition of integers into bit vectors
+template <typename T>
+static std::vector<ENCRYPTO::BitVector<>> int_to_bit_vectors(const std::vector<T>& ints) {
+  const auto num_wires = ENCRYPTO::bit_size_v<T>;
+  const auto num_simd = ints.size();
+  std::vector<ENCRYPTO::BitVector<>> bits;
+  std::generate_n(std::back_inserter(bits), num_wires,
+                  [num_simd] { return ENCRYPTO::BitVector<>(num_simd); });
+  for (std::size_t wire_i = 0; wire_i < num_wires; ++wire_i) {
+    for (std::size_t simd_j = 0; simd_j < num_simd; ++simd_j) {
+      auto v = bool(ints[simd_j] & (T(1) << wire_i));
+      bits[wire_i].Set(v, simd_j);
+    }
+  }
+
+  return bits;
+}
+
+TYPED_TEST(YaoToArithmeticTest, YaoToArithmeticGMW) {
+  std::size_t num_wires = ENCRYPTO::bit_size_v<TypeParam>;
+  std::size_t num_simd = 1;
+  const auto expected_output = this->generate_inputs(num_simd);
+  std::vector<ENCRYPTO::BitVector<>> inputs = int_to_bit_vectors(expected_output);
+
+  auto [input_promise, wires_in_0] =
+      this->yao_providers_[0]->make_boolean_input_gate_my(0, num_wires, num_simd);
+  auto wires_in_1 = this->yao_providers_[1]->make_boolean_input_gate_other(0, num_wires, num_simd);
+
+  auto wires_0 = this->yao_providers_[0]->convert(MOTION::MPCProtocol::ArithmeticGMW, wires_in_0);
+  auto wires_1 = this->yao_providers_[1]->convert(MOTION::MPCProtocol::ArithmeticGMW, wires_in_1);
+
+  this->run_setup();
+  this->run_gates_setup();
+  input_promise.set_value(inputs);
+  this->run_gates_online();
+
+  // check wire values
+  ASSERT_EQ(wires_0.size(), 1);
+  ASSERT_EQ(wires_1.size(), 1);
+  const auto wire_0 = std::dynamic_pointer_cast<MOTION::proto::gmw::ArithmeticGMWWire<TypeParam>>(wires_0.at(0));
+  const auto wire_1 = std::dynamic_pointer_cast<MOTION::proto::gmw::ArithmeticGMWWire<TypeParam>>(wires_1.at(0));
+  ASSERT_NE(wire_0, nullptr);
+  ASSERT_NE(wire_1, nullptr);
+  wire_0->wait_online();
+  wire_1->wait_online();
+  const auto& share_0 = wire_0->get_share();
+  const auto& share_1 = wire_1->get_share();
+  ASSERT_EQ(share_0.size(), num_simd);
+  ASSERT_EQ(share_1.size(), num_simd);
+  for (std::size_t simd_j = 0; simd_j < num_simd; ++simd_j) {
+    ASSERT_EQ(expected_output.at(simd_j), TypeParam(share_0.at(simd_j) + share_1.at(simd_j)));
   }
 }

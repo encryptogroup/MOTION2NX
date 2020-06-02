@@ -43,6 +43,7 @@ class OTProvider;
 
 namespace MOTION {
 
+class CircuitLoader;
 class GateRegister;
 class Logger;
 class NewWire;
@@ -73,14 +74,15 @@ class YaoProvider : public GateFactory {
   enum class Role { garbler, evaluator };
   struct my_input_t {};
 
-  YaoProvider(Communication::CommunicationLayer&, GateRegister&, Crypto::MotionBaseProvider&,
-              ENCRYPTO::ObliviousTransfer::OTProvider&, std::shared_ptr<Logger>);
+  YaoProvider(Communication::CommunicationLayer&, GateRegister&, CircuitLoader&,
+              Crypto::MotionBaseProvider&, ENCRYPTO::ObliviousTransfer::OTProvider&,
+              std::shared_ptr<Logger>);
   ~YaoProvider();
 
   std::string get_provider_name() const noexcept override { return "YaoProvider"; }
 
-  // std::vector<std::shared_ptr<NewWire>> make_input_gate(std::size_t num_wire, std::size_t num_simd);
-  // std::pair<ENCRYPTO::ReusableFiberPromise<std::vector<ENCRYPTO::BitVector<>>>,
+  // std::vector<std::shared_ptr<NewWire>> make_input_gate(std::size_t num_wire, std::size_t
+  // num_simd); std::pair<ENCRYPTO::ReusableFiberPromise<std::vector<ENCRYPTO::BitVector<>>>,
   //           std::vector<std::shared_ptr<NewWire>>>
   // make_input_gate(std::size_t num_wire, std::size_t num_simd, my_input_t);
   ENCRYPTO::ReusableFiberFuture<std::vector<ENCRYPTO::BitVector<>>> make_output_gate(
@@ -115,8 +117,7 @@ class YaoProvider : public GateFactory {
   [[nodiscard]] ENCRYPTO::ReusableFiberFuture<ENCRYPTO::BitVector<>> register_for_bits_message(
       std::size_t gate_id, std::size_t num_bits);
   void create_garbled_tables(std::size_t gate_id, const ENCRYPTO::block128_vector& keys_a,
-                             const ENCRYPTO::block128_vector& keys_b,
-                             ENCRYPTO::block128_t* tables,
+                             const ENCRYPTO::block128_vector& keys_b, ENCRYPTO::block128_t* tables,
                              ENCRYPTO::block128_vector& keys_out) const noexcept;
   void evaluate_garbled_tables(std::size_t gate_id, const ENCRYPTO::block128_vector& keys_a,
                                const ENCRYPTO::block128_vector& keys_b,
@@ -124,7 +125,9 @@ class YaoProvider : public GateFactory {
                                ENCRYPTO::block128_vector& keys_out) const noexcept;
   constexpr static std::size_t garbled_table_size = 2;
 
-  Crypto::MotionBaseProvider& get_motion_base_provider() const noexcept { return motion_base_provider_; }
+  Crypto::MotionBaseProvider& get_motion_base_provider() const noexcept {
+    return motion_base_provider_;
+  }
   ENCRYPTO::ObliviousTransfer::OTProvider& get_ot_provider() const noexcept { return ot_provider_; }
   std::shared_ptr<Logger> get_logger() const noexcept { return logger_; }
 
@@ -140,6 +143,7 @@ class YaoProvider : public GateFactory {
  private:
   Communication::CommunicationLayer& communication_layer_;
   GateRegister& gate_register_;
+  CircuitLoader& circuit_loader_;
   Crypto::MotionBaseProvider& motion_base_provider_;
   ENCRYPTO::ObliviousTransfer::OTProvider& ot_provider_;
   std::unique_ptr<Crypto::garbling::HalfGateGarbler> hg_garbler_;

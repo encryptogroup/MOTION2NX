@@ -113,15 +113,14 @@ void YaoToArithmeticGMWGateGarbler<T>::evaluate_setup() {
   auto num_simd = output_->get_num_simd();
   auto mask = Helpers::RandomVector<T>(output_->get_num_simd());
   auto& mbp = yao_provider_.get_motion_base_provider();
-  auto& rng = mbp.get_their_randomness_generator(0);
+  auto& rng = mbp.get_their_randomness_generator(1);
   auto& share = output_->get_share();
   share = rng.GetUnsigned<T>(gate_id_, num_simd);
   std::transform(std::begin(share), std::end(share), std::begin(mask), std::begin(share), std::minus{});
   output_->set_online_ready();
 
-  // TODO:
-  // - transpose mask into vector of bitvectors
-  // - set value of mask_promise_
+  auto bit_vectors = ENCRYPTO::ToInput(mask);
+  mask_promise_.set_value(std::move(bit_vectors));
 }
 
 template class YaoToArithmeticGMWGateGarbler<std::uint8_t>;
@@ -139,7 +138,7 @@ YaoToArithmeticGMWGateEvaluator<T>::YaoToArithmeticGMWGateEvaluator(
 template <typename T>
 void YaoToArithmeticGMWGateEvaluator<T>::evaluate_setup() {
   auto& mbp = yao_provider_.get_motion_base_provider();
-  auto& rng = mbp.get_my_randomness_generator(1);
+  auto& rng = mbp.get_my_randomness_generator(0);
   auto num_simd = output_->get_num_simd();
   output_->get_share() = rng.GetUnsigned<T>(gate_id_, num_simd);
 }
@@ -147,8 +146,7 @@ void YaoToArithmeticGMWGateEvaluator<T>::evaluate_setup() {
 template <typename T>
 void YaoToArithmeticGMWGateEvaluator<T>::evaluate_online() {
   auto masked_value = masked_value_future_.get();
-  // TODO: transpose masked value to vector of T
-  std::vector<T> masked_value_int_;
+  std::vector<T> masked_value_int_ = ENCRYPTO::ToVectorOutput<T>(std::move(masked_value));
   auto& share = output_->get_share();
   std::transform(std::begin(masked_value_int_), std::end(masked_value_int_), std::begin(share),
                  std::begin(share), std::minus{});
