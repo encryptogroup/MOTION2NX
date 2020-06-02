@@ -69,13 +69,15 @@ Backend::Backend(Communication::CommunicationLayer &communication_layer, Configu
           *register_, [this] { RunPreprocessing(); }, logger_)) {
   motion_base_provider_ =
       std::make_unique<Crypto::MotionBaseProvider>(communication_layer_, logger_);
-  base_ot_provider_ = std::make_unique<BaseOTProvider>(communication_layer, logger_);
+  base_ot_provider_ =
+      std::make_unique<BaseOTProvider>(communication_layer, &run_time_stats_.back(), logger_);
 
   communication_layer_.set_logger(logger_);
   auto my_id = communication_layer_.get_my_id();
 
   ot_provider_manager_ = std::make_unique<ENCRYPTO::ObliviousTransfer::OTProviderManager>(
-      communication_layer_, *base_ot_provider_, *motion_base_provider_, logger_);
+      communication_layer_, *base_ot_provider_, *motion_base_provider_, &run_time_stats_.back(),
+      logger_);
 
   arithmetic_provider_manager_ = std::make_unique<ArithmeticProviderManager>(
       communication_layer_, *ot_provider_manager_, logger_);
@@ -321,10 +323,7 @@ Shares::SharePtr Backend::BMROutput(const Shares::SharePtr &parent, std::size_t 
 void Backend::Sync() { communication_layer_.sync(); }
 
 void Backend::ComputeBaseOTs() {
-  run_time_stats_.back().record_start<Statistics::RunTimeStats::StatID::base_ots>();
   base_ot_provider_->ComputeBaseOTs();
-  run_time_stats_.back().record_end<Statistics::RunTimeStats::StatID::base_ots>();
-
   base_ots_finished_ = true;
 }
 
@@ -353,34 +352,7 @@ void Backend::OTExtensionSetup() {
   }
 
   motion_base_provider_->setup();
-
-  if constexpr (MOTION_DEBUG) {
-    logger_->LogDebug("Start computing setup for OTExtensions");
-  }
-
-  run_time_stats_.back().record_start<Statistics::RunTimeStats::StatID::ot_extension_setup>();
-
-  std::vector<std::future<void>> task_futures;
-  task_futures.reserve(2 * (communication_layer_.get_num_parties() - 1));
-
-  for (auto i = 0ull; i < communication_layer_.get_num_parties(); ++i) {
-    if (i == communication_layer_.get_my_id()) {
-      continue;
-    }
-    task_futures.emplace_back(std::async(
-        std::launch::async, [this, i] { ot_provider_manager_->get_provider(i).SendSetup(); }));
-    task_futures.emplace_back(std::async(
-        std::launch::async, [this, i] { ot_provider_manager_->get_provider(i).ReceiveSetup(); }));
-  }
-
-  std::for_each(task_futures.begin(), task_futures.end(), [](auto &f) { f.get(); });
-  ot_extension_finished_ = true;
-
-  run_time_stats_.back().record_end<Statistics::RunTimeStats::StatID::ot_extension_setup>();
-
-  if constexpr (MOTION_DEBUG) {
-    logger_->LogDebug("Finished setup for OTExtensions");
-  }
+  ot_provider_manager_->run_setup();
 }
 
 ENCRYPTO::ObliviousTransfer::OTProvider &Backend::GetOTProvider(std::size_t party_id) {
