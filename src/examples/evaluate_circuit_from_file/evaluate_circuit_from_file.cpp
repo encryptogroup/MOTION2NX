@@ -103,8 +103,6 @@ int main(int ac, char* av[]) {
     auto w_out = backend.make_circuit(algo, w_in_a, w_in_b);
     auto output_future = gate_factory.make_boolean_output_gate_my(MOTION::ALL_PARTIES, w_out);
 
-    backend.run_preprocessing();
-
     std::vector<ENCRYPTO::BitVector<>> inputs;
     if (my_id == 0) {
       std::generate_n(std::back_inserter(inputs), algo.n_input_wires_parent_a_,

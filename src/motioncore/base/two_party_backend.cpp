@@ -53,7 +53,7 @@ TwoPartyBackend::TwoPartyBackend(Communication::CommunicationLayer& comm_layer,
       logger_(logger),
       gate_register_(std::make_unique<GateRegister>()),
       gate_executor_(std::make_unique<NewGateExecutor>(
-          *gate_register_, [] {}, logger_)),
+          *gate_register_, [this] { run_preprocessing(); }, logger_)),
       run_time_stats_(1),
       motion_base_provider_(std::make_unique<Crypto::MotionBaseProvider>(comm_layer_, logger_)),
       base_ot_provider_(
