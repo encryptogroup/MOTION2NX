@@ -28,7 +28,13 @@
 
 #include "gate/new_gate.h"
 #include "utility/bit_vector.h"
+#include "utility/block.h"
 #include "utility/reusable_future.h"
+
+namespace ENCRYPTO::ObliviousTransfer {
+class GOT128Receiver;
+class GOT128Sender;
+}
 
 namespace MOTION::proto {
 
@@ -73,6 +79,40 @@ class YaoToBooleanGMWGateEvaluator : public NewGate {
  private:
   const YaoWireVector inputs_;
   gmw::BooleanGMWWireVector outputs_;
+};
+
+class BooleanGMWToYaoGateGarbler : public NewGate {
+ public:
+  BooleanGMWToYaoGateGarbler(std::size_t gate_id, YaoProvider&, gmw::BooleanGMWWireVector&&);
+  ~BooleanGMWToYaoGateGarbler();
+  bool need_setup() const noexcept override { return true; }
+  bool need_online() const noexcept override { return true; }
+  void evaluate_setup() override;
+  void evaluate_online() override;
+  YaoWireVector& get_output_wires() noexcept { return outputs_; };
+
+ private:
+  const YaoProvider& yao_provider_;
+  std::unique_ptr<ENCRYPTO::ObliviousTransfer::GOT128Sender> ot_sender_;
+  ENCRYPTO::block128_vector ot_inputs_;
+  const gmw::BooleanGMWWireVector inputs_;
+  YaoWireVector outputs_;
+};
+
+class BooleanGMWToYaoGateEvaluator : public NewGate {
+ public:
+  BooleanGMWToYaoGateEvaluator(std::size_t gate_id, YaoProvider&, gmw::BooleanGMWWireVector&&);
+  ~BooleanGMWToYaoGateEvaluator();
+  bool need_setup() const noexcept override { return false; }
+  bool need_online() const noexcept override { return true; }
+  void evaluate_setup() override;
+  void evaluate_online() override;
+  YaoWireVector& get_output_wires() noexcept { return outputs_; };
+
+ private:
+  std::unique_ptr<ENCRYPTO::ObliviousTransfer::GOT128Receiver> ot_receiver_;
+  const gmw::BooleanGMWWireVector inputs_;
+  YaoWireVector outputs_;
 };
 
 template <typename T>

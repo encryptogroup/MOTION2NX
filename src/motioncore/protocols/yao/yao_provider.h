@@ -105,6 +105,7 @@ class YaoProvider : public GateFactory {
       const std::vector<std::shared_ptr<NewWire>>&) override;
 
   WireVector convert(MPCProtocol proto, const WireVector&) override;
+  WireVector convert_from(MPCProtocol proto, const WireVector&);
 
   void setup();
   ENCRYPTO::block128_t get_global_offset() const;
@@ -136,6 +137,7 @@ class YaoProvider : public GateFactory {
   YaoWireVector make_xor_gate(YaoWireVector&& in_a, YaoWireVector&& in_b);
   YaoWireVector make_and_gate(YaoWireVector&& in_a, YaoWireVector&& in_b);
   WireVector make_convert_to_boolean_gmw_gate(YaoWireVector&& in_a);
+  YaoWireVector make_convert_from_boolean_gmw_gate(const WireVector& in_a);
   template <typename T>
   WireVector basic_make_convert_to_arithmetic_gmw_gate(YaoWireVector&& in_a);
   WireVector make_convert_to_arithmetic_gmw_gate(YaoWireVector&& in_a);

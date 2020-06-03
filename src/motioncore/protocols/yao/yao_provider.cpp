@@ -507,6 +507,25 @@ WireVector YaoProvider::make_convert_to_boolean_gmw_gate(YaoWireVector &&in_a) {
   return cast_wires(std::move(output));
 }
 
+YaoWireVector YaoProvider::make_convert_from_boolean_gmw_gate(const WireVector& in) {
+  auto gate_id = gate_register_.get_next_gate_id();
+  YaoWireVector output;
+  gmw::BooleanGMWWireVector input;
+  input.reserve(in.size());
+  std::transform(std::begin(in), std::end(in), std::back_inserter(input),
+                 [](auto& w) { return std::dynamic_pointer_cast<gmw::BooleanGMWWire>(w); });
+  if (role_ == Role::garbler) {
+    auto gate = std::make_unique<BooleanGMWToYaoGateGarbler>(gate_id, *this, std::move(input));
+    output = gate->get_output_wires();
+    gate_register_.register_gate(std::move(gate));
+  } else {
+    auto gate = std::make_unique<BooleanGMWToYaoGateEvaluator>(gate_id, *this, std::move(input));
+    output = gate->get_output_wires();
+    gate_register_.register_gate(std::move(gate));
+  }
+  return output;
+}
+
 template <typename T>
 WireVector YaoProvider::basic_make_convert_to_arithmetic_gmw_gate(YaoWireVector&& in_a) {
   auto num_wires = in_a.size();
@@ -579,6 +598,16 @@ WireVector YaoProvider::convert(MPCProtocol proto, const WireVector &in) {
       return make_convert_to_boolean_gmw_gate(std::move(input));
     default:
       throw std::logic_error(fmt::format("Yao does not support conversion to {}", ToString(proto)));
+  }
+}
+
+WireVector YaoProvider::convert_from(MPCProtocol proto, const WireVector &in) {
+
+  switch (proto) {
+    case MPCProtocol::BooleanGMW:
+      return cast_wires(make_convert_from_boolean_gmw_gate(in));
+    default:
+      throw std::logic_error(fmt::format("Yao does not support conversion from {}", ToString(proto)));
   }
 }
 

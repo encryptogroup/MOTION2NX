@@ -24,6 +24,8 @@
 #include <cstdint>
 
 #include "crypto/motion_base_provider.h"
+#include "crypto/oblivious_transfer/ot_flavors.h"
+#include "crypto/oblivious_transfer/ot_provider.h"
 #include "crypto/sharing_randomness_generator.h"
 #include "protocols/gmw/wire.h"
 #include "utility/helpers.h"
@@ -96,6 +98,97 @@ void YaoToBooleanGMWGateEvaluator::evaluate_online() {
     for (std::size_t simd_j = 0; simd_j < num_simd; ++simd_j) {
       share.Set(bool(*keys[simd_j].data() & std::byte(0x01)), simd_j);
     }
+    outputs_[wire_i]->set_online_ready();
+  }
+}
+
+BooleanGMWToYaoGateGarbler::BooleanGMWToYaoGateGarbler(std::size_t gate_id, YaoProvider& yao_provider,
+                                                       gmw::BooleanGMWWireVector&& in)
+    : NewGate(gate_id), yao_provider_(yao_provider), inputs_(std::move(in)) {
+  auto num_wires = inputs_.size();
+  auto num_simd = inputs_[0]->get_num_simd();
+  outputs_.reserve(num_wires);
+  std::generate_n(std::back_inserter(outputs_), num_wires, [num_simd] {
+    return std::make_shared<YaoWire>(num_simd);
+  });
+  ot_sender_ = yao_provider.get_ot_provider().RegisterSendGOT128(num_wires * num_simd);
+  ot_inputs_.resize(2 * num_wires * num_simd);
+}
+
+BooleanGMWToYaoGateGarbler::~BooleanGMWToYaoGateGarbler() = default;
+
+void BooleanGMWToYaoGateGarbler::evaluate_setup() {
+  for (auto& wire : outputs_) {
+    wire->get_keys().set_to_random();
+    wire->set_setup_ready();
+  }
+  auto num_wires = inputs_.size();
+  auto num_simd = inputs_[0]->get_num_simd();
+  auto idx = [num_simd](auto wire_i, auto simd_j) { return 2 * wire_i * num_simd + 2 * simd_j; };
+  for (std::size_t wire_i = 0; wire_i < num_wires; ++wire_i) {
+    const auto& zero_keys = outputs_[wire_i]->get_keys();
+    for (std::size_t simd_j = 0; simd_j < num_simd; ++simd_j) {
+      ot_inputs_[idx(wire_i, simd_j)] = zero_keys[simd_j];
+      ot_inputs_[idx(wire_i, simd_j) + 1] = zero_keys[simd_j];
+    }
+  }
+}
+
+void BooleanGMWToYaoGateGarbler::evaluate_online() {
+  auto num_wires = inputs_.size();
+  auto num_simd = inputs_[0]->get_num_simd();
+  ENCRYPTO::block128_vector ot_inputs(num_wires * num_simd);
+  const auto& global_offset = yao_provider_.get_global_offset();
+  auto idx = [num_simd](auto wire_i, auto simd_j) { return 2 * wire_i * num_simd + 2 * simd_j; };
+  for (std::size_t wire_i = 0; wire_i < num_wires; ++wire_i) {
+    inputs_[wire_i]->wait_online();
+    const auto& share = inputs_[wire_i]->get_share();
+    for (std::size_t simd_j = 0; simd_j < num_simd; ++simd_j) {
+      if (share.Get(simd_j)) {
+        ot_inputs_[idx(wire_i, simd_j)] ^= global_offset;
+      } else {
+        ot_inputs_[idx(wire_i, simd_j) + 1] ^= global_offset;
+      }
+    }
+  }
+  ot_sender_->SetInputs(std::move(ot_inputs_));
+  ot_sender_->SendMessages();
+}
+
+BooleanGMWToYaoGateEvaluator::BooleanGMWToYaoGateEvaluator(std::size_t gate_id,
+                                                           YaoProvider& yao_provider,
+                                                           gmw::BooleanGMWWireVector&& in)
+    : NewGate(gate_id), inputs_(std::move(in)) {
+  auto num_wires = inputs_.size();
+  auto num_simd = inputs_[0]->get_num_simd();
+  outputs_.reserve(num_wires);
+  std::generate_n(std::back_inserter(outputs_), num_wires,
+                  [num_simd] { return std::make_shared<YaoWire>(num_simd); });
+  ot_receiver_ = yao_provider.get_ot_provider().RegisterReceiveGOT128(num_wires * num_simd);
+}
+
+BooleanGMWToYaoGateEvaluator::~BooleanGMWToYaoGateEvaluator() = default;
+
+void BooleanGMWToYaoGateEvaluator::evaluate_setup() {
+  // nothing to do
+}
+
+void BooleanGMWToYaoGateEvaluator::evaluate_online() {
+  auto num_wires = inputs_.size();
+  auto num_simd = inputs_[0]->get_num_simd();
+  ENCRYPTO::BitVector<> shares;
+  shares.Reserve(Helpers::Convert::BitsToBytes(num_wires * num_simd));
+  for (const auto& wire : inputs_) {
+    wire->wait_online();
+    shares.Append(wire->get_share());
+  }
+  ot_receiver_->SetChoices(std::move(shares));
+  ot_receiver_->SendCorrections();
+  ot_receiver_->ComputeOutputs();
+  const auto all_keys = ot_receiver_->GetOutputs();
+  for (std::size_t wire_i = 0; wire_i < num_wires; ++wire_i) {
+    auto& wire_keys = outputs_[wire_i]->get_keys();
+    std::copy_n(&all_keys[wire_i * num_simd], num_simd, wire_keys.data());
     outputs_[wire_i]->set_online_ready();
   }
 }
