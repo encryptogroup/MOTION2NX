@@ -424,8 +424,8 @@ TEST_F(YaoTest, YaoToBooleanGMW) {
   auto wires_e_in =
       yao_providers_[evaluator_i_]->make_boolean_input_gate_other(garbler_i_, num_wires, num_simd);
 
-  auto wires_g = yao_providers_[garbler_i_]->convert(MOTION::MPCProtocol::BooleanGMW, wires_g_in);
-  auto wires_e = yao_providers_[evaluator_i_]->convert(MOTION::MPCProtocol::BooleanGMW, wires_e_in);
+  auto wires_g = yao_providers_[garbler_i_]->convert_to(MOTION::MPCProtocol::BooleanGMW, wires_g_in);
+  auto wires_e = yao_providers_[evaluator_i_]->convert_to(MOTION::MPCProtocol::BooleanGMW, wires_e_in);
 
   run_setup();
   run_gates_setup();
@@ -460,9 +460,9 @@ TEST_F(YaoTest, YaoFromBooleanGMW) {
       yao_providers_[evaluator_i_]->make_boolean_input_gate_other(garbler_i_, num_wires, num_simd);
 
   auto wires_g_tmp =
-      yao_providers_[garbler_i_]->convert(MOTION::MPCProtocol::BooleanGMW, wires_g_in);
+      yao_providers_[garbler_i_]->convert_to(MOTION::MPCProtocol::BooleanGMW, wires_g_in);
   auto wires_e_tmp =
-      yao_providers_[evaluator_i_]->convert(MOTION::MPCProtocol::BooleanGMW, wires_e_in);
+      yao_providers_[evaluator_i_]->convert_to(MOTION::MPCProtocol::BooleanGMW, wires_e_in);
   auto wires_g =
       yao_providers_[garbler_i_]->convert_from(MOTION::MPCProtocol::BooleanGMW, wires_g_tmp);
   auto wires_e =
@@ -549,8 +549,8 @@ TYPED_TEST(YaoArithmeticConversionTest, YaoToArithmeticGMW) {
       this->yao_providers_[0]->make_boolean_input_gate_my(0, num_wires, num_simd);
   auto wires_in_1 = this->yao_providers_[1]->make_boolean_input_gate_other(0, num_wires, num_simd);
 
-  auto wires_0 = this->yao_providers_[0]->convert(MOTION::MPCProtocol::ArithmeticGMW, wires_in_0);
-  auto wires_1 = this->yao_providers_[1]->convert(MOTION::MPCProtocol::ArithmeticGMW, wires_in_1);
+  auto wires_0 = this->yao_providers_[0]->convert_to(MOTION::MPCProtocol::ArithmeticGMW, wires_in_0);
+  auto wires_1 = this->yao_providers_[1]->convert_to(MOTION::MPCProtocol::ArithmeticGMW, wires_in_1);
 
   this->run_setup();
   this->run_gates_setup();
@@ -586,9 +586,9 @@ TYPED_TEST(YaoArithmeticConversionTest, YaoFromArithmeticGMW) {
   auto wires_in_e = this->yao_providers_[1]->make_boolean_input_gate_other(0, num_wires, num_simd);
 
   auto wires_g_tmp =
-      this->yao_providers_[0]->convert(MOTION::MPCProtocol::ArithmeticGMW, wires_in_g);
+      this->yao_providers_[0]->convert_to(MOTION::MPCProtocol::ArithmeticGMW, wires_in_g);
   auto wires_e_tmp =
-      this->yao_providers_[1]->convert(MOTION::MPCProtocol::ArithmeticGMW, wires_in_e);
+      this->yao_providers_[1]->convert_to(MOTION::MPCProtocol::ArithmeticGMW, wires_in_e);
   auto wires_g =
       this->yao_providers_[0]->convert_from(MOTION::MPCProtocol::ArithmeticGMW, wires_g_tmp);
   auto wires_e =

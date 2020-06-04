@@ -133,7 +133,8 @@ class BEAVYProvider : public GateFactory, public ENCRYPTO::enable_wait_setup, pu
       const std::vector<std::shared_ptr<NewWire>>&) override;
 
   // conversions
-  WireVector convert(MPCProtocol protocol, const WireVector&) override;
+  WireVector convert_to(MPCProtocol protocol, const WireVector&) override;
+  WireVector convert_from(MPCProtocol protocol, const WireVector&) override;
 
  private:
   template <typename T>

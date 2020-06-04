@@ -825,8 +825,8 @@ TYPED_TEST(ArithmeticGMWTest, BooleanToArithmeticGMW) {
       this->gmw_providers_[0]->make_boolean_input_gate_my(0, num_wires, num_simd);
   auto wires_in_1 = this->gmw_providers_[1]->make_boolean_input_gate_other(0, num_wires, num_simd);
 
-  auto wires_0 = this->gmw_providers_[0]->convert(MOTION::MPCProtocol::ArithmeticGMW, wires_in_0);
-  auto wires_1 = this->gmw_providers_[1]->convert(MOTION::MPCProtocol::ArithmeticGMW, wires_in_1);
+  auto wires_0 = this->gmw_providers_[0]->convert_to(MOTION::MPCProtocol::ArithmeticGMW, wires_in_0);
+  auto wires_1 = this->gmw_providers_[1]->convert_to(MOTION::MPCProtocol::ArithmeticGMW, wires_in_1);
 
   this->run_setup();
   this->run_gates_setup();

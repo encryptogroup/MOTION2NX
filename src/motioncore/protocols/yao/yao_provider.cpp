@@ -650,7 +650,7 @@ WireVector YaoProvider::make_convert_from_arithmetic_gmw_gate(const WireVector &
   }
 }
 
-WireVector YaoProvider::convert(MPCProtocol proto, const WireVector &in) {
+WireVector YaoProvider::convert_to(MPCProtocol proto, const WireVector &in) {
   auto input = cast_wires(in);
 
   switch (proto) {

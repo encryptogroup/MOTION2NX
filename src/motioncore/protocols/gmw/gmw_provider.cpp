@@ -21,6 +21,7 @@
 // SOFTWARE.
 
 #include <cstdint>
+#include <stdexcept>
 #include <unordered_map>
 #include "gmw_provider.h"
 
@@ -508,7 +509,7 @@ WireVector GMWProvider::convert_boolean(MPCProtocol proto, const WireVector &in)
   }
 }
 
-WireVector GMWProvider::convert(MPCProtocol proto, const WireVector &in) {
+WireVector GMWProvider::convert_to(MPCProtocol proto, const WireVector &in) {
   auto input = cast_wires(in);
   assert(input.size() > 0);
   auto src_proto = input.at(0)->get_protocol();
@@ -521,6 +522,10 @@ WireVector GMWProvider::convert(MPCProtocol proto, const WireVector &in) {
     default:
       throw std::logic_error("expected GMW protocol");
   }
+}
+
+WireVector GMWProvider::convert_from(MPCProtocol, const WireVector &) {
+  throw std::logic_error("GMWProvider does not support conversions from other protocols");
 }
 
 }  // namespace MOTION::proto::gmw

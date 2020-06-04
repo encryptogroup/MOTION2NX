@@ -104,8 +104,8 @@ class YaoProvider : public GateFactory {
       ENCRYPTO::PrimitiveOperationType op, const std::vector<std::shared_ptr<NewWire>>&,
       const std::vector<std::shared_ptr<NewWire>>&) override;
 
-  WireVector convert(MPCProtocol proto, const WireVector&) override;
-  WireVector convert_from(MPCProtocol proto, const WireVector&);
+  WireVector convert_to(MPCProtocol proto, const WireVector&) override;
+  WireVector convert_from(MPCProtocol proto, const WireVector&) override;
 
   void setup();
   ENCRYPTO::block128_t get_global_offset() const;
