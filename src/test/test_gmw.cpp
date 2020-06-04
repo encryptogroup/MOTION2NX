@@ -615,6 +615,36 @@ TYPED_TEST(ArithmeticGMWTest, OutputBoth) {
   ASSERT_EQ(inputs_b, outputs_b_1);
 }
 
+TYPED_TEST(ArithmeticGMWTest, OutputShare) {
+  std::size_t num_simd = 10;
+  const auto inputs = this->generate_inputs(num_simd);
+
+  // input of party 0
+  auto [input_promise, wires_in_0] = this->make_arithmetic_T_input_gate_my(0, 0, num_simd);
+  auto wires_in_1 = this->make_arithmetic_T_input_gate_other(1, 0, num_simd);
+
+  auto output_future_0 =
+      this->gmw_providers_[0]->template make_arithmetic_output_share_gate<TypeParam>(wires_in_0);
+  auto output_future_1 =
+      this->gmw_providers_[1]->template make_arithmetic_output_share_gate<TypeParam>(wires_in_1);
+
+  this->run_setup();
+  this->run_gates_setup();
+  input_promise.set_value(inputs);
+  this->run_gates_online();
+
+  auto outputs_0 = output_future_0.get();
+  auto outputs_1 = output_future_1.get();
+
+  ASSERT_EQ(outputs_0.size(), num_simd);
+  ASSERT_EQ(outputs_1.size(), num_simd);
+
+  // check outputs values
+  for (std::size_t simd_j = 0; simd_j < num_simd; ++simd_j) {
+    ASSERT_EQ(inputs.at(simd_j), TypeParam(outputs_0.at(simd_j) + outputs_1.at(simd_j)));
+  }
+}
+
 TYPED_TEST(ArithmeticGMWTest, NEG) {
   std::size_t num_simd = 10;
   const auto inputs = this->generate_inputs(num_simd);

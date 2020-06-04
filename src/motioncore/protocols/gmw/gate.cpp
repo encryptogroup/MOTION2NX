@@ -647,6 +647,34 @@ template class ArithmeticGMWOutputGate<std::uint32_t>;
 template class ArithmeticGMWOutputGate<std::uint64_t>;
 
 template <typename T>
+ArithmeticGMWOutputShareGate<T>::ArithmeticGMWOutputShareGate(std::size_t gate_id,
+                                                    ArithmeticGMWWireP<T>&& input)
+    : NewGate(gate_id),
+      input_(std::move(input)) {
+}
+
+template <typename T>
+ENCRYPTO::ReusableFiberFuture<std::vector<T>> ArithmeticGMWOutputShareGate<T>::get_output_future() {
+  return output_promise_.get_future();
+}
+
+template <typename T>
+void ArithmeticGMWOutputShareGate<T>::evaluate_setup() {
+  // nothing to do
+}
+
+template <typename T>
+void ArithmeticGMWOutputShareGate<T>::evaluate_online() {
+  input_->wait_online();
+  output_promise_.set_value(input_->get_share());
+}
+
+template class ArithmeticGMWOutputShareGate<std::uint8_t>;
+template class ArithmeticGMWOutputShareGate<std::uint16_t>;
+template class ArithmeticGMWOutputShareGate<std::uint32_t>;
+template class ArithmeticGMWOutputShareGate<std::uint64_t>;
+
+template <typename T>
 ArithmeticGMWNEGGate<T>::ArithmeticGMWNEGGate(std::size_t gate_id, GMWProvider& gmw_provider,
                                               ArithmeticGMWWireP<T>&& in)
     : detail::BasicArithmeticGMWUnaryGate<T>(gate_id, gmw_provider, std::move(in)) {

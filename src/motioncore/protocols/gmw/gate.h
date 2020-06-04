@@ -248,6 +248,21 @@ class ArithmeticGMWOutputGate : public NewGate {
 };
 
 template <typename T>
+class ArithmeticGMWOutputShareGate : public NewGate {
+ public:
+  ArithmeticGMWOutputShareGate(std::size_t gate_id, ArithmeticGMWWireP<T>&&);
+  ENCRYPTO::ReusableFiberFuture<std::vector<T>> get_output_future();
+  bool need_setup() const noexcept override { return false; }
+  bool need_online() const noexcept override { return true; }
+  void evaluate_setup() override;
+  void evaluate_online() override;
+
+ private:
+  ENCRYPTO::ReusableFiberPromise<std::vector<T>> output_promise_;
+  const ArithmeticGMWWireP<T> input_;
+};
+
+template <typename T>
 class ArithmeticGMWNEGGate : public detail::BasicArithmeticGMWUnaryGate<T> {
  public:
   ArithmeticGMWNEGGate(std::size_t gate_id, GMWProvider&, ArithmeticGMWWireP<T>&&);

@@ -132,6 +132,10 @@ class GMWProvider : public GateFactory, public ENCRYPTO::enable_wait_setup, publ
 
   WireVector convert(MPCProtocol proto, const WireVector&) override;
 
+  // other gates
+  template <typename T>
+  ENCRYPTO::ReusableFiberFuture<IntegerValues<T>> make_arithmetic_output_share_gate(const WireVector&);
+
  private:
   template <typename T>
   std::pair<ENCRYPTO::ReusableFiberPromise<IntegerValues<T>>, WireVector>

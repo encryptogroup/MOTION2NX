@@ -391,6 +391,30 @@ WireVector GMWProvider::make_arithmetic_unary_gate(const WireVector& in_a) {
   }
 }
 
+template <typename T>
+ENCRYPTO::ReusableFiberFuture<IntegerValues<T>> GMWProvider::make_arithmetic_output_share_gate(
+    const WireVector& in) {
+  auto bit_size = check_arithmetic_wire(in);
+  if (bit_size != ENCRYPTO::bit_size_v<T>) {
+    throw std::logic_error("mismatch of bit sizes");
+  }
+  auto arith_wire = std::dynamic_pointer_cast<ArithmeticGMWWire<T>>(in[0]);
+  auto gate_id = gate_register_.get_next_gate_id();
+  auto gate = std::make_unique<ArithmeticGMWOutputShareGate<T>>(gate_id, std::move(arith_wire));
+  auto future = gate->get_output_future();
+  gate_register_.register_gate(std::move(gate));
+  return future;
+}
+
+template ENCRYPTO::ReusableFiberFuture<IntegerValues<std::uint8_t>>
+GMWProvider::make_arithmetic_output_share_gate(const WireVector&);
+template ENCRYPTO::ReusableFiberFuture<IntegerValues<std::uint16_t>>
+GMWProvider::make_arithmetic_output_share_gate(const WireVector&);
+template ENCRYPTO::ReusableFiberFuture<IntegerValues<std::uint32_t>>
+GMWProvider::make_arithmetic_output_share_gate(const WireVector&);
+template ENCRYPTO::ReusableFiberFuture<IntegerValues<std::uint64_t>>
+GMWProvider::make_arithmetic_output_share_gate(const WireVector&);
+
 static std::size_t check_arithmetic_wires(const WireVector& in_a, const WireVector& in_b) {
   if (in_a.size() != 1 || in_b.size() != 1) {
     throw std::logic_error("arithmetic operations support single wires only");
