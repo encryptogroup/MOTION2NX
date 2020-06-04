@@ -498,7 +498,7 @@ TEST_F(YaoTest, YaoFromBooleanGMW) {
 }
 
 template <typename T>
-class YaoToArithmeticTest : public YaoTest {
+class YaoArithmeticConversionTest : public YaoTest {
   using is_enabled_t_ = ENCRYPTO::is_unsigned_int_t<T>;
 
  public:
@@ -519,7 +519,7 @@ class YaoToArithmeticTest : public YaoTest {
 
 using integer_types =
     ::testing::Types<std::uint8_t, std::uint16_t, std::uint32_t, std::uint64_t>;
-TYPED_TEST_SUITE(YaoToArithmeticTest, integer_types);
+TYPED_TEST_SUITE(YaoArithmeticConversionTest, integer_types);
 
 // naive transposition of integers into bit vectors
 template <typename T>
@@ -539,7 +539,7 @@ static std::vector<ENCRYPTO::BitVector<>> int_to_bit_vectors(const std::vector<T
   return bits;
 }
 
-TYPED_TEST(YaoToArithmeticTest, YaoToArithmeticGMW) {
+TYPED_TEST(YaoArithmeticConversionTest, YaoToArithmeticGMW) {
   std::size_t num_wires = ENCRYPTO::bit_size_v<TypeParam>;
   std::size_t num_simd = 1;
   const auto expected_output = this->generate_inputs(num_simd);
@@ -572,5 +572,56 @@ TYPED_TEST(YaoToArithmeticTest, YaoToArithmeticGMW) {
   ASSERT_EQ(share_1.size(), num_simd);
   for (std::size_t simd_j = 0; simd_j < num_simd; ++simd_j) {
     ASSERT_EQ(expected_output.at(simd_j), TypeParam(share_0.at(simd_j) + share_1.at(simd_j)));
+  }
+}
+
+TYPED_TEST(YaoArithmeticConversionTest, YaoFromArithmeticGMW) {
+  std::size_t num_wires = ENCRYPTO::bit_size_v<TypeParam>;
+  std::size_t num_simd = 1;
+  const auto expected_output = this->generate_inputs(num_simd);
+  std::vector<ENCRYPTO::BitVector<>> inputs = int_to_bit_vectors(expected_output);
+
+  auto [input_promise, wires_in_g] =
+      this->yao_providers_[0]->make_boolean_input_gate_my(0, num_wires, num_simd);
+  auto wires_in_e = this->yao_providers_[1]->make_boolean_input_gate_other(0, num_wires, num_simd);
+
+  auto wires_g_tmp =
+      this->yao_providers_[0]->convert(MOTION::MPCProtocol::ArithmeticGMW, wires_in_g);
+  auto wires_e_tmp =
+      this->yao_providers_[1]->convert(MOTION::MPCProtocol::ArithmeticGMW, wires_in_e);
+  auto wires_g =
+      this->yao_providers_[0]->convert_from(MOTION::MPCProtocol::ArithmeticGMW, wires_g_tmp);
+  auto wires_e =
+      this->yao_providers_[1]->convert_from(MOTION::MPCProtocol::ArithmeticGMW, wires_e_tmp);
+
+  this->run_setup();
+  this->run_gates_setup();
+  input_promise.set_value(inputs);
+  this->run_gates_online();
+
+  ASSERT_EQ(wires_g.size(), num_wires);
+  ASSERT_EQ(wires_e.size(), num_wires);
+
+  // check wire values
+  for (std::size_t wire_i = 0; wire_i < num_wires; ++wire_i) {
+    const auto& expected_output_bits = inputs.at(wire_i);
+    const auto wire_g = std::dynamic_pointer_cast<YaoWire>(wires_g.at(wire_i));
+    const auto wire_e = std::dynamic_pointer_cast<YaoWire>(wires_e.at(wire_i));
+    ASSERT_NE(wire_g, nullptr);
+    ASSERT_NE(wire_e, nullptr);
+    wire_g->wait_setup();
+    wire_e->wait_online();
+    const auto& keys_g = wire_g->get_keys();
+    const auto& keys_e = wire_e->get_keys();
+    ASSERT_EQ(keys_g.size(), num_simd);
+    ASSERT_EQ(keys_e.size(), num_simd);
+    const auto& global_offset = this->yao_providers_[this->garbler_i_]->get_global_offset();
+    for (std::size_t simd_j = 0; simd_j < num_simd; ++simd_j) {
+      if (expected_output_bits.Get(simd_j)) {
+        ASSERT_EQ(keys_e.at(simd_j), keys_g.at(simd_j) ^ global_offset);
+      } else {
+        ASSERT_EQ(keys_e.at(simd_j), keys_g.at(simd_j));
+      }
+    }
   }
 }
