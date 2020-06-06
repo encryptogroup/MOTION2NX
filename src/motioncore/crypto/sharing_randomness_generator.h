@@ -61,11 +61,11 @@ class SharingRandomnessGenerator {
 
   SharingRandomnessGenerator(std::size_t party_id);
 
-  void Initialize(const unsigned char seed[SharingRandomnessGenerator::MASTER_SEED_BYTE_LENGTH]);
+  void Initialize(const std::byte seed[SharingRandomnessGenerator::MASTER_SEED_BYTE_LENGTH]);
 
   ~SharingRandomnessGenerator() = default;
 
-  std::vector<std::uint8_t> GetSeed();
+  std::vector<std::byte> GetSeed();
 
   bool &IsInitialized() { return initialized_; }
 
@@ -86,9 +86,8 @@ class SharingRandomnessGenerator {
     std::byte input[AES_BLOCK_SIZE];
 
     std::copy(std::begin(aes_ctr_nonce_arithmetic_), std::end(aes_ctr_nonce_arithmetic_), input);
-    std::copy(reinterpret_cast<const std::uint8_t *>(&gate_id),
-              reinterpret_cast<const std::uint8_t *>(&gate_id) + sizeof(gate_id),
-              input + SharingRandomnessGenerator::COUNTER_OFFSET);
+    std::copy_n(reinterpret_cast<const std::byte *>(&gate_id), sizeof(gate_id),
+                input + SharingRandomnessGenerator::COUNTER_OFFSET);
 
     auto output = prg_a.Encrypt(input, AES_BLOCK_SIZE);
 
@@ -122,10 +121,9 @@ class SharingRandomnessGenerator {
     auto gate_id_copy = gate_id;
     for (auto i = 0u; i < num_of_gates; ++i, ++gate_id_copy) {
       std::copy(std::begin(aes_ctr_nonce_arithmetic_), std::end(aes_ctr_nonce_arithmetic_),
-                reinterpret_cast<std::uint8_t *>(input.data()) + i * AES_BLOCK_SIZE);
-      std::copy(reinterpret_cast<std::byte *>(&gate_id_copy),
-                reinterpret_cast<std::byte *>(&gate_id_copy) + sizeof(gate_id_copy),
-                input.data() + i * AES_BLOCK_SIZE + SharingRandomnessGenerator::COUNTER_OFFSET);
+                &input[i * AES_BLOCK_SIZE]);
+      std::copy_n(reinterpret_cast<const std::byte *>(&gate_id_copy), sizeof(gate_id_copy),
+                  input.data() + i * AES_BLOCK_SIZE + SharingRandomnessGenerator::COUNTER_OFFSET);
     }
 
     auto output = prg_a.Encrypt(input.data(), num_of_gates * AES_BLOCK_SIZE);
@@ -162,11 +160,12 @@ class SharingRandomnessGenerator {
   };
   EVP_CIPHER_CTX_PTR ctx_arithmetic_, ctx_boolean_;
 
-  std::uint8_t master_seed_[SharingRandomnessGenerator::MASTER_SEED_BYTE_LENGTH] = {0};
-  std::uint8_t raw_key_arithmetic_[AES_KEY_SIZE] = {0};
-  std::uint8_t raw_key_boolean_[AES_KEY_SIZE] = {0};  /// AES key in raw std::uint8_t format
-  std::uint8_t aes_ctr_nonce_arithmetic_[AES_BLOCK_SIZE / 2] = {0};
-  std::uint8_t aes_ctr_nonce_boolean_[AES_BLOCK_SIZE / 2] = {0};  /// Raw AES CTR nonce that is used
+  std::byte master_seed_[SharingRandomnessGenerator::MASTER_SEED_BYTE_LENGTH] = {std::byte{0}};
+  std::byte raw_key_arithmetic_[AES_KEY_SIZE] = {std::byte{0}};
+  std::byte raw_key_boolean_[AES_KEY_SIZE] = {std::byte{0}};  /// AES key in raw std::byte format
+  std::byte aes_ctr_nonce_arithmetic_[AES_BLOCK_SIZE / 2] = {std::byte{0}};
+  std::byte aes_ctr_nonce_boolean_[AES_BLOCK_SIZE / 2] = {
+      std::byte{0}};  /// Raw AES CTR nonce that is used
   /// in the left part of IV
 
   ENCRYPTO::PRG prg_a, prg_b;
@@ -180,7 +179,7 @@ class SharingRandomnessGenerator {
   };
 
   // use a seed to generate randomness for a new key
-  std::vector<std::uint8_t> HashKey(const std::uint8_t seed[AES_KEY_SIZE], const KeyType key_type);
+  std::vector<std::byte> HashKey(const std::byte seed[AES_KEY_SIZE], const KeyType key_type);
 
   bool initialized_ = false;
 

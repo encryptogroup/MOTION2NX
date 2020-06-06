@@ -31,11 +31,12 @@ SharingRandomnessGenerator::SharingRandomnessGenerator(std::size_t party_id)
   if (!ctx_arithmetic_ || !ctx_boolean_) {
     throw(std::runtime_error(fmt::format("Could not initialize EVP context")));
   }
-  initialized_condition_ = std::make_unique<ENCRYPTO::FiberCondition>([this]() { return initialized_; });
+  initialized_condition_ =
+      std::make_unique<ENCRYPTO::FiberCondition>([this]() { return initialized_; });
 }
 
 void SharingRandomnessGenerator::Initialize(
-    const std::uint8_t seed[SharingRandomnessGenerator::MASTER_SEED_BYTE_LENGTH]) {
+    const std::byte seed[SharingRandomnessGenerator::MASTER_SEED_BYTE_LENGTH]) {
   std::copy(seed, seed + MASTER_SEED_BYTE_LENGTH, std::begin(master_seed_));
 
   {
@@ -88,7 +89,7 @@ ENCRYPTO::BitVector<> SharingRandomnessGenerator::GetBits(const std::size_t gate
         output(BYTES_IN_BATCH + AES_BLOCK_SIZE);
     for (auto offset = random_bits_.GetSize() / AES_BLOCK_SIZE_; offset < CIPHERTEXTS_IN_BATCH;
          ++offset) {
-      auto ptr = reinterpret_cast<std::uint8_t *>(input.data()) + offset * AES_BLOCK_SIZE_;
+      auto ptr = input.data() + offset * AES_BLOCK_SIZE_;
       // copy nonce
       std::copy(std::begin(aes_ctr_nonce_boolean_), std::end(aes_ctr_nonce_boolean_), ptr);
       // copy counter value
@@ -117,14 +118,15 @@ ENCRYPTO::BitVector<> SharingRandomnessGenerator::GetBits(const std::size_t gate
                              gate_id + num_of_bits - random_bits_offset_);
 }
 
-std::vector<std::uint8_t> SharingRandomnessGenerator::HashKey(
-    const std::uint8_t seed[MASTER_SEED_BYTE_LENGTH], const KeyType key_type) {
-  std::vector<std::uint8_t> seed_padded(seed, seed + MASTER_SEED_BYTE_LENGTH);
+std::vector<std::byte> SharingRandomnessGenerator::HashKey(
+    const std::byte seed[MASTER_SEED_BYTE_LENGTH], const KeyType key_type) {
   std::uint32_t key_type32 = key_type;
-  const uint8_t *key_type_ptr = reinterpret_cast<const std::uint8_t *>(&key_type32);
-  seed_padded.insert(seed_padded.begin(), key_type_ptr, key_type_ptr + sizeof(key_type32));
+  std::vector<std::byte> seed_padded(sizeof(key_type32) + MASTER_SEED_BYTE_LENGTH);
+  std::copy_n(reinterpret_cast<const std::byte *>(&key_type32), sizeof(key_type32),
+              std::begin(seed_padded));
+  std::copy_n(seed, MASTER_SEED_BYTE_LENGTH, &seed_padded[sizeof(key_type32)]);
   EVP_MD_CTX *mdctx = EVP_MD_CTX_new();
-  std::uint8_t digest[EVP_MAX_MD_SIZE];
+  std::byte digest[EVP_MAX_MD_SIZE];
   unsigned int md_len;
 
 #if (OPENSSL_VERSION_NUMBER < 0x1010000fL)
@@ -134,14 +136,14 @@ std::vector<std::uint8_t> SharingRandomnessGenerator::HashKey(
 #endif
 
   EVP_DigestUpdate(mdctx, seed_padded.data(), seed_padded.size());
-  EVP_DigestFinal_ex(mdctx, digest, &md_len);
+  EVP_DigestFinal_ex(mdctx, reinterpret_cast<unsigned char *>(digest), &md_len);
   EVP_MD_CTX_free(mdctx);
 
-  return std::vector<std::uint8_t>(digest, digest + AES_KEY_SIZE);
+  return std::vector<std::byte>(digest, digest + AES_KEY_SIZE);
 }
 
-std::vector<std::uint8_t> SharingRandomnessGenerator::GetSeed() {
-  return std::vector<std::uint8_t>(master_seed_, master_seed_ + sizeof(master_seed_));
+std::vector<std::byte> SharingRandomnessGenerator::GetSeed() {
+  return std::vector<std::byte>(master_seed_, master_seed_ + sizeof(master_seed_));
 }
 
 void SharingRandomnessGenerator::ClearBitPool() { random_bits_ = ENCRYPTO::BitVector<>(); }

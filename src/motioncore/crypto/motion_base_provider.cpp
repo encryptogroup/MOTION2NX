@@ -151,7 +151,7 @@ void MotionBaseProvider::setup() {
     }
     my_randomness_generators_.at(party_id) = std::make_unique<SharingRandomnessGenerator>(party_id);
     my_randomness_generators_.at(party_id)->Initialize(
-        reinterpret_cast<std::uint8_t*>(my_seeds.at(party_id).data()));
+        reinterpret_cast<const std::byte*>(my_seeds.at(party_id).data()));
     their_randomness_generators_.at(party_id) =
         std::make_unique<SharingRandomnessGenerator>(party_id);
   }
@@ -166,7 +166,8 @@ void MotionBaseProvider::setup() {
                    std::begin(aes_fixed_key_), [](auto a, auto b) { return a ^ b; });
     auto their_seed = hello_message_handler_->randomness_sharing_seed_futures_.at(party_id).get();
     // initialize randomness generator of the other party
-    their_randomness_generators_.at(party_id)->Initialize(their_seed.data());
+    their_randomness_generators_.at(party_id)->Initialize(
+        reinterpret_cast<const std::byte*>(their_seed.data()));
   }
   set_setup_ready();
 

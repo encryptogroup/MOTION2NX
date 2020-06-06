@@ -402,8 +402,8 @@ void BitMatrix::TransposeUsingBitSlicing(std::array<std::byte*, 128>& matrix, st
 #define OUT(r, c) out[(r)*nrows / 8 + (c) / 8]
 
   constexpr std::uint64_t nrows = 128;
-  std::vector<std::uint8_t, boost::alignment::aligned_allocator<std::byte, 16>> out(
-      ((nrows * ncols) + 7) / 8, 0);
+  std::vector<std::byte, boost::alignment::aligned_allocator<std::byte, 16>> out(
+      ((nrows * ncols) + 7) / 8, std::byte{0});
 
   uint64_t rr, cc;
   int i;
@@ -482,9 +482,9 @@ void BitMatrix::TransposeUsingBitSlicing(std::array<std::byte*, 128>& matrix, st
 #endif
 
   for (auto j = 0ull; j < ncols; ++j) {
-    std::copy(reinterpret_cast<const std::uint8_t* __restrict__>(out.data()) + j * 16,
-              reinterpret_cast<const std::uint8_t* __restrict__>(out.data()) + (j + 1) * 16,
-              reinterpret_cast<std::uint8_t* __restrict__>(
+    std::copy(reinterpret_cast<const std::byte* __restrict__>(out.data()) + j * 16,
+              reinterpret_cast<const std::byte* __restrict__>(out.data()) + (j + 1) * 16,
+              reinterpret_cast<std::byte* __restrict__>(
                   __builtin_assume_aligned(matrix.at(j % nrows), 16)) +
                   (j / nrows) * 16);
   }
