@@ -62,7 +62,7 @@ GMWProvider::GMWProvider(Communication::CommunicationLayer& communication_layer,
 GMWProvider::~GMWProvider() = default;
 
 void GMWProvider::setup() {
-  motion_base_provider_.wait_for_setup();
+  motion_base_provider_.wait_setup();
   mt_provider_.WaitFinished();
   sp_provider_.WaitFinished();
   set_setup_ready();

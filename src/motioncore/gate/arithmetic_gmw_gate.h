@@ -94,7 +94,7 @@ class ArithmeticInputGate final : public Interfaces::InputGate {
   ~ArithmeticInputGate() final = default;
 
   void EvaluateSetup() final {
-    get_motion_base_provider().wait_for_setup();
+    get_motion_base_provider().wait_setup();
     SetSetupIsReady();
     GetRegister().IncrementEvaluatedGatesSetupCounter();
   }

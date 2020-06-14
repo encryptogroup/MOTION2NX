@@ -178,8 +178,6 @@ void MotionBaseProvider::setup() {
   }
 }
 
-void MotionBaseProvider::wait_for_setup() const { wait_setup(); }
-
 std::vector<ENCRYPTO::ReusableFiberFuture<std::vector<std::uint8_t>>>
 MotionBaseProvider::register_for_output_messages(std::size_t gate_id) {
   std::vector<ENCRYPTO::ReusableFiberFuture<std::vector<std::uint8_t>>> futures(num_parties_);

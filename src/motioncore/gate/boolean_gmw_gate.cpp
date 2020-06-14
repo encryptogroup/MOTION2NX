@@ -96,7 +96,7 @@ void GMWInputGate::InitializationHelper() {
 }
 
 void GMWInputGate::EvaluateSetup() {
-  get_motion_base_provider().wait_for_setup();
+  get_motion_base_provider().wait_setup();
   SetSetupIsReady();
   GetRegister().IncrementEvaluatedGatesSetupCounter();
 }

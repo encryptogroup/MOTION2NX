@@ -51,7 +51,6 @@ class MotionBaseProvider : public ENCRYPTO::enable_wait_setup {
   ~MotionBaseProvider();
 
   void setup();
-  [[deprecated("use `wait_setup()` instead")]] void wait_for_setup() const;
 
   const std::vector<std::uint8_t>& get_aes_fixed_key() const { return aes_fixed_key_; }
   SharingRandomnessGenerator& get_my_randomness_generator(std::size_t party_id) {

@@ -63,7 +63,7 @@ BEAVYProvider::BEAVYProvider(Communication::CommunicationLayer& communication_la
 BEAVYProvider::~BEAVYProvider() = default;
 
 void BEAVYProvider::setup() {
-  motion_base_provider_.wait_for_setup();
+  motion_base_provider_.wait_setup();
   // TODO wait for ot setup
   set_setup_ready();
 }
