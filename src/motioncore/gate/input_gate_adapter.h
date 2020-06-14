@@ -22,6 +22,7 @@
 
 #pragma once
 
+#include <functional>
 #include <type_traits>
 #include <vector>
 
@@ -38,11 +39,14 @@ template <typename InputGateClass, typename T>
 class ArithmeticInputAdapterGate : public InputGateClass {
   using is_enabled_0_ = std::enable_if_t<std::is_base_of_v<NewGate, InputGateClass>>;
   using is_enabled_1_ = ENCRYPTO::is_unsigned_int_t<T>;
+  using base_constructor_tag = struct {};
 
  public:
-  ArithmeticInputAdapterGate(const ArithmeticInputAdapterGate&) = delete;
   template <typename... Args>
-  ArithmeticInputAdapterGate(ENCRYPTO::ReusableFiberFuture<std::vector<T>>&& int_vector_future,
+  ArithmeticInputAdapterGate(base_constructor_tag,
+                             ENCRYPTO::ReusableFiberFuture<std::vector<T>>&& int_vector_future_1,
+                             ENCRYPTO::ReusableFiberFuture<std::vector<T>>&& int_vector_future_2,
+                             std::function<T(T)> unary_op, std::function<T(T, T)> binary_op,
                              Args&&... args)
       : InputGateClass(std::forward<Args>(args)...,
                        // ugly hack!
@@ -52,22 +56,53 @@ class ArithmeticInputAdapterGate : public InputGateClass {
                          tmp_promise_ = std::move(promise);
                          return future;
                        }()),
-        // another ugly hack!
         bit_vectors_promise_(std::move(tmp_promise_)),
-        int_vector_future_(std::move(int_vector_future)) {}
+        int_vector_future_1_(std::move(int_vector_future_1)),
+        int_vector_future_2_(std::move(int_vector_future_2)),
+        unary_op_(unary_op),
+        binary_op_(binary_op) {}
+
+  template <typename... Args>
+  ArithmeticInputAdapterGate(ENCRYPTO::ReusableFiberFuture<std::vector<T>>&& int_vector_future,
+                             std::function<T(T)> unary_op, Args&&... args)
+      : ArithmeticInputAdapterGate(base_constructor_tag{}, std::move(int_vector_future),
+                                   ENCRYPTO::ReusableFiberFuture<std::vector<T>>{}, unary_op,
+                                   std::function<T(T, T)>{}, std::forward<Args>(args)...) {}
+
+  template <typename... Args>
+  ArithmeticInputAdapterGate(ENCRYPTO::ReusableFiberFuture<std::vector<T>>&& int_vector_future_1,
+                             ENCRYPTO::ReusableFiberFuture<std::vector<T>>&& int_vector_future_2,
+                             std::function<T(T, T)> binary_op, Args&&... args)
+      : ArithmeticInputAdapterGate(base_constructor_tag{}, std::move(int_vector_future_1),
+                                   std::move(int_vector_future_2), std::function<T(T)>{}, binary_op,
+                                   std::forward<Args>(args)...) {}
 
   bool need_setup() const noexcept override { return InputGateClass::need_setup(); }
   bool need_online() const noexcept override { return InputGateClass::need_online(); }
   void evaluate_setup() override { InputGateClass::evaluate_setup(); }
   void evaluate_online() override {
-    auto int_vector = int_vector_future_.get();
+    auto int_vector = int_vector_future_1_.get();
+    if (int_vector_future_2_.valid()) {
+      auto int_vector_2 = int_vector_future_2_.get();
+      if (int_vector.size() != int_vector_2.size()) {
+        throw std::logic_error("ArithmeticInputAdapterGate: expected int vectors of same size");
+      }
+      std::transform(std::begin(int_vector), std::end(int_vector), std::begin(int_vector_2),
+                     std::begin(int_vector), binary_op_);
+    } else {
+      std::transform(std::begin(int_vector), std::end(int_vector), std::begin(int_vector),
+                     unary_op_);
+    }
     bit_vectors_promise_.set_value(ENCRYPTO::ToInput(int_vector));
     InputGateClass::evaluate_online();
   }
 
  private:
   ENCRYPTO::ReusableFiberPromise<std::vector<ENCRYPTO::BitVector<>>> bit_vectors_promise_;
-  ENCRYPTO::ReusableFiberFuture<std::vector<T>> int_vector_future_;
+  ENCRYPTO::ReusableFiberFuture<std::vector<T>> int_vector_future_1_;
+  ENCRYPTO::ReusableFiberFuture<std::vector<T>> int_vector_future_2_;
+  std::function<T(T)> unary_op_;
+  std::function<T(T, T)> binary_op_;
   // another ugly hack!
   static thread_local ENCRYPTO::ReusableFiberPromise<std::vector<ENCRYPTO::BitVector<>>>
       tmp_promise_;
