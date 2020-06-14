@@ -607,7 +607,7 @@ WireVector YaoProvider::basic_make_convert_from_arithmetic_gmw_gate(const WireVe
   YaoWireVector wires_1;
   if (role_ == Role::garbler) {
     auto input_gate_0 = std::make_unique<ArithmeticInputAdapterGate<YaoInputGateGarbler, T>>(
-        std::move(share_future), input_gate_0_id, *this, num_wires, num_simd);
+        std::move(share_future), [] (auto x) { return x; }, input_gate_0_id, *this, num_wires, num_simd);
     auto input_gate_1 =
         std::make_unique<YaoInputGateGarbler>(input_gate_1_id, *this, num_wires, num_simd);
     wires_0 = input_gate_0->get_output_wires();
@@ -618,7 +618,7 @@ WireVector YaoProvider::basic_make_convert_from_arithmetic_gmw_gate(const WireVe
     auto input_gate_0 =
         std::make_unique<YaoInputGateEvaluator>(input_gate_0_id, *this, num_wires, num_simd);
     auto input_gate_1 = std::make_unique<ArithmeticInputAdapterGate<YaoInputGateEvaluator, T>>(
-        std::move(share_future), input_gate_1_id, *this, num_wires, num_simd);
+        std::move(share_future), [] (auto x) { return x; }, input_gate_1_id, *this, num_wires, num_simd);
     wires_0 = input_gate_0->get_output_wires();
     wires_1 = input_gate_1->get_output_wires();
     gate_register_.register_gate(std::move(input_gate_0));
