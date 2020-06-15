@@ -349,6 +349,7 @@ void YaoOutputGateGarbler::evaluate_setup() {
   // key.
   std::size_t bit_offset = 0;
   for (const auto& wire : inputs_) {
+    wire->wait_setup();
     for (const auto& key : wire->get_keys()) {
       decoding_info.Set(bool(*key.data() & std::byte(0x01)), bit_offset);
       ++bit_offset;
@@ -468,6 +469,7 @@ void YaoOutputGateEvaluator::evaluate_online() {
   // key.
   std::size_t bit_offset = 0;
   for (const auto& wire : inputs_) {
+    wire->wait_online();
     for (const auto& key : wire->get_keys()) {
       encoded_output.Set(bool(*key.data() & std::byte(0x01)), bit_offset);
       ++bit_offset;
