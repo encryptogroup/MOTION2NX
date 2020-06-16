@@ -37,6 +37,8 @@
 #include "crypto/garbling/half_gates.h"
 #include "gate.h"
 #include "gate/input_gate_adapter.h"
+#include "protocols/beavy/gate.h"
+#include "protocols/beavy/wire.h"
 #include "protocols/gmw/gate.h"
 #include "protocols/gmw/wire.h"
 #include "utility/constants.h"
@@ -509,13 +511,13 @@ WireVector YaoProvider::make_convert_to_boolean_gmw_gate(YaoWireVector &&in_a) {
   return cast_wires(std::move(output));
 }
 
-YaoWireVector YaoProvider::make_convert_from_boolean_gmw_gate(const WireVector& in) {
+YaoWireVector YaoProvider::make_convert_from_boolean_gmw_gate(const WireVector &in) {
   auto gate_id = gate_register_.get_next_gate_id();
   YaoWireVector output;
   gmw::BooleanGMWWireVector input;
   input.reserve(in.size());
   std::transform(std::begin(in), std::end(in), std::back_inserter(input),
-                 [](auto& w) { return std::dynamic_pointer_cast<gmw::BooleanGMWWire>(w); });
+                 [](auto &w) { return std::dynamic_pointer_cast<gmw::BooleanGMWWire>(w); });
   if (role_ == Role::garbler) {
     auto gate = std::make_unique<BooleanGMWToYaoGateGarbler>(gate_id, *this, std::move(input));
     output = gate->get_output_wires();
@@ -529,14 +531,14 @@ YaoWireVector YaoProvider::make_convert_from_boolean_gmw_gate(const WireVector& 
 }
 
 template <typename T>
-WireVector YaoProvider::basic_make_convert_to_arithmetic_gmw_gate(YaoWireVector&& in_a) {
+WireVector YaoProvider::basic_make_convert_to_arithmetic_gmw_gate(YaoWireVector &&in_a) {
   auto num_wires = in_a.size();
   assert(num_wires == ENCRYPTO::bit_size_v<T>);
   auto conv_gate_id = gate_register_.get_next_gate_id();
   auto input_gate_id = gate_register_.get_next_gate_id();
   auto num_simd = in_a[0]->get_num_simd();
   YaoWireVector in_b;
-  YaoToArithmeticGMWGateEvaluator<T>* y2a_gate_evaluator = nullptr;
+  YaoToArithmeticGMWGateEvaluator<T> *y2a_gate_evaluator = nullptr;
   gmw::ArithmeticGMWWireP<T> output;
   if (role_ == Role::garbler) {
     auto conv_gate =
@@ -561,7 +563,7 @@ WireVector YaoProvider::basic_make_convert_to_arithmetic_gmw_gate(YaoWireVector&
 
   // sum up the additive shares in a Boolean circuit
   const auto circuit_name = fmt::format("int_add{}_size.bristol", ENCRYPTO::bit_size_v<T>);
-  const auto& algo = circuit_loader_.load_circuit(circuit_name, CircuitFormat::Bristol);
+  const auto &algo = circuit_loader_.load_circuit(circuit_name, CircuitFormat::Bristol);
   auto sum_wires = make_circuit(*this, algo, cast_wires(in_a), cast_wires(in_b));
 
   // the output is given to the evaluator
@@ -586,12 +588,13 @@ WireVector YaoProvider::make_convert_to_arithmetic_gmw_gate(YaoWireVector &&in_a
     case 64:
       return basic_make_convert_to_arithmetic_gmw_gate<std::uint64_t>(std::move(in_a));
     default:
-      throw std::logic_error(fmt::format("unsupported bit size {} for Yao to Arithmetic GMW conversion\n", bit_size));
+      throw std::logic_error(
+          fmt::format("unsupported bit size {} for Yao to Arithmetic GMW conversion\n", bit_size));
   }
 }
 
 template <typename T>
-WireVector YaoProvider::basic_make_convert_from_arithmetic_gmw_gate(const WireVector& in) {
+WireVector YaoProvider::basic_make_convert_from_arithmetic_gmw_gate(const WireVector &in) {
   assert(in.size() == 1);
   auto num_wires = ENCRYPTO::bit_size_v<T>;
   auto arith_wire = std::dynamic_pointer_cast<gmw::ArithmeticGMWWire<T>>(in.at(0));
@@ -607,7 +610,8 @@ WireVector YaoProvider::basic_make_convert_from_arithmetic_gmw_gate(const WireVe
   YaoWireVector wires_1;
   if (role_ == Role::garbler) {
     auto input_gate_0 = std::make_unique<ArithmeticInputAdapterGate<YaoInputGateGarbler, T>>(
-        std::move(share_future), [] (auto x) { return x; }, input_gate_0_id, *this, num_wires, num_simd);
+        std::move(share_future), [](auto x) { return x; }, input_gate_0_id, *this, num_wires,
+        num_simd);
     auto input_gate_1 =
         std::make_unique<YaoInputGateGarbler>(input_gate_1_id, *this, num_wires, num_simd);
     wires_0 = input_gate_0->get_output_wires();
@@ -618,7 +622,8 @@ WireVector YaoProvider::basic_make_convert_from_arithmetic_gmw_gate(const WireVe
     auto input_gate_0 =
         std::make_unique<YaoInputGateEvaluator>(input_gate_0_id, *this, num_wires, num_simd);
     auto input_gate_1 = std::make_unique<ArithmeticInputAdapterGate<YaoInputGateEvaluator, T>>(
-        std::move(share_future), [] (auto x) { return x; }, input_gate_1_id, *this, num_wires, num_simd);
+        std::move(share_future), [](auto x) { return x; }, input_gate_1_id, *this, num_wires,
+        num_simd);
     wires_0 = input_gate_0->get_output_wires();
     wires_1 = input_gate_1->get_output_wires();
     gate_register_.register_gate(std::move(input_gate_0));
@@ -627,7 +632,7 @@ WireVector YaoProvider::basic_make_convert_from_arithmetic_gmw_gate(const WireVe
 
   // sum up the additive shares in a Boolean circuit
   const auto circuit_name = fmt::format("int_add{}_size.bristol", ENCRYPTO::bit_size_v<T>);
-  const auto& algo = circuit_loader_.load_circuit(circuit_name, CircuitFormat::Bristol);
+  const auto &algo = circuit_loader_.load_circuit(circuit_name, CircuitFormat::Bristol);
   auto sum_wires = make_circuit(*this, algo, cast_wires(wires_0), cast_wires(wires_1));
   return sum_wires;
 }
@@ -650,10 +655,137 @@ WireVector YaoProvider::make_convert_from_arithmetic_gmw_gate(const WireVector &
   }
 }
 
+template <typename T>
+WireVector YaoProvider::basic_make_convert_to_arithmetic_beavy_gate(YaoWireVector &&in_a) {
+  auto num_wires = in_a.size();
+  assert(num_wires == ENCRYPTO::bit_size_v<T>);
+  auto conv_gate_id = gate_register_.get_next_gate_id();
+  auto input_gate_id = gate_register_.get_next_gate_id();
+  auto num_simd = in_a[0]->get_num_simd();
+  YaoWireVector in_b;
+  YaoToArithmeticBEAVYGateEvaluator<T> *y2a_gate_evaluator = nullptr;
+  beavy::ArithmeticBEAVYWireP<T> output;
+  if (role_ == Role::garbler) {
+    auto conv_gate =
+        std::make_unique<YaoToArithmeticBEAVYGateGarbler<T>>(conv_gate_id, *this, num_simd);
+    output = conv_gate->get_output_wire();
+    auto input_gate = std::make_unique<SetupGate<YaoInputGateGarbler>>(
+        input_gate_id, *this, num_wires, num_simd, conv_gate->get_mask_future());
+    in_b = input_gate->get_output_wires();
+    gate_register_.register_gate(std::move(conv_gate));
+    gate_register_.register_gate(std::move(input_gate));
+  } else {
+    auto conv_gate =
+        std::make_unique<YaoToArithmeticBEAVYGateEvaluator<T>>(conv_gate_id, *this, num_simd);
+    output = conv_gate->get_output_wire();
+    y2a_gate_evaluator = conv_gate.get();
+    auto input_gate = std::make_unique<SetupGate<YaoInputGateEvaluator>>(input_gate_id, *this,
+                                                                         num_wires, num_simd);
+    in_b = input_gate->get_output_wires();
+    gate_register_.register_gate(std::move(conv_gate));
+    gate_register_.register_gate(std::move(input_gate));
+  }
+
+  // sum up the additive shares in a Boolean circuit
+  const auto circuit_name = fmt::format("int_add{}_size.bristol", ENCRYPTO::bit_size_v<T>);
+  const auto &algo = circuit_loader_.load_circuit(circuit_name, CircuitFormat::Bristol);
+  auto sum_wires = make_circuit(*this, algo, cast_wires(in_a), cast_wires(in_b));
+
+  // the output is given to the evaluator
+  if (role_ == Role::garbler) {
+    make_boolean_output_gate_other(1, sum_wires);
+  } else {
+    auto future = make_boolean_output_gate_my(1, sum_wires);
+    y2a_gate_evaluator->set_masked_value_future(std::move(future));
+  }
+  return {std::dynamic_pointer_cast<NewWire>(output)};
+}
+
+WireVector YaoProvider::make_convert_to_arithmetic_beavy_gate(YaoWireVector &&in_a) {
+  auto bit_size = in_a.size();
+  switch (bit_size) {
+    case 8:
+      return basic_make_convert_to_arithmetic_beavy_gate<std::uint8_t>(std::move(in_a));
+    case 16:
+      return basic_make_convert_to_arithmetic_beavy_gate<std::uint16_t>(std::move(in_a));
+    case 32:
+      return basic_make_convert_to_arithmetic_beavy_gate<std::uint32_t>(std::move(in_a));
+    case 64:
+      return basic_make_convert_to_arithmetic_beavy_gate<std::uint64_t>(std::move(in_a));
+    default:
+      throw std::logic_error(fmt::format(
+          "unsupported bit size {} for Yao to Arithmetic BEAVY conversion\n", bit_size));
+  }
+}
+
+template <typename T>
+WireVector YaoProvider::basic_make_convert_from_arithmetic_beavy_gate(const WireVector &in) {
+  assert(in.size() == 1);
+  auto num_wires = ENCRYPTO::bit_size_v<T>;
+  auto arith_wire = std::dynamic_pointer_cast<beavy::ArithmeticBEAVYWire<T>>(in.at(0));
+  auto num_simd = arith_wire->get_num_simd();
+  auto share_output_gate_id = gate_register_.get_next_gate_id();
+  auto share_output_gate = std::make_unique<beavy::ArithmeticBEAVYOutputShareGate<T>>(
+      share_output_gate_id, std::move(arith_wire));
+  auto secret_share_future = share_output_gate->get_secret_share_future();
+  auto public_share_future = share_output_gate->get_public_share_future();
+  gate_register_.register_gate(std::move(share_output_gate));  // XXX: move
+  auto input_gate_0_id = gate_register_.get_next_gate_id();
+  auto input_gate_1_id = gate_register_.get_next_gate_id();
+  YaoWireVector wires_0;
+  YaoWireVector wires_1;
+  if (role_ == Role::garbler) {
+    auto input_gate_0 = std::make_unique<ArithmeticInputAdapterGate<YaoInputGateGarbler, T>>(
+        std::move(public_share_future), std::move(secret_share_future),
+        [](auto x, auto y) { return x - y; }, input_gate_0_id, *this, num_wires, num_simd);
+    auto input_gate_1 =
+        std::make_unique<YaoInputGateGarbler>(input_gate_1_id, *this, num_wires, num_simd);
+    wires_0 = input_gate_0->get_output_wires();
+    wires_1 = input_gate_1->get_output_wires();
+    gate_register_.register_gate(std::move(input_gate_0));
+    gate_register_.register_gate(std::move(input_gate_1));
+  } else {
+    auto input_gate_0 =
+        std::make_unique<YaoInputGateEvaluator>(input_gate_0_id, *this, num_wires, num_simd);
+    auto input_gate_1 = std::make_unique<ArithmeticInputAdapterGate<YaoInputGateEvaluator, T>>(
+        std::move(secret_share_future), std::negate{}, input_gate_1_id, *this, num_wires, num_simd);
+    wires_0 = input_gate_0->get_output_wires();
+    wires_1 = input_gate_1->get_output_wires();
+    gate_register_.register_gate(std::move(input_gate_0));
+    gate_register_.register_gate(std::move(input_gate_1));
+  }
+
+  // sum up the additive shares in a Boolean circuit
+  const auto circuit_name = fmt::format("int_add{}_size.bristol", ENCRYPTO::bit_size_v<T>);
+  const auto &algo = circuit_loader_.load_circuit(circuit_name, CircuitFormat::Bristol);
+  auto sum_wires = make_circuit(*this, algo, cast_wires(wires_0), cast_wires(wires_1));
+  return sum_wires;
+}
+
+WireVector YaoProvider::make_convert_from_arithmetic_beavy_gate(const WireVector &in) {
+  assert(in.size() == 1);
+  auto bit_size = in.at(0)->get_bit_size();
+  switch (bit_size) {
+    case 8:
+      return basic_make_convert_from_arithmetic_beavy_gate<std::uint8_t>(in);
+    case 16:
+      return basic_make_convert_from_arithmetic_beavy_gate<std::uint16_t>(in);
+    case 32:
+      return basic_make_convert_from_arithmetic_beavy_gate<std::uint32_t>(in);
+    case 64:
+      return basic_make_convert_from_arithmetic_beavy_gate<std::uint64_t>(in);
+    default:
+      throw std::logic_error(fmt::format(
+          "unsupported bit size {} for Yao from Arithmetic BEAVY conversion\n", bit_size));
+  }
+}
+
 WireVector YaoProvider::convert_to(MPCProtocol proto, const WireVector &in) {
   auto input = cast_wires(in);
 
   switch (proto) {
+    case MPCProtocol::ArithmeticBEAVY:
+      return make_convert_to_arithmetic_beavy_gate(std::move(input));
     case MPCProtocol::ArithmeticGMW:
       return make_convert_to_arithmetic_gmw_gate(std::move(input));
     case MPCProtocol::BooleanGMW:
@@ -664,14 +796,16 @@ WireVector YaoProvider::convert_to(MPCProtocol proto, const WireVector &in) {
 }
 
 WireVector YaoProvider::convert_from(MPCProtocol proto, const WireVector &in) {
-
   switch (proto) {
+    case MPCProtocol::ArithmeticBEAVY:
+      return make_convert_from_arithmetic_beavy_gate(in);
     case MPCProtocol::ArithmeticGMW:
       return make_convert_from_arithmetic_gmw_gate(in);
     case MPCProtocol::BooleanGMW:
       return cast_wires(make_convert_from_boolean_gmw_gate(in));
     default:
-      throw std::logic_error(fmt::format("Yao does not support conversion from {}", ToString(proto)));
+      throw std::logic_error(
+          fmt::format("Yao does not support conversion from {}", ToString(proto)));
   }
 }
 

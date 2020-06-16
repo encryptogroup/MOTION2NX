@@ -727,6 +727,40 @@ template class ArithmeticBEAVYOutputGate<std::uint16_t>;
 template class ArithmeticBEAVYOutputGate<std::uint32_t>;
 template class ArithmeticBEAVYOutputGate<std::uint64_t>;
 
+template <typename T>
+ArithmeticBEAVYOutputShareGate<T>::ArithmeticBEAVYOutputShareGate(std::size_t gate_id,
+                                                    ArithmeticBEAVYWireP<T>&& input)
+    : NewGate(gate_id),
+      input_(std::move(input)) {
+}
+
+template <typename T>
+ENCRYPTO::ReusableFiberFuture<std::vector<T>> ArithmeticBEAVYOutputShareGate<T>::get_public_share_future() {
+  return public_share_promise_.get_future();
+}
+
+template <typename T>
+ENCRYPTO::ReusableFiberFuture<std::vector<T>> ArithmeticBEAVYOutputShareGate<T>::get_secret_share_future() {
+  return secret_share_promise_.get_future();
+}
+
+template <typename T>
+void ArithmeticBEAVYOutputShareGate<T>::evaluate_setup() {
+  input_->wait_setup();
+  secret_share_promise_.set_value(input_->get_secret_share());
+}
+
+template <typename T>
+void ArithmeticBEAVYOutputShareGate<T>::evaluate_online() {
+  input_->wait_online();
+  public_share_promise_.set_value(input_->get_public_share());
+}
+
+template class ArithmeticBEAVYOutputShareGate<std::uint8_t>;
+template class ArithmeticBEAVYOutputShareGate<std::uint16_t>;
+template class ArithmeticBEAVYOutputShareGate<std::uint32_t>;
+template class ArithmeticBEAVYOutputShareGate<std::uint64_t>;
+
 namespace detail {
 
 template <typename T>

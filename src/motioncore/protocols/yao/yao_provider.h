@@ -144,6 +144,12 @@ class YaoProvider : public GateFactory {
   template <typename T>
   WireVector basic_make_convert_from_arithmetic_gmw_gate(const WireVector& in_a);
   WireVector make_convert_from_arithmetic_gmw_gate(const WireVector& in_a);
+  template <typename T>
+  WireVector basic_make_convert_to_arithmetic_beavy_gate(YaoWireVector&& in_a);
+  WireVector make_convert_to_arithmetic_beavy_gate(YaoWireVector&& in_a);
+  template <typename T>
+  WireVector basic_make_convert_from_arithmetic_beavy_gate(const WireVector& in_a);
+  WireVector make_convert_from_arithmetic_beavy_gate(const WireVector& in_a);
 
  private:
   Communication::CommunicationLayer& communication_layer_;

@@ -34,9 +34,18 @@
 namespace ENCRYPTO::ObliviousTransfer {
 class GOT128Receiver;
 class GOT128Sender;
-}
+}  // namespace ENCRYPTO::ObliviousTransfer
 
 namespace MOTION::proto {
+
+namespace beavy {
+class BooleanBEAVYWire;
+using BooleanBEAVYWireVector = std::vector<std::shared_ptr<BooleanBEAVYWire>>;
+template <typename T>
+class ArithmeticBEAVYWire;
+template <typename T>
+using ArithmeticBEAVYWireP = std::shared_ptr<ArithmeticBEAVYWire<T>>;
+}  // namespace beavy
 
 namespace gmw {
 class BooleanGMWWire;
@@ -151,6 +160,48 @@ class YaoToArithmeticGMWGateEvaluator : public NewGate {
  private:
   gmw::ArithmeticGMWWireP<T> output_;
   ENCRYPTO::ReusableFiberFuture<std::vector<ENCRYPTO::BitVector<>>> masked_value_future_;
+  YaoProvider& yao_provider_;
+};
+
+template <typename T>
+class YaoToArithmeticBEAVYGateGarbler : public NewGate {
+ public:
+  YaoToArithmeticBEAVYGateGarbler(std::size_t gate_id, YaoProvider&, std::size_t num_simd);
+  bool need_setup() const noexcept override { return true; }
+  bool need_online() const noexcept override { return true; }
+  void evaluate_setup() override;
+  void evaluate_online() override;
+  ENCRYPTO::ReusableFiberFuture<std::vector<ENCRYPTO::BitVector<>>> get_mask_future() noexcept {
+    return mask_promise_.get_future();
+  };
+  beavy::ArithmeticBEAVYWireP<T>& get_output_wire() noexcept { return output_; };
+
+ private:
+  beavy::ArithmeticBEAVYWireP<T> output_;
+  ENCRYPTO::ReusableFiberPromise<std::vector<ENCRYPTO::BitVector<>>> mask_promise_;
+  ENCRYPTO::ReusableFiberFuture<ENCRYPTO::BitVector<>> masked_value_public_share_future_;
+  YaoProvider& yao_provider_;
+};
+
+template <typename T>
+class YaoToArithmeticBEAVYGateEvaluator : public NewGate {
+ public:
+  YaoToArithmeticBEAVYGateEvaluator(std::size_t gate_id, YaoProvider&, std::size_t num_simd);
+  bool need_setup() const noexcept override { return true; }
+  bool need_online() const noexcept override { return true; }
+  void evaluate_setup() override;
+  void evaluate_online() override;
+  beavy::ArithmeticBEAVYWireP<T>& get_output_wire() noexcept { return output_; };
+  void set_masked_value_future(
+      ENCRYPTO::ReusableFiberFuture<std::vector<ENCRYPTO::BitVector<>>>&& future) {
+    masked_value_future_ = std::move(future);
+  }
+
+ private:
+  beavy::ArithmeticBEAVYWireP<T> output_;
+  ENCRYPTO::ReusableFiberFuture<std::vector<ENCRYPTO::BitVector<>>> masked_value_future_;
+  std::vector<T> masked_value_secret_share_;
+  std::vector<T> masked_value_public_share_;
   YaoProvider& yao_provider_;
 };
 

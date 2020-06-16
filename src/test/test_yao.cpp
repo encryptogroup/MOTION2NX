@@ -34,6 +34,7 @@
 #include "crypto/motion_base_provider.h"
 #include "crypto/oblivious_transfer/ot_provider.h"
 #include "gate/new_gate.h"
+#include "protocols/beavy/wire.h"
 #include "protocols/gmw/wire.h"
 #include "protocols/yao/wire.h"
 #include "protocols/yao/yao_provider.h"
@@ -593,6 +594,106 @@ TYPED_TEST(YaoArithmeticConversionTest, YaoFromArithmeticGMW) {
       this->yao_providers_[0]->convert_from(MOTION::MPCProtocol::ArithmeticGMW, wires_g_tmp);
   auto wires_e =
       this->yao_providers_[1]->convert_from(MOTION::MPCProtocol::ArithmeticGMW, wires_e_tmp);
+
+  this->run_setup();
+  this->run_gates_setup();
+  input_promise.set_value(inputs);
+  this->run_gates_online();
+
+  ASSERT_EQ(wires_g.size(), num_wires);
+  ASSERT_EQ(wires_e.size(), num_wires);
+
+  // check wire values
+  for (std::size_t wire_i = 0; wire_i < num_wires; ++wire_i) {
+    const auto& expected_output_bits = inputs.at(wire_i);
+    const auto wire_g = std::dynamic_pointer_cast<YaoWire>(wires_g.at(wire_i));
+    const auto wire_e = std::dynamic_pointer_cast<YaoWire>(wires_e.at(wire_i));
+    ASSERT_NE(wire_g, nullptr);
+    ASSERT_NE(wire_e, nullptr);
+    wire_g->wait_setup();
+    wire_e->wait_online();
+    const auto& keys_g = wire_g->get_keys();
+    const auto& keys_e = wire_e->get_keys();
+    ASSERT_EQ(keys_g.size(), num_simd);
+    ASSERT_EQ(keys_e.size(), num_simd);
+    const auto& global_offset = this->yao_providers_[this->garbler_i_]->get_global_offset();
+    for (std::size_t simd_j = 0; simd_j < num_simd; ++simd_j) {
+      if (expected_output_bits.Get(simd_j)) {
+        ASSERT_EQ(keys_e.at(simd_j), keys_g.at(simd_j) ^ global_offset);
+      } else {
+        ASSERT_EQ(keys_e.at(simd_j), keys_g.at(simd_j));
+      }
+    }
+  }
+}
+
+TYPED_TEST(YaoArithmeticConversionTest, YaoToArithmeticBEAVY) {
+  std::size_t num_wires = ENCRYPTO::bit_size_v<TypeParam>;
+  std::size_t num_simd = 1;
+  const auto expected_output = this->generate_inputs(num_simd);
+  std::vector<ENCRYPTO::BitVector<>> inputs = int_to_bit_vectors(expected_output);
+
+  auto [input_promise, wires_in_0] =
+      this->yao_providers_[0]->make_boolean_input_gate_my(0, num_wires, num_simd);
+  auto wires_in_1 = this->yao_providers_[1]->make_boolean_input_gate_other(0, num_wires, num_simd);
+
+  auto wires_0 =
+      this->yao_providers_[0]->convert_to(MOTION::MPCProtocol::ArithmeticBEAVY, wires_in_0);
+  auto wires_1 =
+      this->yao_providers_[1]->convert_to(MOTION::MPCProtocol::ArithmeticBEAVY, wires_in_1);
+
+  this->run_setup();
+  this->run_gates_setup();
+  input_promise.set_value(inputs);
+  this->run_gates_online();
+
+  // check wire values
+  ASSERT_EQ(wires_0.size(), 1);
+  ASSERT_EQ(wires_1.size(), 1);
+  const auto wire_0 =
+      std::dynamic_pointer_cast<MOTION::proto::beavy::ArithmeticBEAVYWire<TypeParam>>(
+          wires_0.at(0));
+  const auto wire_1 =
+      std::dynamic_pointer_cast<MOTION::proto::beavy::ArithmeticBEAVYWire<TypeParam>>(
+          wires_1.at(0));
+  ASSERT_NE(wire_0, nullptr);
+  ASSERT_NE(wire_1, nullptr);
+  wire_0->wait_online();
+  wire_1->wait_online();
+  const auto& public_share_0 = wire_0->get_public_share();
+  const auto& public_share_1 = wire_1->get_public_share();
+  const auto& secret_share_0 = wire_0->get_secret_share();
+  const auto& secret_share_1 = wire_1->get_secret_share();
+  ASSERT_EQ(public_share_0.size(), num_simd);
+  ASSERT_EQ(public_share_1.size(), num_simd);
+  ASSERT_EQ(secret_share_0.size(), num_simd);
+  ASSERT_EQ(secret_share_1.size(), num_simd);
+  ASSERT_EQ(public_share_0, public_share_1);
+  for (std::size_t simd_j = 0; simd_j < num_simd; ++simd_j) {
+    ASSERT_EQ(expected_output.at(simd_j),
+              TypeParam(public_share_0.at(simd_j) - secret_share_0.at(simd_j) -
+                        secret_share_1.at(simd_j)));
+  }
+}
+
+TYPED_TEST(YaoArithmeticConversionTest, YaoFromArithmeticBEAVY) {
+  std::size_t num_wires = ENCRYPTO::bit_size_v<TypeParam>;
+  std::size_t num_simd = 1;
+  const auto expected_output = this->generate_inputs(num_simd);
+  std::vector<ENCRYPTO::BitVector<>> inputs = int_to_bit_vectors(expected_output);
+
+  auto [input_promise, wires_in_g] =
+      this->yao_providers_[0]->make_boolean_input_gate_my(0, num_wires, num_simd);
+  auto wires_in_e = this->yao_providers_[1]->make_boolean_input_gate_other(0, num_wires, num_simd);
+
+  auto wires_g_tmp =
+      this->yao_providers_[0]->convert_to(MOTION::MPCProtocol::ArithmeticBEAVY, wires_in_g);
+  auto wires_e_tmp =
+      this->yao_providers_[1]->convert_to(MOTION::MPCProtocol::ArithmeticBEAVY, wires_in_e);
+  auto wires_g =
+      this->yao_providers_[0]->convert_from(MOTION::MPCProtocol::ArithmeticBEAVY, wires_g_tmp);
+  auto wires_e =
+      this->yao_providers_[1]->convert_from(MOTION::MPCProtocol::ArithmeticBEAVY, wires_e_tmp);
 
   this->run_setup();
   this->run_gates_setup();
