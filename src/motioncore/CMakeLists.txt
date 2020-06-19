@@ -215,6 +215,7 @@ target_link_libraries(motion
         Threads::Threads
         OpenSSL::Crypto
         OpenSSL::SSL
+        Eigen3::Eigen
         )
 
 if (${SANITIZE_ADDRESS_LINK_OPT})

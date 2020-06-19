@@ -19,6 +19,7 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/cmake")
 find_package(Threads REQUIRED)
 find_package(OpenSSL REQUIRED)
 find_package(OpenMP REQUIRED)
+find_package(Eigen3 REQUIRED)
 
 set(REQUIRED_BOOST_VERSION "1.69.0")
 
