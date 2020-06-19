@@ -35,9 +35,12 @@ namespace MOTION {
 
 template <typename T>
 IntegerMultiplicationSender<T>::IntegerMultiplicationSender(
-    std::size_t batch_size, ENCRYPTO::ObliviousTransfer::OTProvider& ot_provider)
+    std::size_t batch_size, std::size_t vector_size,
+    ENCRYPTO::ObliviousTransfer::OTProvider& ot_provider)
     : batch_size_(batch_size),
-      ot_sender_(ot_provider.RegisterSendACOT<T>(batch_size * ENCRYPTO::bit_size_v<T>)) {}
+      vector_size_(vector_size),
+      ot_sender_(
+          ot_provider.RegisterSendACOT<T>(batch_size * ENCRYPTO::bit_size_v<T>, vector_size)) {}
 
 template <typename T>
 IntegerMultiplicationSender<T>::~IntegerMultiplicationSender() = default;
@@ -49,7 +52,7 @@ void IntegerMultiplicationSender<T>::set_inputs(std::vector<T>&& inputs) {
 
 template <typename T>
 void IntegerMultiplicationSender<T>::set_inputs(const std::vector<T>& inputs) {
-  if (inputs.size() != batch_size_) {
+  if (inputs.size() != batch_size_ * vector_size_) {
     throw std::invalid_argument("input has unexpected size");
   }
   set_inputs(inputs.data());
@@ -59,11 +62,17 @@ template <typename T>
 void IntegerMultiplicationSender<T>::set_inputs(const T* inputs) {
   constexpr auto bit_size = ENCRYPTO::bit_size_v<T>;
 
-  std::vector<T> ot_inputs(batch_size_ * ENCRYPTO::bit_size_v<T>);
+  const auto idx = [this](auto input_i, auto vector_enty_k, auto bit_j) {
+    return input_i * vector_size_ * bit_size + bit_j * vector_size_ + vector_enty_k;
+  };
+
+  std::vector<T> ot_inputs(batch_size_ * ENCRYPTO::bit_size_v<T> * vector_size_);
   for (std::size_t input_i = 0; input_i < batch_size_; ++input_i) {
-    const T value = inputs[input_i];
-    for (std::size_t bit_j = 0; bit_j < bit_size; ++bit_j) {
-      ot_inputs[input_i * bit_size + bit_j] = value << bit_j;
+    for (std::size_t vector_enty_k = 0; vector_enty_k < vector_size_; ++vector_enty_k) {
+      const T value = inputs[input_i * vector_size_ + vector_enty_k];
+      for (std::size_t bit_j = 0; bit_j < bit_size; ++bit_j) {
+        ot_inputs[idx(input_i, vector_enty_k, bit_j)] = value << bit_j;
+      }
     }
   }
   ot_sender_->SetCorrelations(std::move(ot_inputs));
@@ -73,16 +82,23 @@ void IntegerMultiplicationSender<T>::set_inputs(const T* inputs) {
 template <typename T>
 void IntegerMultiplicationSender<T>::compute_outputs() {
   constexpr auto bit_size = ENCRYPTO::bit_size_v<T>;
+
+  const auto idx = [this](auto output_i, auto vector_enty_k, auto bit_j) {
+    return output_i * vector_size_ * bit_size + bit_j * vector_size_ + vector_enty_k;
+  };
+
   ot_sender_->ComputeOutputs();
   auto ot_outputs = ot_sender_->GetOutputs();
-  assert(ot_outputs.size() == batch_size_ * bit_size);
-  outputs_.resize(batch_size_);
+  assert(ot_outputs.size() == batch_size_ * vector_size_ * bit_size);
+  outputs_.resize(batch_size_ * vector_size_);
   for (std::size_t output_i = 0; output_i < batch_size_; ++output_i) {
-    T value = 0;
-    for (std::size_t bit_j = 0; bit_j < bit_size; ++bit_j) {
-      value -= ot_outputs[output_i * bit_size + bit_j];
+    for (std::size_t vector_enty_k = 0; vector_enty_k < vector_size_; ++vector_enty_k) {
+      T value = 0;
+      for (std::size_t bit_j = 0; bit_j < bit_size; ++bit_j) {
+        value -= ot_outputs[idx(output_i, vector_enty_k, bit_j)];
+      }
+      outputs_[output_i * vector_size_ + vector_enty_k] = value;
     }
-    outputs_[output_i] = value;
   }
 }
 
@@ -96,9 +112,12 @@ std::vector<T> IntegerMultiplicationSender<T>::get_outputs() {
 
 template <typename T>
 IntegerMultiplicationReceiver<T>::IntegerMultiplicationReceiver(
-    std::size_t batch_size, ENCRYPTO::ObliviousTransfer::OTProvider& ot_provider)
+    std::size_t batch_size, std::size_t vector_size,
+    ENCRYPTO::ObliviousTransfer::OTProvider& ot_provider)
     : batch_size_(batch_size),
-      ot_receiver_(ot_provider.RegisterReceiveACOT<T>(batch_size * ENCRYPTO::bit_size_v<T>)) {}
+      vector_size_(vector_size),
+      ot_receiver_(
+          ot_provider.RegisterReceiveACOT<T>(batch_size * ENCRYPTO::bit_size_v<T>, vector_size)) {}
 
 template <typename T>
 IntegerMultiplicationReceiver<T>::~IntegerMultiplicationReceiver() = default;
@@ -127,16 +146,23 @@ void IntegerMultiplicationReceiver<T>::set_inputs(const T* inputs) {
 template <typename T>
 void IntegerMultiplicationReceiver<T>::compute_outputs() {
   constexpr auto bit_size = ENCRYPTO::bit_size_v<T>;
+
+  const auto idx = [this](auto output_i, auto vector_enty_k, auto bit_j) {
+    return output_i * vector_size_ * bit_size + bit_j * vector_size_ + vector_enty_k;
+  };
+
   ot_receiver_->ComputeOutputs();
   auto ot_outputs = ot_receiver_->GetOutputs();
-  assert(ot_outputs.size() == batch_size_ * bit_size);
-  outputs_.resize(batch_size_);
+  assert(ot_outputs.size() == batch_size_ * vector_size_ * bit_size);
+  outputs_.resize(batch_size_ * vector_size_);
   for (std::size_t output_i = 0; output_i < batch_size_; ++output_i) {
-    T value = 0;
-    for (std::size_t bit_j = 0; bit_j < bit_size; ++bit_j) {
-      value += ot_outputs[output_i * bit_size + bit_j];
+    for (std::size_t vector_enty_k = 0; vector_enty_k < vector_size_; ++vector_enty_k) {
+      T value = 0;
+      for (std::size_t bit_j = 0; bit_j < bit_size; ++bit_j) {
+        value += ot_outputs[idx(output_i, vector_enty_k, bit_j)];
+      }
+      outputs_[output_i * vector_size_ + vector_enty_k] = value;
     }
-    outputs_[output_i] = value;
   }
 }
 
@@ -154,14 +180,16 @@ ArithmeticProvider::ArithmeticProvider(ENCRYPTO::ObliviousTransfer::OTProvider& 
 
 template <typename T>
 std::unique_ptr<IntegerMultiplicationSender<T>>
-ArithmeticProvider::register_integer_multiplication_send(std::size_t batch_size) {
-  return std::make_unique<IntegerMultiplicationSender<T>>(batch_size, ot_provider_);
+ArithmeticProvider::register_integer_multiplication_send(std::size_t batch_size,
+                                                         std::size_t vector_size) {
+  return std::make_unique<IntegerMultiplicationSender<T>>(batch_size, vector_size, ot_provider_);
 }
 
 template <typename T>
 std::unique_ptr<IntegerMultiplicationReceiver<T>>
-ArithmeticProvider::register_integer_multiplication_receive(std::size_t batch_size) {
-  return std::make_unique<IntegerMultiplicationReceiver<T>>(batch_size, ot_provider_);
+ArithmeticProvider::register_integer_multiplication_receive(std::size_t batch_size,
+                                                            std::size_t vector_size) {
+  return std::make_unique<IntegerMultiplicationReceiver<T>>(batch_size, vector_size, ot_provider_);
 }
 
 // ---------- ArithmeticProviderManager ----------
@@ -200,25 +228,34 @@ template class IntegerMultiplicationReceiver<std::uint64_t>;
 template class IntegerMultiplicationReceiver<__uint128_t>;
 
 template std::unique_ptr<IntegerMultiplicationSender<std::uint8_t>>
-    ArithmeticProvider::register_integer_multiplication_send<std::uint8_t>(std::size_t);
+    ArithmeticProvider::register_integer_multiplication_send<std::uint8_t>(std::size_t,
+                                                                           std::size_t);
 template std::unique_ptr<IntegerMultiplicationSender<std::uint16_t>>
-    ArithmeticProvider::register_integer_multiplication_send<std::uint16_t>(std::size_t);
+    ArithmeticProvider::register_integer_multiplication_send<std::uint16_t>(std::size_t,
+                                                                            std::size_t);
 template std::unique_ptr<IntegerMultiplicationSender<std::uint32_t>>
-    ArithmeticProvider::register_integer_multiplication_send<std::uint32_t>(std::size_t);
+    ArithmeticProvider::register_integer_multiplication_send<std::uint32_t>(std::size_t,
+                                                                            std::size_t);
 template std::unique_ptr<IntegerMultiplicationSender<std::uint64_t>>
-    ArithmeticProvider::register_integer_multiplication_send<std::uint64_t>(std::size_t);
+    ArithmeticProvider::register_integer_multiplication_send<std::uint64_t>(std::size_t,
+                                                                            std::size_t);
 template std::unique_ptr<IntegerMultiplicationSender<__uint128_t>>
-    ArithmeticProvider::register_integer_multiplication_send<__uint128_t>(std::size_t);
+    ArithmeticProvider::register_integer_multiplication_send<__uint128_t>(std::size_t, std::size_t);
 
 template std::unique_ptr<IntegerMultiplicationReceiver<std::uint8_t>>
-    ArithmeticProvider::register_integer_multiplication_receive<std::uint8_t>(std::size_t);
+    ArithmeticProvider::register_integer_multiplication_receive<std::uint8_t>(std::size_t,
+                                                                              std::size_t);
 template std::unique_ptr<IntegerMultiplicationReceiver<std::uint16_t>>
-    ArithmeticProvider::register_integer_multiplication_receive<std::uint16_t>(std::size_t);
+    ArithmeticProvider::register_integer_multiplication_receive<std::uint16_t>(std::size_t,
+                                                                               std::size_t);
 template std::unique_ptr<IntegerMultiplicationReceiver<std::uint32_t>>
-    ArithmeticProvider::register_integer_multiplication_receive<std::uint32_t>(std::size_t);
+    ArithmeticProvider::register_integer_multiplication_receive<std::uint32_t>(std::size_t,
+                                                                               std::size_t);
 template std::unique_ptr<IntegerMultiplicationReceiver<std::uint64_t>>
-    ArithmeticProvider::register_integer_multiplication_receive<std::uint64_t>(std::size_t);
+    ArithmeticProvider::register_integer_multiplication_receive<std::uint64_t>(std::size_t,
+                                                                               std::size_t);
 template std::unique_ptr<IntegerMultiplicationReceiver<__uint128_t>>
-    ArithmeticProvider::register_integer_multiplication_receive<__uint128_t>(std::size_t);
+    ArithmeticProvider::register_integer_multiplication_receive<__uint128_t>(std::size_t,
+                                                                             std::size_t);
 
 }  // namespace MOTION

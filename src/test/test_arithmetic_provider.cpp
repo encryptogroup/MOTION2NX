@@ -132,3 +132,37 @@ TYPED_TEST(ArithmeticProviderTest, IntegerMultiplication) {
               TypeParam(input_sender[i] * input_receiver[i]));
   }
 }
+
+TYPED_TEST(ArithmeticProviderTest, IntegerVectorMultiplication) {
+  const std::size_t batch_size = 10;
+  const std::size_t vector_size = 8;
+
+  const auto input_sender = MOTION::Helpers::RandomVector<TypeParam>(batch_size * vector_size);
+  const auto input_receiver = MOTION::Helpers::RandomVector<TypeParam>(batch_size);
+  auto mult_sender =
+      this->get_sender_provider().template register_integer_multiplication_send<TypeParam>(
+          batch_size, vector_size);
+  auto mult_receiver =
+      this->get_receiver_provider().template register_integer_multiplication_receive<TypeParam>(
+          batch_size, vector_size);
+
+  this->run_setup();
+
+  mult_sender->set_inputs(input_sender);
+  mult_receiver->set_inputs(input_receiver);
+  mult_sender->compute_outputs();
+  mult_receiver->compute_outputs();
+  const auto output_sender = mult_sender->get_outputs();
+  const auto output_receiver = mult_receiver->get_outputs();
+
+  ASSERT_EQ(output_sender.size(), batch_size * vector_size);
+  ASSERT_EQ(output_receiver.size(), batch_size * vector_size);
+
+  for (std::size_t i = 0; i < batch_size; ++i) {
+    for (std::size_t j = 0; j < vector_size; ++j) {
+      ASSERT_EQ(
+          TypeParam(output_sender[i * vector_size + j] + output_receiver[i * vector_size + j]),
+          TypeParam(input_sender[i * vector_size + j] * input_receiver[i]));
+    }
+  }
+}

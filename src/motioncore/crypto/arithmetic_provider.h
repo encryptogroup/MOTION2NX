@@ -50,7 +50,8 @@ class Logger;
 template <typename T>
 class IntegerMultiplicationSender {
  public:
-  IntegerMultiplicationSender(std::size_t batch_size, ENCRYPTO::ObliviousTransfer::OTProvider&);
+  IntegerMultiplicationSender(std::size_t batch_size, std::size_t vector_size,
+                              ENCRYPTO::ObliviousTransfer::OTProvider&);
   ~IntegerMultiplicationSender();
   void set_inputs(std::vector<T>&& inputs);
   void set_inputs(const std::vector<T>& inputs);
@@ -61,6 +62,7 @@ class IntegerMultiplicationSender {
  private:
   using is_enabled_ = ENCRYPTO::is_unsigned_int_t<T>;
   std::size_t batch_size_;
+  std::size_t vector_size_;
   std::vector<T> inputs_;
   std::vector<T> outputs_;
   std::unique_ptr<ENCRYPTO::ObliviousTransfer::ACOTSender<T>> ot_sender_;
@@ -69,7 +71,8 @@ class IntegerMultiplicationSender {
 template <typename T>
 class IntegerMultiplicationReceiver {
  public:
-  IntegerMultiplicationReceiver(std::size_t batch_size, ENCRYPTO::ObliviousTransfer::OTProvider&);
+  IntegerMultiplicationReceiver(std::size_t batch_size, std::size_t vector_size,
+                                ENCRYPTO::ObliviousTransfer::OTProvider&);
   ~IntegerMultiplicationReceiver();
   void set_inputs(std::vector<T>&& inputs);
   void set_inputs(const std::vector<T>& inputs);
@@ -80,6 +83,7 @@ class IntegerMultiplicationReceiver {
  private:
   using is_enabled_ = ENCRYPTO::is_unsigned_int_t<T>;
   std::size_t batch_size_;
+  std::size_t vector_size_;
   std::vector<T> inputs_;
   std::vector<T> outputs_;
   std::unique_ptr<ENCRYPTO::ObliviousTransfer::ACOTReceiver<T>> ot_receiver_;
@@ -92,10 +96,20 @@ class ArithmeticProvider {
 
   template <typename T>
   std::unique_ptr<IntegerMultiplicationSender<T>> register_integer_multiplication_send(
-      std::size_t batch_size);
+      std::size_t batch_size, std::size_t vector_size);
+  template <typename T>
+  std::unique_ptr<IntegerMultiplicationSender<T>> register_integer_multiplication_send(
+      std::size_t batch_size) {
+    return register_integer_multiplication_send<T>(batch_size, 1);
+  }
   template <typename T>
   std::unique_ptr<IntegerMultiplicationReceiver<T>> register_integer_multiplication_receive(
-      std::size_t batch_size);
+      std::size_t batch_size, std::size_t vector_size);
+  template <typename T>
+  std::unique_ptr<IntegerMultiplicationReceiver<T>> register_integer_multiplication_receive(
+      std::size_t batch_size) {
+    return register_integer_multiplication_receive<T>(batch_size, 1);
+  }
 
  private:
   ENCRYPTO::ObliviousTransfer::OTProvider& ot_provider_;
