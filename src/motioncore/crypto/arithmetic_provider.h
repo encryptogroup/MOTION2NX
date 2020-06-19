@@ -45,6 +45,7 @@ namespace Communication {
 class CommunicationLayer;
 }
 
+class ArithmeticProvider;
 class Logger;
 
 template <typename T>
@@ -90,6 +91,45 @@ class IntegerMultiplicationReceiver {
   std::shared_ptr<Logger> logger_;
 };
 
+template <typename T>
+class MatrixMultiplicationSender {
+ public:
+  MatrixMultiplicationSender(std::size_t l, std::size_t m, std::size_t n, ArithmeticProvider&);
+  ~MatrixMultiplicationSender();
+  void set_inputs(std::vector<T>&& inputs);
+  void set_inputs(const std::vector<T>& inputs);
+  void set_inputs(const T* inputs);
+  void compute_outputs();
+  std::vector<T> get_outputs();
+
+ private:
+  using is_enabled_ = ENCRYPTO::is_unsigned_int_t<T>;
+  std::array<std::size_t, 3> dims_;
+  std::vector<T> output_;
+  std::unique_ptr<IntegerMultiplicationSender<T>> mult_sender_;
+  bool is_output_ready_;
+};
+
+template <typename T>
+class MatrixMultiplicationReceiver {
+ public:
+  MatrixMultiplicationReceiver(std::size_t l, std::size_t m, std::size_t n, ArithmeticProvider&);
+  ~MatrixMultiplicationReceiver();
+  void set_inputs(std::vector<T>&& inputs);
+  void set_inputs(const std::vector<T>& inputs);
+  void set_inputs(const T* inputs);
+  void compute_outputs();
+  std::vector<T> get_outputs();
+
+ private:
+  using is_enabled_ = ENCRYPTO::is_unsigned_int_t<T>;
+  std::array<std::size_t, 3> dims_;
+  std::vector<T> output_;
+  std::unique_ptr<IntegerMultiplicationReceiver<T>> mult_receiver_;
+  std::shared_ptr<Logger> logger_;
+  bool is_output_ready_;
+};
+
 class ArithmeticProvider {
  public:
   ArithmeticProvider(ENCRYPTO::ObliviousTransfer::OTProvider&, std::shared_ptr<Logger>);
@@ -110,6 +150,13 @@ class ArithmeticProvider {
       std::size_t batch_size) {
     return register_integer_multiplication_receive<T>(batch_size, 1);
   }
+
+  template <typename T>
+  std::unique_ptr<MatrixMultiplicationSender<T>> register_matrix_multiplication_send(
+      std::size_t dim_l, std::size_t dim_m, std::size_t dim_n);
+  template <typename T>
+  std::unique_ptr<MatrixMultiplicationReceiver<T>> register_matrix_multiplication_receive(
+      std::size_t dim_l, std::size_t dim_m, std::size_t dim_n);
 
  private:
   ENCRYPTO::ObliviousTransfer::OTProvider& ot_provider_;

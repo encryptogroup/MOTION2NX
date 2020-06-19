@@ -27,6 +27,7 @@
 #include "crypto/base_ots/base_ot_provider.h"
 #include "crypto/motion_base_provider.h"
 #include "crypto/oblivious_transfer/ot_provider.h"
+#include "utility/linear_algebra.h"
 
 template <typename T>
 class ArithmeticProviderTest : public ::testing::Test {
@@ -163,6 +164,45 @@ TYPED_TEST(ArithmeticProviderTest, IntegerVectorMultiplication) {
       ASSERT_EQ(
           TypeParam(output_sender[i * vector_size + j] + output_receiver[i * vector_size + j]),
           TypeParam(input_sender[i * vector_size + j] * input_receiver[i]));
+    }
+  }
+}
+
+TYPED_TEST(ArithmeticProviderTest, MatrixMultiplication) {
+  const std::size_t dim_l = 7;
+  const std::size_t dim_m = 13;
+  const std::size_t dim_n = 11;
+
+  const auto input_sender = MOTION::Helpers::RandomVector<TypeParam>(dim_m * dim_n);
+  const auto input_receiver = MOTION::Helpers::RandomVector<TypeParam>(dim_l * dim_m);
+  std::vector<TypeParam> expected_output =
+      MOTION::matrix_multiply(dim_l, dim_m, dim_n, input_receiver, input_sender);
+  ASSERT_EQ(expected_output.size(), dim_l * dim_n);
+
+  auto mult_sender =
+      this->get_sender_provider().template register_matrix_multiplication_send<TypeParam>(
+          dim_l, dim_m, dim_n);
+  auto mult_receiver =
+      this->get_receiver_provider().template register_matrix_multiplication_receive<TypeParam>(
+          dim_l, dim_m, dim_n);
+
+  this->run_setup();
+
+  mult_sender->set_inputs(input_sender);
+  mult_receiver->set_inputs(input_receiver);
+  mult_sender->compute_outputs();
+  mult_receiver->compute_outputs();
+  const auto output_sender = mult_sender->get_outputs();
+  const auto output_receiver = mult_receiver->get_outputs();
+
+  ASSERT_EQ(output_sender.size(), dim_l * dim_n);
+  ASSERT_EQ(output_receiver.size(), dim_l * dim_n);
+
+  for (std::size_t row_i = 0; row_i < dim_l; ++row_i) {
+    for (std::size_t col_j = 0; col_j < dim_n; ++col_j) {
+      ASSERT_EQ(
+          TypeParam(output_sender[row_i * dim_n + col_j] + output_receiver[row_i * dim_n + col_j]),
+          TypeParam(expected_output[row_i * dim_n + col_j]));
     }
   }
 }

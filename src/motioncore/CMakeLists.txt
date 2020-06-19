@@ -75,6 +75,7 @@ add_library(motion
         utility/fiber_thread_pool/fiber_thread_pool.cpp
         utility/fiber_thread_pool/pooled_work_stealing.cpp
         utility/helpers.cpp
+        utility/linear_algebra.cpp
         utility/logger.cpp
         utility/runtime_info.cpp
         utility/thread.cpp

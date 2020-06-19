@@ -25,6 +25,8 @@
 #include <stdexcept>
 #include <vector>
 
+#include <unsupported/Eigen/CXX11/Tensor>
+
 #include "communication/communication_layer.h"
 #include "oblivious_transfer/ot_flavors.h"
 #include "oblivious_transfer/ot_provider.h"
@@ -172,6 +174,118 @@ std::vector<T> IntegerMultiplicationReceiver<T>::get_outputs() {
   return std::move(outputs_);
 }
 
+// ---------- MatrixMultiplicationSender ----------
+
+template <typename T>
+MatrixMultiplicationSender<T>::MatrixMultiplicationSender(std::size_t l, std::size_t m,
+                                                          std::size_t n,
+                                                          ArithmeticProvider& arith_provider)
+    : dims_({l, m, n}),
+      mult_sender_(arith_provider.register_integer_multiplication_send<T>(l * m, n)),
+      is_output_ready_(false) {}
+
+template <typename T>
+MatrixMultiplicationSender<T>::~MatrixMultiplicationSender() = default;
+
+template <typename T>
+void MatrixMultiplicationSender<T>::set_inputs(std::vector<T>&& inputs) {
+  set_inputs(inputs);
+}
+
+template <typename T>
+void MatrixMultiplicationSender<T>::set_inputs(const std::vector<T>& inputs) {
+  if (inputs.size() != dims_[1] * dims_[2]) {
+    throw std::invalid_argument("input has unexpected size");
+  }
+  set_inputs(inputs.data());
+}
+
+template <typename T>
+void MatrixMultiplicationSender<T>::set_inputs(const T* inputs) {
+  const auto input_size = dims_[1] * dims_[2];
+  std::vector<T> mult_inputs(dims_[0] * input_size);
+  for (std::size_t i = 0; i < dims_[0]; ++i) {
+    std::copy_n(inputs, input_size, std::begin(mult_inputs) + i * input_size);
+  }
+  mult_sender_->set_inputs(std::move(mult_inputs));
+}
+
+template <typename T>
+void MatrixMultiplicationSender<T>::compute_outputs() {
+  mult_sender_->compute_outputs();
+  auto mult_output = mult_sender_->get_outputs();
+  output_.resize(dims_[0] * dims_[2]);
+  using TensorType2 = Eigen::Tensor<T, 2, Eigen::RowMajor>;
+  using TensorType3 = Eigen::Tensor<T, 3, Eigen::RowMajor>;
+  Eigen::TensorMap<TensorType3> input_tensor(mult_output.data(), dims_[0], dims_[1], dims_[2]);
+  Eigen::TensorMap<TensorType2> output_tensor(output_.data(), dims_[0], dims_[2]);
+  Eigen::array<Eigen::Index, 1> reduction_dimensions = {1};
+  output_tensor = input_tensor.sum(reduction_dimensions);
+  is_output_ready_ = true;
+}
+
+template <typename T>
+std::vector<T> MatrixMultiplicationSender<T>::get_outputs() {
+  assert(is_output_ready_);
+  return std::move(output_);
+}
+
+// ---------- MatrixMultiplicationReceiver ----------
+
+template <typename T>
+MatrixMultiplicationReceiver<T>::MatrixMultiplicationReceiver(std::size_t l, std::size_t m,
+                                                              std::size_t n,
+                                                              ArithmeticProvider& arith_provider)
+    : dims_({l, m, n}),
+      mult_receiver_(arith_provider.register_integer_multiplication_receive<T>(l * m, n)),
+      is_output_ready_(false) {}
+
+template <typename T>
+MatrixMultiplicationReceiver<T>::~MatrixMultiplicationReceiver() = default;
+
+template <typename T>
+void MatrixMultiplicationReceiver<T>::set_inputs(std::vector<T>&& inputs) {
+  if (inputs.size() != dims_[0] * dims_[1]) {
+    throw std::invalid_argument("input has unexpected size");
+  }
+  mult_receiver_->set_inputs(std::move(inputs));
+}
+
+template <typename T>
+void MatrixMultiplicationReceiver<T>::set_inputs(const std::vector<T>& inputs) {
+  if (inputs.size() != dims_[0] * dims_[1]) {
+    throw std::invalid_argument("input has unexpected size");
+  }
+  set_inputs(inputs.data());
+}
+
+template <typename T>
+void MatrixMultiplicationReceiver<T>::set_inputs(const T* inputs) {
+  std::vector<T> mult_inputs(inputs, inputs + dims_[0] * dims_[1]);
+  mult_receiver_->set_inputs(std::move(mult_inputs));
+}
+
+template <typename T>
+void MatrixMultiplicationReceiver<T>::compute_outputs() {
+  mult_receiver_->compute_outputs();
+  auto mult_output = mult_receiver_->get_outputs();
+  assert(mult_output.size() == dims_[0] * dims_[1] * dims_[2]);
+  output_.resize(dims_[0] * dims_[2]);
+  using TensorType2 = Eigen::Tensor<T, 2, Eigen::RowMajor>;
+  using TensorType3 = Eigen::Tensor<T, 3, Eigen::RowMajor>;
+  Eigen::TensorMap<TensorType3> input_tensor(mult_output.data(), dims_[0], dims_[1], dims_[2]);
+  Eigen::TensorMap<TensorType2> output_tensor(output_.data(), dims_[0], dims_[2]);
+  Eigen::array<Eigen::Index, 1> reduction_dimensions = {1};
+  output_tensor = input_tensor.sum(reduction_dimensions);
+  is_output_ready_ = true;
+}
+
+template <typename T>
+std::vector<T> MatrixMultiplicationReceiver<T>::get_outputs() {
+  assert(is_output_ready_);
+  return std::move(output_);
+}
+
 // ---------- ArithmeticProvider ----------
 
 ArithmeticProvider::ArithmeticProvider(ENCRYPTO::ObliviousTransfer::OTProvider& ot_provider,
@@ -190,6 +304,20 @@ std::unique_ptr<IntegerMultiplicationReceiver<T>>
 ArithmeticProvider::register_integer_multiplication_receive(std::size_t batch_size,
                                                             std::size_t vector_size) {
   return std::make_unique<IntegerMultiplicationReceiver<T>>(batch_size, vector_size, ot_provider_);
+}
+
+template <typename T>
+std::unique_ptr<MatrixMultiplicationSender<T>>
+ArithmeticProvider::register_matrix_multiplication_send(std::size_t dim_l, std::size_t dim_m,
+                                                        std::size_t dim_n) {
+  return std::make_unique<MatrixMultiplicationSender<T>>(dim_l, dim_m, dim_n, *this);
+}
+
+template <typename T>
+std::unique_ptr<MatrixMultiplicationReceiver<T>>
+ArithmeticProvider::register_matrix_multiplication_receive(std::size_t dim_l, std::size_t dim_m,
+                                                           std::size_t dim_n) {
+  return std::make_unique<MatrixMultiplicationReceiver<T>>(dim_l, dim_m, dim_n, *this);
 }
 
 // ---------- ArithmeticProviderManager ----------
@@ -227,6 +355,18 @@ template class IntegerMultiplicationReceiver<std::uint32_t>;
 template class IntegerMultiplicationReceiver<std::uint64_t>;
 template class IntegerMultiplicationReceiver<__uint128_t>;
 
+template class MatrixMultiplicationSender<std::uint8_t>;
+template class MatrixMultiplicationSender<std::uint16_t>;
+template class MatrixMultiplicationSender<std::uint32_t>;
+template class MatrixMultiplicationSender<std::uint64_t>;
+template class MatrixMultiplicationSender<__uint128_t>;
+
+template class MatrixMultiplicationReceiver<std::uint8_t>;
+template class MatrixMultiplicationReceiver<std::uint16_t>;
+template class MatrixMultiplicationReceiver<std::uint32_t>;
+template class MatrixMultiplicationReceiver<std::uint64_t>;
+template class MatrixMultiplicationReceiver<__uint128_t>;
+
 template std::unique_ptr<IntegerMultiplicationSender<std::uint8_t>>
     ArithmeticProvider::register_integer_multiplication_send<std::uint8_t>(std::size_t,
                                                                            std::size_t);
@@ -257,5 +397,42 @@ template std::unique_ptr<IntegerMultiplicationReceiver<std::uint64_t>>
 template std::unique_ptr<IntegerMultiplicationReceiver<__uint128_t>>
     ArithmeticProvider::register_integer_multiplication_receive<__uint128_t>(std::size_t,
                                                                              std::size_t);
+
+template std::unique_ptr<MatrixMultiplicationSender<std::uint8_t>>
+    ArithmeticProvider::register_matrix_multiplication_send<std::uint8_t>(std::size_t, std::size_t,
+                                                                          std::size_t);
+template std::unique_ptr<MatrixMultiplicationSender<std::uint16_t>>
+    ArithmeticProvider::register_matrix_multiplication_send<std::uint16_t>(std::size_t, std::size_t,
+                                                                           std::size_t);
+template std::unique_ptr<MatrixMultiplicationSender<std::uint32_t>>
+    ArithmeticProvider::register_matrix_multiplication_send<std::uint32_t>(std::size_t, std::size_t,
+                                                                           std::size_t);
+template std::unique_ptr<MatrixMultiplicationSender<std::uint64_t>>
+    ArithmeticProvider::register_matrix_multiplication_send<std::uint64_t>(std::size_t, std::size_t,
+                                                                           std::size_t);
+template std::unique_ptr<MatrixMultiplicationSender<__uint128_t>>
+    ArithmeticProvider::register_matrix_multiplication_send<__uint128_t>(std::size_t, std::size_t,
+                                                                         std::size_t);
+
+template std::unique_ptr<MatrixMultiplicationReceiver<std::uint8_t>>
+    ArithmeticProvider::register_matrix_multiplication_receive<std::uint8_t>(std::size_t,
+                                                                             std::size_t,
+                                                                             std::size_t);
+template std::unique_ptr<MatrixMultiplicationReceiver<std::uint16_t>>
+    ArithmeticProvider::register_matrix_multiplication_receive<std::uint16_t>(std::size_t,
+                                                                              std::size_t,
+                                                                              std::size_t);
+template std::unique_ptr<MatrixMultiplicationReceiver<std::uint32_t>>
+    ArithmeticProvider::register_matrix_multiplication_receive<std::uint32_t>(std::size_t,
+                                                                              std::size_t,
+                                                                              std::size_t);
+template std::unique_ptr<MatrixMultiplicationReceiver<std::uint64_t>>
+    ArithmeticProvider::register_matrix_multiplication_receive<std::uint64_t>(std::size_t,
+                                                                              std::size_t,
+                                                                              std::size_t);
+template std::unique_ptr<MatrixMultiplicationReceiver<__uint128_t>>
+    ArithmeticProvider::register_matrix_multiplication_receive<__uint128_t>(std::size_t,
+                                                                            std::size_t,
+                                                                            std::size_t);
 
 }  // namespace MOTION
