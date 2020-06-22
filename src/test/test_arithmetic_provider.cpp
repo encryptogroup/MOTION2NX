@@ -173,27 +173,26 @@ TYPED_TEST(ArithmeticProviderTest, MatrixMultiplication) {
   const std::size_t dim_m = 13;
   const std::size_t dim_n = 11;
 
-  const auto input_sender = MOTION::Helpers::RandomVector<TypeParam>(dim_m * dim_n);
-  const auto input_receiver = MOTION::Helpers::RandomVector<TypeParam>(dim_l * dim_m);
+  const auto input_rhs = MOTION::Helpers::RandomVector<TypeParam>(dim_m * dim_n);
+  const auto input_lhs = MOTION::Helpers::RandomVector<TypeParam>(dim_l * dim_m);
   std::vector<TypeParam> expected_output =
-      MOTION::matrix_multiply(dim_l, dim_m, dim_n, input_receiver, input_sender);
+      MOTION::matrix_multiply(dim_l, dim_m, dim_n, input_lhs, input_rhs);
   ASSERT_EQ(expected_output.size(), dim_l * dim_n);
 
-  auto mult_sender =
-      this->get_sender_provider().template register_matrix_multiplication_send<TypeParam>(
-          dim_l, dim_m, dim_n);
-  auto mult_receiver =
-      this->get_receiver_provider().template register_matrix_multiplication_receive<TypeParam>(
+  auto mm_rhs = this->get_sender_provider().template register_matrix_multiplication_rhs<TypeParam>(
+      dim_l, dim_m, dim_n);
+  auto mm_lhs =
+      this->get_receiver_provider().template register_matrix_multiplication_lhs<TypeParam>(
           dim_l, dim_m, dim_n);
 
   this->run_setup();
 
-  mult_sender->set_inputs(input_sender);
-  mult_receiver->set_inputs(input_receiver);
-  mult_sender->compute_outputs();
-  mult_receiver->compute_outputs();
-  const auto output_sender = mult_sender->get_outputs();
-  const auto output_receiver = mult_receiver->get_outputs();
+  mm_rhs->set_input(input_rhs);
+  mm_lhs->set_input(input_lhs);
+  mm_rhs->compute_output();
+  mm_lhs->compute_output();
+  const auto output_sender = mm_rhs->get_output();
+  const auto output_receiver = mm_lhs->get_output();
 
   ASSERT_EQ(output_sender.size(), dim_l * dim_n);
   ASSERT_EQ(output_receiver.size(), dim_l * dim_n);
@@ -204,5 +203,42 @@ TYPED_TEST(ArithmeticProviderTest, MatrixMultiplication) {
           TypeParam(output_sender[row_i * dim_n + col_j] + output_receiver[row_i * dim_n + col_j]),
           TypeParam(expected_output[row_i * dim_n + col_j]));
     }
+  }
+}
+
+TYPED_TEST(ArithmeticProviderTest, Convolution) {
+  // Convolution from CryptoNets
+  const MOTION::tensor::Conv2DOp conv_op = {.kernel_shape_ = {5, 1, 5, 5},
+                                            .input_shape_ = {1, 28, 28},
+                                            .output_shape_ = {5, 13, 13},
+                                            .dilations_ = {1, 1},
+                                            .pads_ = {1, 1, 0, 0},
+                                            .strides_ = {2, 2}};
+  ASSERT_TRUE(conv_op.verify());
+
+  const auto input = MOTION::Helpers::RandomVector<TypeParam>(conv_op.compute_input_size());
+  const auto kernel = MOTION::Helpers::RandomVector<TypeParam>(conv_op.compute_kernel_size());
+  std::vector<TypeParam> expected_output = MOTION::convolution(conv_op, input, kernel);
+  ASSERT_EQ(expected_output.size(), conv_op.compute_output_size());
+
+  auto conv_input_side =
+      this->get_sender_provider().template register_convolution_input_side<TypeParam>(conv_op);
+  auto conv_kernel_side =
+      this->get_receiver_provider().template register_convolution_kernel_side<TypeParam>(conv_op);
+
+  this->run_setup();
+
+  conv_input_side->set_input(input);
+  conv_kernel_side->set_input(kernel);
+  conv_input_side->compute_output();
+  conv_kernel_side->compute_output();
+  const auto output_is = conv_input_side->get_output();
+  const auto output_ks = conv_kernel_side->get_output();
+
+  ASSERT_EQ(output_is.size(), conv_op.compute_output_size());
+  ASSERT_EQ(output_ks.size(), conv_op.compute_output_size());
+
+  for (std::size_t i = 0; i < expected_output.size(); ++i) {
+    ASSERT_EQ(TypeParam(output_is[i] + output_ks[i]), TypeParam(expected_output[i]));
   }
 }

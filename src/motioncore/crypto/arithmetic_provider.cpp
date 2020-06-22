@@ -174,34 +174,33 @@ std::vector<T> IntegerMultiplicationReceiver<T>::get_outputs() {
   return std::move(outputs_);
 }
 
-// ---------- MatrixMultiplicationSender ----------
+// ---------- MatrixMultiplicationRHS ----------
 
 template <typename T>
-MatrixMultiplicationSender<T>::MatrixMultiplicationSender(std::size_t l, std::size_t m,
-                                                          std::size_t n,
-                                                          ArithmeticProvider& arith_provider)
+MatrixMultiplicationRHS<T>::MatrixMultiplicationRHS(std::size_t l, std::size_t m, std::size_t n,
+                                                    ArithmeticProvider& arith_provider)
     : dims_({l, m, n}),
       mult_sender_(arith_provider.register_integer_multiplication_send<T>(l * m, n)),
       is_output_ready_(false) {}
 
 template <typename T>
-MatrixMultiplicationSender<T>::~MatrixMultiplicationSender() = default;
+MatrixMultiplicationRHS<T>::~MatrixMultiplicationRHS() = default;
 
 template <typename T>
-void MatrixMultiplicationSender<T>::set_inputs(std::vector<T>&& inputs) {
-  set_inputs(inputs);
+void MatrixMultiplicationRHS<T>::set_input(std::vector<T>&& inputs) {
+  set_input(inputs);
 }
 
 template <typename T>
-void MatrixMultiplicationSender<T>::set_inputs(const std::vector<T>& inputs) {
+void MatrixMultiplicationRHS<T>::set_input(const std::vector<T>& inputs) {
   if (inputs.size() != dims_[1] * dims_[2]) {
     throw std::invalid_argument("input has unexpected size");
   }
-  set_inputs(inputs.data());
+  set_input(inputs.data());
 }
 
 template <typename T>
-void MatrixMultiplicationSender<T>::set_inputs(const T* inputs) {
+void MatrixMultiplicationRHS<T>::set_input(const T* inputs) {
   const auto input_size = dims_[1] * dims_[2];
   std::vector<T> mult_inputs(dims_[0] * input_size);
   for (std::size_t i = 0; i < dims_[0]; ++i) {
@@ -211,7 +210,7 @@ void MatrixMultiplicationSender<T>::set_inputs(const T* inputs) {
 }
 
 template <typename T>
-void MatrixMultiplicationSender<T>::compute_outputs() {
+void MatrixMultiplicationRHS<T>::compute_output() {
   mult_sender_->compute_outputs();
   auto mult_output = mult_sender_->get_outputs();
   output_.resize(dims_[0] * dims_[2]);
@@ -225,26 +224,25 @@ void MatrixMultiplicationSender<T>::compute_outputs() {
 }
 
 template <typename T>
-std::vector<T> MatrixMultiplicationSender<T>::get_outputs() {
+std::vector<T> MatrixMultiplicationRHS<T>::get_output() {
   assert(is_output_ready_);
   return std::move(output_);
 }
 
-// ---------- MatrixMultiplicationReceiver ----------
+// ---------- MatrixMultiplicationLHS ----------
 
 template <typename T>
-MatrixMultiplicationReceiver<T>::MatrixMultiplicationReceiver(std::size_t l, std::size_t m,
-                                                              std::size_t n,
-                                                              ArithmeticProvider& arith_provider)
+MatrixMultiplicationLHS<T>::MatrixMultiplicationLHS(std::size_t l, std::size_t m, std::size_t n,
+                                                    ArithmeticProvider& arith_provider)
     : dims_({l, m, n}),
       mult_receiver_(arith_provider.register_integer_multiplication_receive<T>(l * m, n)),
       is_output_ready_(false) {}
 
 template <typename T>
-MatrixMultiplicationReceiver<T>::~MatrixMultiplicationReceiver() = default;
+MatrixMultiplicationLHS<T>::~MatrixMultiplicationLHS() = default;
 
 template <typename T>
-void MatrixMultiplicationReceiver<T>::set_inputs(std::vector<T>&& inputs) {
+void MatrixMultiplicationLHS<T>::set_input(std::vector<T>&& inputs) {
   if (inputs.size() != dims_[0] * dims_[1]) {
     throw std::invalid_argument("input has unexpected size");
   }
@@ -252,21 +250,21 @@ void MatrixMultiplicationReceiver<T>::set_inputs(std::vector<T>&& inputs) {
 }
 
 template <typename T>
-void MatrixMultiplicationReceiver<T>::set_inputs(const std::vector<T>& inputs) {
+void MatrixMultiplicationLHS<T>::set_input(const std::vector<T>& inputs) {
   if (inputs.size() != dims_[0] * dims_[1]) {
     throw std::invalid_argument("input has unexpected size");
   }
-  set_inputs(inputs.data());
+  set_input(inputs.data());
 }
 
 template <typename T>
-void MatrixMultiplicationReceiver<T>::set_inputs(const T* inputs) {
+void MatrixMultiplicationLHS<T>::set_input(const T* inputs) {
   std::vector<T> mult_inputs(inputs, inputs + dims_[0] * dims_[1]);
   mult_receiver_->set_inputs(std::move(mult_inputs));
 }
 
 template <typename T>
-void MatrixMultiplicationReceiver<T>::compute_outputs() {
+void MatrixMultiplicationLHS<T>::compute_output() {
   mult_receiver_->compute_outputs();
   auto mult_output = mult_receiver_->get_outputs();
   assert(mult_output.size() == dims_[0] * dims_[1] * dims_[2]);
@@ -281,7 +279,164 @@ void MatrixMultiplicationReceiver<T>::compute_outputs() {
 }
 
 template <typename T>
-std::vector<T> MatrixMultiplicationReceiver<T>::get_outputs() {
+std::vector<T> MatrixMultiplicationLHS<T>::get_output() {
+  assert(is_output_ready_);
+  return std::move(output_);
+}
+
+// ---------- ConvolutionInputSide ----------
+
+template <typename T>
+ConvolutionInputSide<T>::ConvolutionInputSide(tensor::Conv2DOp conv_op,
+                                              ArithmeticProvider& arith_provider)
+    : conv_op_(conv_op), is_output_ready_(false) {
+  const auto kernel_matrix_shape = conv_op_.compute_kernel_matrix_shape();
+  const auto input_matrix_shape = conv_op_.compute_input_matrix_shape();
+  matrix_rhs_ = arith_provider.register_matrix_multiplication_rhs<T>(
+      kernel_matrix_shape.first, kernel_matrix_shape.second, input_matrix_shape.second);
+}
+
+template <typename T>
+ConvolutionInputSide<T>::~ConvolutionInputSide() = default;
+
+template <typename T>
+void ConvolutionInputSide<T>::set_input(std::vector<T>&& input) {
+  set_input(input);
+}
+
+template <typename T>
+void ConvolutionInputSide<T>::set_input(const std::vector<T>& input) {
+  if (input.size() != conv_op_.compute_input_size()) {
+    throw std::invalid_argument("input has unexpected size");
+  }
+  set_input(input.data());
+}
+
+template <typename T>
+void ConvolutionInputSide<T>::set_input(const T* input_buffer) {
+  const auto matrix_shape = conv_op_.compute_input_matrix_shape();
+  std::vector<T> input_matrix_buffer(matrix_shape.first * matrix_shape.second);
+  using TensorType2 = Eigen::Tensor<T, 2, Eigen::RowMajor>;
+  using CTensorType3 = Eigen::Tensor<const T, 3, Eigen::RowMajor>;
+  Eigen::TensorMap<CTensorType3> input(input_buffer, conv_op_.input_shape_[0],
+                                       conv_op_.input_shape_[1], conv_op_.input_shape_[2]);
+  Eigen::TensorMap<TensorType2> input_matrix(input_matrix_buffer.data(), matrix_shape.first,
+                                             matrix_shape.second);
+  input_matrix =
+      input.shuffle(Eigen::array<Eigen::Index, 3>{2, 1, 0})
+          .extract_image_patches(conv_op_.kernel_shape_[2], conv_op_.kernel_shape_[3],
+                                 conv_op_.strides_[0], conv_op_.strides_[1], conv_op_.dilations_[0],
+                                 conv_op_.dilations_[1], 1, 1, conv_op_.pads_[0], conv_op_.pads_[2],
+                                 conv_op_.pads_[1], conv_op_.pads_[3], 0)
+          .reshape(Eigen::array<Eigen::Index, 2>{static_cast<Eigen::Index>(matrix_shape.second),
+                                                 static_cast<Eigen::Index>(matrix_shape.first)})
+          .shuffle(Eigen::array<Eigen::Index, 2>{1, 0});
+  matrix_rhs_->set_input(std::move(input_matrix_buffer));
+}
+
+template <typename T>
+void ConvolutionInputSide<T>::compute_output() {
+  matrix_rhs_->compute_output();
+  output_ = matrix_rhs_->get_output();
+  assert(output_.size() == conv_op_.compute_output_size());
+  using CTensorType2 = Eigen::Tensor<T, 2, Eigen::RowMajor>;
+  using TensorType3 = Eigen::Tensor<T, 3, Eigen::RowMajor>;
+  const auto matrix_shape = conv_op_.compute_output_matrix_shape();
+  // be careful about aliasing, use eval()
+  Eigen::TensorMap<CTensorType2> output_matrix(output_.data(), matrix_shape.first,
+                                               matrix_shape.second);
+  Eigen::TensorMap<TensorType3> output(output_.data(), conv_op_.output_shape_[0],
+                                       conv_op_.output_shape_[1], conv_op_.output_shape_[2]);
+  const std::array<Eigen::Index, 3> rev_output_dimensions = {
+      static_cast<Eigen::Index>(conv_op_.output_shape_[2]),
+      static_cast<Eigen::Index>(conv_op_.output_shape_[1]),
+      static_cast<Eigen::Index>(conv_op_.output_shape_[0])};
+  output = output_matrix.shuffle(std::array<Eigen::Index, 2>{1, 0})
+               .reshape(rev_output_dimensions)
+               .shuffle(Eigen::array<Eigen::Index, 3>{2, 1, 0})
+               .eval();
+  is_output_ready_ = true;
+}
+
+template <typename T>
+std::vector<T> ConvolutionInputSide<T>::get_output() {
+  assert(is_output_ready_);
+  return std::move(output_);
+}
+
+// ---------- ConvolutionKernelSide ----------
+
+template <typename T>
+ConvolutionKernelSide<T>::ConvolutionKernelSide(tensor::Conv2DOp conv_op,
+                                                ArithmeticProvider& arith_provider)
+    : conv_op_(conv_op), is_output_ready_(false) {
+  const auto kernel_matrix_shape = conv_op_.compute_kernel_matrix_shape();
+  const auto input_matrix_shape = conv_op_.compute_input_matrix_shape();
+  matrix_lhs_ = arith_provider.register_matrix_multiplication_lhs<T>(
+      kernel_matrix_shape.first, kernel_matrix_shape.second, input_matrix_shape.second);
+}
+
+template <typename T>
+ConvolutionKernelSide<T>::~ConvolutionKernelSide() = default;
+
+template <typename T>
+void ConvolutionKernelSide<T>::set_input(std::vector<T>&& kernel_buffer) {
+  set_input(kernel_buffer);
+}
+
+template <typename T>
+void ConvolutionKernelSide<T>::set_input(const std::vector<T>& kernel) {
+  if (kernel.size() != conv_op_.compute_kernel_size()) {
+    throw std::invalid_argument("kernel has unexpected size");
+  }
+  set_input(kernel.data());
+}
+
+template <typename T>
+void ConvolutionKernelSide<T>::set_input(const T* kernel_buffer) {
+  using TensorType2 = Eigen::Tensor<T, 2, Eigen::RowMajor>;
+  using CTensorType4 = Eigen::Tensor<const T, 4, Eigen::RowMajor>;
+  Eigen::TensorMap<CTensorType4> kernel(kernel_buffer, conv_op_.kernel_shape_[0],
+                                        conv_op_.kernel_shape_[1], conv_op_.kernel_shape_[2],
+                                        conv_op_.kernel_shape_[3]);
+  const auto matrix_shape = conv_op_.compute_kernel_matrix_shape();
+  std::vector<T> kernel_matrix_buffer(matrix_shape.first * matrix_shape.second);
+  Eigen::TensorMap<TensorType2> kernel_matrix(kernel_matrix_buffer.data(), matrix_shape.first,
+                                              matrix_shape.second);
+  kernel_matrix =
+      kernel.shuffle(std::array<Eigen::Index, 4>{3, 2, 1, 0})
+          .reshape(std::array<Eigen::Index, 2>{static_cast<Eigen::Index>(matrix_shape.second),
+                                               static_cast<Eigen::Index>(matrix_shape.first)})
+          .shuffle(std::array<Eigen::Index, 2>{1, 0});
+  matrix_lhs_->set_input(std::move(kernel_matrix_buffer));
+}
+
+template <typename T>
+void ConvolutionKernelSide<T>::compute_output() {
+  matrix_lhs_->compute_output();
+  output_ = matrix_lhs_->get_output();
+  assert(output_.size() == conv_op_.compute_output_size());
+  using CTensorType2 = Eigen::Tensor<T, 2, Eigen::RowMajor>;
+  using TensorType3 = Eigen::Tensor<T, 3, Eigen::RowMajor>;
+  const auto matrix_shape = conv_op_.compute_output_matrix_shape();
+  // be careful about aliasing, use eval()
+  Eigen::TensorMap<CTensorType2> output_matrix(output_.data(), matrix_shape.first,
+                                               matrix_shape.second);
+  Eigen::TensorMap<TensorType3> output(output_.data(), conv_op_.output_shape_[0],
+                                       conv_op_.output_shape_[1], conv_op_.output_shape_[2]);
+  const std::array<Eigen::Index, 3> rev_output_dimensions = {
+      static_cast<Eigen::Index>(conv_op_.output_shape_[2]),
+      static_cast<Eigen::Index>(conv_op_.output_shape_[1]),
+      static_cast<Eigen::Index>(conv_op_.output_shape_[0])};
+  output = output_matrix.shuffle(std::array<Eigen::Index, 2>{1, 0})
+               .reshape(rev_output_dimensions)
+               .shuffle(Eigen::array<Eigen::Index, 3>{2, 1, 0})
+               .eval();
+  is_output_ready_ = true;
+}
+
+template <typename T>
+std::vector<T> ConvolutionKernelSide<T>::get_output() {
   assert(is_output_ready_);
   return std::move(output_);
 }
@@ -307,17 +462,27 @@ ArithmeticProvider::register_integer_multiplication_receive(std::size_t batch_si
 }
 
 template <typename T>
-std::unique_ptr<MatrixMultiplicationSender<T>>
-ArithmeticProvider::register_matrix_multiplication_send(std::size_t dim_l, std::size_t dim_m,
-                                                        std::size_t dim_n) {
-  return std::make_unique<MatrixMultiplicationSender<T>>(dim_l, dim_m, dim_n, *this);
+std::unique_ptr<MatrixMultiplicationRHS<T>> ArithmeticProvider::register_matrix_multiplication_rhs(
+    std::size_t dim_l, std::size_t dim_m, std::size_t dim_n) {
+  return std::make_unique<MatrixMultiplicationRHS<T>>(dim_l, dim_m, dim_n, *this);
 }
 
 template <typename T>
-std::unique_ptr<MatrixMultiplicationReceiver<T>>
-ArithmeticProvider::register_matrix_multiplication_receive(std::size_t dim_l, std::size_t dim_m,
-                                                           std::size_t dim_n) {
-  return std::make_unique<MatrixMultiplicationReceiver<T>>(dim_l, dim_m, dim_n, *this);
+std::unique_ptr<MatrixMultiplicationLHS<T>> ArithmeticProvider::register_matrix_multiplication_lhs(
+    std::size_t dim_l, std::size_t dim_m, std::size_t dim_n) {
+  return std::make_unique<MatrixMultiplicationLHS<T>>(dim_l, dim_m, dim_n, *this);
+}
+
+template <typename T>
+std::unique_ptr<ConvolutionInputSide<T>> ArithmeticProvider::register_convolution_input_side(
+    tensor::Conv2DOp conv_op) {
+  return std::make_unique<ConvolutionInputSide<T>>(conv_op, *this);
+}
+
+template <typename T>
+std::unique_ptr<ConvolutionKernelSide<T>> ArithmeticProvider::register_convolution_kernel_side(
+    tensor::Conv2DOp conv_op) {
+  return std::make_unique<ConvolutionKernelSide<T>>(conv_op, *this);
 }
 
 // ---------- ArithmeticProviderManager ----------
@@ -355,17 +520,29 @@ template class IntegerMultiplicationReceiver<std::uint32_t>;
 template class IntegerMultiplicationReceiver<std::uint64_t>;
 template class IntegerMultiplicationReceiver<__uint128_t>;
 
-template class MatrixMultiplicationSender<std::uint8_t>;
-template class MatrixMultiplicationSender<std::uint16_t>;
-template class MatrixMultiplicationSender<std::uint32_t>;
-template class MatrixMultiplicationSender<std::uint64_t>;
-template class MatrixMultiplicationSender<__uint128_t>;
+template class MatrixMultiplicationRHS<std::uint8_t>;
+template class MatrixMultiplicationRHS<std::uint16_t>;
+template class MatrixMultiplicationRHS<std::uint32_t>;
+template class MatrixMultiplicationRHS<std::uint64_t>;
+template class MatrixMultiplicationRHS<__uint128_t>;
 
-template class MatrixMultiplicationReceiver<std::uint8_t>;
-template class MatrixMultiplicationReceiver<std::uint16_t>;
-template class MatrixMultiplicationReceiver<std::uint32_t>;
-template class MatrixMultiplicationReceiver<std::uint64_t>;
-template class MatrixMultiplicationReceiver<__uint128_t>;
+template class MatrixMultiplicationLHS<std::uint8_t>;
+template class MatrixMultiplicationLHS<std::uint16_t>;
+template class MatrixMultiplicationLHS<std::uint32_t>;
+template class MatrixMultiplicationLHS<std::uint64_t>;
+template class MatrixMultiplicationLHS<__uint128_t>;
+
+template class ConvolutionInputSide<std::uint8_t>;
+template class ConvolutionInputSide<std::uint16_t>;
+template class ConvolutionInputSide<std::uint32_t>;
+template class ConvolutionInputSide<std::uint64_t>;
+template class ConvolutionInputSide<__uint128_t>;
+
+template class ConvolutionKernelSide<std::uint8_t>;
+template class ConvolutionKernelSide<std::uint16_t>;
+template class ConvolutionKernelSide<std::uint32_t>;
+template class ConvolutionKernelSide<std::uint64_t>;
+template class ConvolutionKernelSide<__uint128_t>;
 
 template std::unique_ptr<IntegerMultiplicationSender<std::uint8_t>>
     ArithmeticProvider::register_integer_multiplication_send<std::uint8_t>(std::size_t,
@@ -398,41 +575,58 @@ template std::unique_ptr<IntegerMultiplicationReceiver<__uint128_t>>
     ArithmeticProvider::register_integer_multiplication_receive<__uint128_t>(std::size_t,
                                                                              std::size_t);
 
-template std::unique_ptr<MatrixMultiplicationSender<std::uint8_t>>
-    ArithmeticProvider::register_matrix_multiplication_send<std::uint8_t>(std::size_t, std::size_t,
-                                                                          std::size_t);
-template std::unique_ptr<MatrixMultiplicationSender<std::uint16_t>>
-    ArithmeticProvider::register_matrix_multiplication_send<std::uint16_t>(std::size_t, std::size_t,
-                                                                           std::size_t);
-template std::unique_ptr<MatrixMultiplicationSender<std::uint32_t>>
-    ArithmeticProvider::register_matrix_multiplication_send<std::uint32_t>(std::size_t, std::size_t,
-                                                                           std::size_t);
-template std::unique_ptr<MatrixMultiplicationSender<std::uint64_t>>
-    ArithmeticProvider::register_matrix_multiplication_send<std::uint64_t>(std::size_t, std::size_t,
-                                                                           std::size_t);
-template std::unique_ptr<MatrixMultiplicationSender<__uint128_t>>
-    ArithmeticProvider::register_matrix_multiplication_send<__uint128_t>(std::size_t, std::size_t,
+template std::unique_ptr<MatrixMultiplicationRHS<std::uint8_t>>
+    ArithmeticProvider::register_matrix_multiplication_rhs<std::uint8_t>(std::size_t, std::size_t,
                                                                          std::size_t);
+template std::unique_ptr<MatrixMultiplicationRHS<std::uint16_t>>
+    ArithmeticProvider::register_matrix_multiplication_rhs<std::uint16_t>(std::size_t, std::size_t,
+                                                                          std::size_t);
+template std::unique_ptr<MatrixMultiplicationRHS<std::uint32_t>>
+    ArithmeticProvider::register_matrix_multiplication_rhs<std::uint32_t>(std::size_t, std::size_t,
+                                                                          std::size_t);
+template std::unique_ptr<MatrixMultiplicationRHS<std::uint64_t>>
+    ArithmeticProvider::register_matrix_multiplication_rhs<std::uint64_t>(std::size_t, std::size_t,
+                                                                          std::size_t);
+template std::unique_ptr<MatrixMultiplicationRHS<__uint128_t>>
+    ArithmeticProvider::register_matrix_multiplication_rhs<__uint128_t>(std::size_t, std::size_t,
+                                                                        std::size_t);
 
-template std::unique_ptr<MatrixMultiplicationReceiver<std::uint8_t>>
-    ArithmeticProvider::register_matrix_multiplication_receive<std::uint8_t>(std::size_t,
-                                                                             std::size_t,
-                                                                             std::size_t);
-template std::unique_ptr<MatrixMultiplicationReceiver<std::uint16_t>>
-    ArithmeticProvider::register_matrix_multiplication_receive<std::uint16_t>(std::size_t,
-                                                                              std::size_t,
-                                                                              std::size_t);
-template std::unique_ptr<MatrixMultiplicationReceiver<std::uint32_t>>
-    ArithmeticProvider::register_matrix_multiplication_receive<std::uint32_t>(std::size_t,
-                                                                              std::size_t,
-                                                                              std::size_t);
-template std::unique_ptr<MatrixMultiplicationReceiver<std::uint64_t>>
-    ArithmeticProvider::register_matrix_multiplication_receive<std::uint64_t>(std::size_t,
-                                                                              std::size_t,
-                                                                              std::size_t);
-template std::unique_ptr<MatrixMultiplicationReceiver<__uint128_t>>
-    ArithmeticProvider::register_matrix_multiplication_receive<__uint128_t>(std::size_t,
-                                                                            std::size_t,
-                                                                            std::size_t);
+template std::unique_ptr<MatrixMultiplicationLHS<std::uint8_t>>
+    ArithmeticProvider::register_matrix_multiplication_lhs<std::uint8_t>(std::size_t, std::size_t,
+                                                                         std::size_t);
+template std::unique_ptr<MatrixMultiplicationLHS<std::uint16_t>>
+    ArithmeticProvider::register_matrix_multiplication_lhs<std::uint16_t>(std::size_t, std::size_t,
+                                                                          std::size_t);
+template std::unique_ptr<MatrixMultiplicationLHS<std::uint32_t>>
+    ArithmeticProvider::register_matrix_multiplication_lhs<std::uint32_t>(std::size_t, std::size_t,
+                                                                          std::size_t);
+template std::unique_ptr<MatrixMultiplicationLHS<std::uint64_t>>
+    ArithmeticProvider::register_matrix_multiplication_lhs<std::uint64_t>(std::size_t, std::size_t,
+                                                                          std::size_t);
+template std::unique_ptr<MatrixMultiplicationLHS<__uint128_t>>
+    ArithmeticProvider::register_matrix_multiplication_lhs<__uint128_t>(std::size_t, std::size_t,
+                                                                        std::size_t);
+
+template std::unique_ptr<ConvolutionInputSide<std::uint8_t>>
+    ArithmeticProvider::register_convolution_input_side<std::uint8_t>(tensor::Conv2DOp);
+template std::unique_ptr<ConvolutionInputSide<std::uint16_t>>
+    ArithmeticProvider::register_convolution_input_side<std::uint16_t>(tensor::Conv2DOp);
+template std::unique_ptr<ConvolutionInputSide<std::uint32_t>>
+    ArithmeticProvider::register_convolution_input_side<std::uint32_t>(tensor::Conv2DOp);
+template std::unique_ptr<ConvolutionInputSide<std::uint64_t>>
+    ArithmeticProvider::register_convolution_input_side<std::uint64_t>(tensor::Conv2DOp);
+template std::unique_ptr<ConvolutionInputSide<__uint128_t>>
+    ArithmeticProvider::register_convolution_input_side<__uint128_t>(tensor::Conv2DOp);
+
+template std::unique_ptr<ConvolutionKernelSide<std::uint8_t>>
+    ArithmeticProvider::register_convolution_kernel_side<std::uint8_t>(tensor::Conv2DOp);
+template std::unique_ptr<ConvolutionKernelSide<std::uint16_t>>
+    ArithmeticProvider::register_convolution_kernel_side<std::uint16_t>(tensor::Conv2DOp);
+template std::unique_ptr<ConvolutionKernelSide<std::uint32_t>>
+    ArithmeticProvider::register_convolution_kernel_side<std::uint32_t>(tensor::Conv2DOp);
+template std::unique_ptr<ConvolutionKernelSide<std::uint64_t>>
+    ArithmeticProvider::register_convolution_kernel_side<std::uint64_t>(tensor::Conv2DOp);
+template std::unique_ptr<ConvolutionKernelSide<__uint128_t>>
+    ArithmeticProvider::register_convolution_kernel_side<__uint128_t>(tensor::Conv2DOp);
 
 }  // namespace MOTION

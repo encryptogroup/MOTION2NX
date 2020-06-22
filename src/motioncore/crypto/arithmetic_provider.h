@@ -27,6 +27,7 @@
 #include <vector>
 
 #include "oblivious_transfer/ot_provider.h"
+#include "tensor/tensor_op.h"
 #include "utility/reusable_future.h"
 #include "utility/type_traits.hpp"
 
@@ -92,15 +93,15 @@ class IntegerMultiplicationReceiver {
 };
 
 template <typename T>
-class MatrixMultiplicationSender {
+class MatrixMultiplicationRHS {
  public:
-  MatrixMultiplicationSender(std::size_t l, std::size_t m, std::size_t n, ArithmeticProvider&);
-  ~MatrixMultiplicationSender();
-  void set_inputs(std::vector<T>&& inputs);
-  void set_inputs(const std::vector<T>& inputs);
-  void set_inputs(const T* inputs);
-  void compute_outputs();
-  std::vector<T> get_outputs();
+  MatrixMultiplicationRHS(std::size_t l, std::size_t m, std::size_t n, ArithmeticProvider&);
+  ~MatrixMultiplicationRHS();
+  void set_input(std::vector<T>&& inputs);
+  void set_input(const std::vector<T>& inputs);
+  void set_input(const T* inputs);
+  void compute_output();
+  std::vector<T> get_output();
 
  private:
   using is_enabled_ = ENCRYPTO::is_unsigned_int_t<T>;
@@ -111,21 +112,60 @@ class MatrixMultiplicationSender {
 };
 
 template <typename T>
-class MatrixMultiplicationReceiver {
+class MatrixMultiplicationLHS {
  public:
-  MatrixMultiplicationReceiver(std::size_t l, std::size_t m, std::size_t n, ArithmeticProvider&);
-  ~MatrixMultiplicationReceiver();
-  void set_inputs(std::vector<T>&& inputs);
-  void set_inputs(const std::vector<T>& inputs);
-  void set_inputs(const T* inputs);
-  void compute_outputs();
-  std::vector<T> get_outputs();
+  MatrixMultiplicationLHS(std::size_t l, std::size_t m, std::size_t n, ArithmeticProvider&);
+  ~MatrixMultiplicationLHS();
+  void set_input(std::vector<T>&& inputs);
+  void set_input(const std::vector<T>& inputs);
+  void set_input(const T* inputs);
+  void compute_output();
+  std::vector<T> get_output();
 
  private:
   using is_enabled_ = ENCRYPTO::is_unsigned_int_t<T>;
   std::array<std::size_t, 3> dims_;
   std::vector<T> output_;
   std::unique_ptr<IntegerMultiplicationReceiver<T>> mult_receiver_;
+  std::shared_ptr<Logger> logger_;
+  bool is_output_ready_;
+};
+
+template <typename T>
+class ConvolutionInputSide {
+ public:
+  ConvolutionInputSide(tensor::Conv2DOp, ArithmeticProvider&);
+  ~ConvolutionInputSide();
+  void set_input(std::vector<T>&& inputs);
+  void set_input(const std::vector<T>& inputs);
+  void set_input(const T* inputs);
+  void compute_output();
+  std::vector<T> get_output();
+
+ private:
+  using is_enabled_ = ENCRYPTO::is_unsigned_int_t<T>;
+  const tensor::Conv2DOp conv_op_;
+  std::vector<T> output_;
+  std::unique_ptr<MatrixMultiplicationRHS<T>> matrix_rhs_;
+  bool is_output_ready_;
+};
+
+template <typename T>
+class ConvolutionKernelSide {
+ public:
+  ConvolutionKernelSide(tensor::Conv2DOp conv_op, ArithmeticProvider&);
+  ~ConvolutionKernelSide();
+  void set_input(std::vector<T>&& inputs);
+  void set_input(const std::vector<T>& inputs);
+  void set_input(const T* inputs);
+  void compute_output();
+  std::vector<T> get_output();
+
+ private:
+  using is_enabled_ = ENCRYPTO::is_unsigned_int_t<T>;
+  const tensor::Conv2DOp conv_op_;
+  std::vector<T> output_;
+  std::unique_ptr<MatrixMultiplicationLHS<T>> matrix_lhs_;
   std::shared_ptr<Logger> logger_;
   bool is_output_ready_;
 };
@@ -152,11 +192,18 @@ class ArithmeticProvider {
   }
 
   template <typename T>
-  std::unique_ptr<MatrixMultiplicationSender<T>> register_matrix_multiplication_send(
-      std::size_t dim_l, std::size_t dim_m, std::size_t dim_n);
+  std::unique_ptr<MatrixMultiplicationRHS<T>> register_matrix_multiplication_rhs(std::size_t dim_l,
+                                                                                 std::size_t dim_m,
+                                                                                 std::size_t dim_n);
   template <typename T>
-  std::unique_ptr<MatrixMultiplicationReceiver<T>> register_matrix_multiplication_receive(
-      std::size_t dim_l, std::size_t dim_m, std::size_t dim_n);
+  std::unique_ptr<MatrixMultiplicationLHS<T>> register_matrix_multiplication_lhs(std::size_t dim_l,
+                                                                                 std::size_t dim_m,
+                                                                                 std::size_t dim_n);
+
+  template <typename T>
+  std::unique_ptr<ConvolutionInputSide<T>> register_convolution_input_side(tensor::Conv2DOp);
+  template <typename T>
+  std::unique_ptr<ConvolutionKernelSide<T>> register_convolution_kernel_side(tensor::Conv2DOp);
 
  private:
   ENCRYPTO::ObliviousTransfer::OTProvider& ot_provider_;

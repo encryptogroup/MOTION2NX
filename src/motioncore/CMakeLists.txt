@@ -57,6 +57,7 @@ add_library(motion
         protocols/gmw/conversion.cpp
         protocols/gmw/gate.cpp
         protocols/gmw/gmw_provider.cpp
+        protocols/gmw/tensor_op.cpp
         protocols/yao/conversion.cpp
         protocols/yao/gate.cpp
         protocols/yao/yao_provider.cpp
@@ -68,6 +69,7 @@ add_library(motion
         share/share_wrapper.cpp
         statistics/analysis.cpp
         statistics/run_time_stats.cpp
+        tensor/tensor_op.cpp
         utility/bit_matrix.cpp
         utility/bit_vector.cpp
         utility/block.cpp
