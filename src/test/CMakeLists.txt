@@ -14,6 +14,7 @@ add_executable(motiontest
         test_gmw.cpp
         test_half_gates.cpp
         test_integer_operations.cpp
+        test_linear_algebra.cpp
         test_misc.cpp
         test_motion_main.cpp
         test_mt.cpp
