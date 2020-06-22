@@ -31,6 +31,7 @@ add_library(motion
         crypto/curve25519/mycurve25519.cpp
         crypto/garbling/half_gates.cpp
         crypto/motion_base_provider.cpp
+        crypto/multiplication_triple/linalg_triple_provider.cpp
         crypto/multiplication_triple/mt_provider.cpp
         crypto/multiplication_triple/sb_provider.cpp
         crypto/multiplication_triple/sp_provider.cpp

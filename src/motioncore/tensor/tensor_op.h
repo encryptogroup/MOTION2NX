@@ -24,6 +24,7 @@
 
 #include <array>
 #include <cstddef>
+#include <functional>
 #include <utility>
 
 namespace MOTION::tensor {
@@ -41,14 +42,44 @@ struct Conv2DOp {
   std::array<std::size_t, 4> pads_;
   std::array<std::size_t, 2> strides_;
 
-  bool verify() const;
-  std::array<std::size_t, 3> compute_output_shape() const;
-  std::size_t compute_output_size() const;
-  std::size_t compute_input_size() const;
-  std::size_t compute_kernel_size() const;
-  std::pair<std::size_t, std::size_t> compute_input_matrix_shape() const;
-  std::pair<std::size_t, std::size_t> compute_kernel_matrix_shape() const;
-  std::pair<std::size_t, std::size_t> compute_output_matrix_shape() const;
+  bool verify() const noexcept;
+  std::array<std::size_t, 3> compute_output_shape() const noexcept;
+  std::size_t compute_output_size() const noexcept;
+  std::size_t compute_input_size() const noexcept;
+  std::size_t compute_kernel_size() const noexcept;
+  std::pair<std::size_t, std::size_t> compute_input_matrix_shape() const noexcept;
+  std::pair<std::size_t, std::size_t> compute_kernel_matrix_shape() const noexcept;
+  std::pair<std::size_t, std::size_t> compute_output_matrix_shape() const noexcept;
+
+  bool operator==(const Conv2DOp&) const noexcept;
 };
 
-}
+struct GemmOp {
+  std::array<std::size_t, 2> input_shape_;
+  std::array<std::size_t, 2> factor_shape_;
+  std::array<std::size_t, 2> output_shape_;
+
+  bool verify() const noexcept;
+  std::array<std::size_t, 2> compute_output_shape() const noexcept;
+  std::size_t compute_output_size() const noexcept;
+  std::size_t compute_input_size() const noexcept;
+  std::size_t compute_factor_size() const noexcept;
+
+  bool operator==(const GemmOp&) const noexcept;
+};
+
+}  // namespace MOTION::tensor
+
+namespace std {
+
+template <>
+struct hash<MOTION::tensor::Conv2DOp> {
+  std::size_t operator()(const MOTION::tensor::Conv2DOp&) const noexcept;
+};
+
+template <>
+struct hash<MOTION::tensor::GemmOp> {
+  std::size_t operator()(const MOTION::tensor::GemmOp&) const noexcept;
+};
+
+}  // namespace std
