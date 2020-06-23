@@ -39,4 +39,7 @@ template <typename T>
 std::vector<T> convolution(const tensor::Conv2DOp&, const std::vector<T>& input,
                            const std::vector<T>& kernel);
 
+template <typename T>
+void convolution(const tensor::Conv2DOp&, const T* input, const T* kernel, T* output);
+
 }  // namespace MOTION

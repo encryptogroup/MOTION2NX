@@ -63,8 +63,8 @@ template std::vector<__uint128_t> matrix_multiply(std::size_t, std::size_t, std:
                                                   const std::vector<__uint128_t>&);
 
 template <typename T>
-std::vector<T> convolution(const tensor::Conv2DOp& conv_op, const std::vector<T>& input_buffer,
-                           const std::vector<T>& kernel_buffer) {
+void convolution(const tensor::Conv2DOp& conv_op, const T* input_buffer, const T* kernel_buffer,
+                 T* output_buffer) {
   using TensorType3 = Eigen::Tensor<T, 3, Eigen::RowMajor>;
   using CTensorType3 = Eigen::Tensor<const T, 3, Eigen::RowMajor>;
   using CTensorType4 = Eigen::Tensor<const T, 4, Eigen::RowMajor>;
@@ -73,12 +73,11 @@ std::vector<T> convolution(const tensor::Conv2DOp& conv_op, const std::vector<T>
   const auto& input_shape = conv_op.input_shape_;
   const auto& kernel_shape = conv_op.kernel_shape_;
 
-  std::vector<T> output_buffer(conv_op.compute_output_size());
-  Eigen::TensorMap<CTensorType3> input(input_buffer.data(), input_shape[0], input_shape[1],
+  Eigen::TensorMap<CTensorType3> input(input_buffer, input_shape[0], input_shape[1],
                                        input_shape[2]);
-  Eigen::TensorMap<CTensorType4> kernel(kernel_buffer.data(), kernel_shape[0], kernel_shape[1],
+  Eigen::TensorMap<CTensorType4> kernel(kernel_buffer, kernel_shape[0], kernel_shape[1],
                                         kernel_shape[2], kernel_shape[3]);
-  Eigen::TensorMap<TensorType3> output(output_buffer.data(), output_shape[0], output_shape[1],
+  Eigen::TensorMap<TensorType3> output(output_buffer, output_shape[0], output_shape[1],
                                        output_shape[2]);
   const std::array<Eigen::Index, 2> kernel_matrix_dimensions = {
       static_cast<Eigen::Index>(kernel_shape[1] * kernel_shape[2] * kernel_shape[3]),
@@ -109,7 +108,16 @@ std::vector<T> convolution(const tensor::Conv2DOp& conv_op, const std::vector<T>
       output.dimension(2), output.dimension(1), output.dimension(0)};
   output =
       output_matrix.reshape(rev_output_dimensions).shuffle(Eigen::array<Eigen::Index, 3>{2, 1, 0});
+}
 
+template <typename T>
+std::vector<T> convolution(const tensor::Conv2DOp& conv_op, const std::vector<T>& input_buffer,
+                           const std::vector<T>& kernel_buffer) {
+  assert(conv_op.verify());
+  assert(input_buffer.size() == conv_op.compute_input_size());
+  assert(kernel_buffer.size() == conv_op.compute_kernel_size());
+  std::vector<T> output_buffer(conv_op.compute_output_size());
+  convolution(conv_op, input_buffer.data(), kernel_buffer.data(), output_buffer.data());
   return output_buffer;
 }
 
