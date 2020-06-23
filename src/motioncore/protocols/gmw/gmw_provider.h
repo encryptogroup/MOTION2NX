@@ -34,6 +34,7 @@ namespace MOTION {
 
 class GateRegister;
 class Logger;
+class LinAlgTripleProvider;
 class MTProvider;
 class SBProvider;
 class SPProvider;
@@ -71,6 +72,10 @@ class GMWProvider : public GateFactory, public ENCRYPTO::enable_wait_setup, publ
   MTProvider& get_mt_provider() noexcept { return mt_provider_; }
   SPProvider& get_sp_provider() noexcept { return sp_provider_; }
   SBProvider& get_sb_provider() noexcept { return sb_provider_; }
+  void set_linalg_triple_provider(std::shared_ptr<LinAlgTripleProvider> ltp) noexcept {
+    linalg_triple_provider_ = ltp;
+  }
+  LinAlgTripleProvider& get_linalg_triple_provider() noexcept { return *linalg_triple_provider_; }
   std::shared_ptr<Logger> get_logger() const noexcept { return logger_; }
   bool is_my_job(std::size_t gate_id) const noexcept;
   std::size_t get_my_id() const noexcept { return my_id_; }
@@ -174,6 +179,7 @@ class GMWProvider : public GateFactory, public ENCRYPTO::enable_wait_setup, publ
   MTProvider& mt_provider_;
   SPProvider& sp_provider_;
   SBProvider& sb_provider_;
+  std::shared_ptr<LinAlgTripleProvider> linalg_triple_provider_;
   std::size_t my_id_;
   std::size_t num_parties_;
   std::size_t next_input_id_;
