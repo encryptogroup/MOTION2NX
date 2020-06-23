@@ -60,13 +60,13 @@ class LinAlgTripleProvider : public ENCRYPTO::enable_wait_setup {
   std::size_t register_for_gemm_triple(const tensor::GemmOp&);
 
   template <typename T>
-  LinAlgTriple<T> get_gemm_triple(const tensor::GemmOp&, std::size_t);
+  [[nodiscard]] LinAlgTriple<T> get_gemm_triple(const tensor::GemmOp&, std::size_t);
 
   template <typename T>
   std::size_t register_for_conv2d_triple(const tensor::Conv2DOp&);
 
   template <typename T>
-  LinAlgTriple<T> get_conv2d_triple(const tensor::Conv2DOp&, std::size_t);
+  [[nodiscard]] LinAlgTriple<T> get_conv2d_triple(const tensor::Conv2DOp&, std::size_t);
 
   virtual void setup() = 0;
 
