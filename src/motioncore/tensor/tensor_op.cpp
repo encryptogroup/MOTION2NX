@@ -88,6 +88,30 @@ std::pair<std::size_t, std::size_t> Conv2DOp::compute_output_matrix_shape() cons
   return {num_rows, num_columns};
 }
 
+TensorDimensions Conv2DOp::get_input_tensor_dims() const noexcept {
+  assert(verify());
+  return {.batch_size_ = 1,
+          .num_channels_ = input_shape_[0],
+          .height_ = input_shape_[1],
+          .width_ = input_shape_[2]};
+}
+
+TensorDimensions Conv2DOp::get_kernel_tensor_dims() const noexcept {
+  assert(verify());
+  return {.batch_size_ = kernel_shape_[0],
+          .num_channels_ = kernel_shape_[1],
+          .height_ = kernel_shape_[2],
+          .width_ = kernel_shape_[3]};
+}
+
+TensorDimensions Conv2DOp::get_output_tensor_dims() const noexcept {
+  assert(verify());
+  return {.batch_size_ = 1,
+          .num_channels_ = output_shape_[0],
+          .height_ = output_shape_[1],
+          .width_ = output_shape_[2]};
+}
+
 bool Conv2DOp::operator==(const Conv2DOp& other) const noexcept {
   assert(verify());
   assert(other.verify());

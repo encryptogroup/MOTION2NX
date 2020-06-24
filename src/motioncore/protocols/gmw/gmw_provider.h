@@ -26,6 +26,8 @@
 
 #include "base/gate_factory.h"
 #include "protocols/common/comm_mixin.h"
+#include "tensor/tensor_op.h"
+#include "tensor/tensor_op_factory.h"
 #include "utility/bit_vector.h"
 #include "utility/enable_wait.h"
 #include "utility/type_traits.hpp"
@@ -56,7 +58,10 @@ enum class OutputRecipient : std::uint8_t { garbler, evaluator, both };
 class BooleanGMWWire;
 using BooleanGMWWireVector = std::vector<std::shared_ptr<BooleanGMWWire>>;
 
-class GMWProvider : public GateFactory, public ENCRYPTO::enable_wait_setup, public CommMixin {
+class GMWProvider : public GateFactory,
+                    public ENCRYPTO::enable_wait_setup,
+                    public CommMixin,
+                    public tensor::TensorOpFactory {
  public:
   enum class Role { garbler, evaluator };
   struct my_input_t {};
@@ -75,7 +80,10 @@ class GMWProvider : public GateFactory, public ENCRYPTO::enable_wait_setup, publ
   void set_linalg_triple_provider(std::shared_ptr<LinAlgTripleProvider> ltp) noexcept {
     linalg_triple_provider_ = ltp;
   }
-  LinAlgTripleProvider& get_linalg_triple_provider() noexcept { return *linalg_triple_provider_; }
+  LinAlgTripleProvider& get_linalg_triple_provider() noexcept {
+    assert(linalg_triple_provider_);
+    return *linalg_triple_provider_;
+  }
   std::shared_ptr<Logger> get_logger() const noexcept { return logger_; }
   bool is_my_job(std::size_t gate_id) const noexcept;
   std::size_t get_my_id() const noexcept { return my_id_; }
@@ -142,6 +150,22 @@ class GMWProvider : public GateFactory, public ENCRYPTO::enable_wait_setup, publ
   template <typename T>
   ENCRYPTO::ReusableFiberFuture<IntegerValues<T>> make_arithmetic_output_share_gate(const WireVector&);
 
+  // implementation of TensorOpFactory
+  std::pair<ENCRYPTO::ReusableFiberPromise<IntegerValues<std::uint64_t>>, tensor::TensorCP>
+  make_arithmetic_64_tensor_input_my(const tensor::TensorDimensions&) override;
+
+  tensor::TensorCP make_arithmetic_64_tensor_input_other(const tensor::TensorDimensions&) override;
+
+  // arithmetic outputs
+  ENCRYPTO::ReusableFiberFuture<IntegerValues<std::uint64_t>> make_arithmetic_64_tensor_output_my(
+      const tensor::TensorCP&) override;
+
+  void make_arithmetic_tensor_output_other(const tensor::TensorCP&) override;
+
+  tensor::TensorCP make_arithmetic_tensor_conv2d_op(const tensor::Conv2DOp& conv_op,
+                                                    const tensor::TensorCP input,
+                                                    const tensor::TensorCP kernel);
+
  private:
   template <typename T>
   std::pair<ENCRYPTO::ReusableFiberPromise<IntegerValues<T>>, WireVector>
@@ -171,6 +195,16 @@ class GMWProvider : public GateFactory, public ENCRYPTO::enable_wait_setup, publ
   WireVector basic_make_convert_to_arithmetic_gmw_gate(BooleanGMWWireVector&& in_a);
   WireVector make_convert_to_arithmetic_gmw_gate(BooleanGMWWireVector&& in_a);
   WireVector convert_boolean(MPCProtocol proto, const WireVector&);
+
+  // tensor stuff
+  template <typename T>
+  std::pair<ENCRYPTO::ReusableFiberPromise<IntegerValues<T>>, tensor::TensorCP>
+  basic_make_arithmetic_tensor_input_my(const tensor::TensorDimensions&);
+  template <typename T>
+  tensor::TensorCP basic_make_arithmetic_tensor_input_other(const tensor::TensorDimensions&);
+  template <typename T>
+  ENCRYPTO::ReusableFiberFuture<IntegerValues<T>> basic_make_arithmetic_tensor_output_my(
+      const tensor::TensorCP&);
 
  private:
   Communication::CommunicationLayer& communication_layer_;

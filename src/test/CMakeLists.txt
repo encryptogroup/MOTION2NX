@@ -12,6 +12,7 @@ add_executable(motiontest
         test_conversions.cpp
         test_dummy_transport.cpp
         test_gmw.cpp
+        test_gmw_tensor.cpp
         test_half_gates.cpp
         test_integer_operations.cpp
         test_linear_algebra.cpp

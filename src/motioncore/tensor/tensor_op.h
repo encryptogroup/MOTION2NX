@@ -27,6 +27,8 @@
 #include <functional>
 #include <utility>
 
+#include "tensor.h"
+
 namespace MOTION::tensor {
 
 struct TensorOp {
@@ -50,6 +52,9 @@ struct Conv2DOp {
   std::pair<std::size_t, std::size_t> compute_input_matrix_shape() const noexcept;
   std::pair<std::size_t, std::size_t> compute_kernel_matrix_shape() const noexcept;
   std::pair<std::size_t, std::size_t> compute_output_matrix_shape() const noexcept;
+  TensorDimensions get_input_tensor_dims() const noexcept;
+  TensorDimensions get_kernel_tensor_dims() const noexcept;
+  TensorDimensions get_output_tensor_dims() const noexcept;
 
   bool operator==(const Conv2DOp&) const noexcept;
 };
