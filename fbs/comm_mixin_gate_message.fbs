@@ -1,0 +1,7 @@
+namespace MOTION.Communication;
+
+table CommMixinGateMessage {
+  gate_id:uint64;
+  msg_num:uint64 = 0;
+  payload:[ubyte];
+}

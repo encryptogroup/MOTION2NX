@@ -28,7 +28,7 @@
 #include <boost/functional/hash.hpp>
 
 #include "communication/communication_layer.h"
-#include "communication/fbs_headers/gmw_message_generated.h"
+#include "communication/fbs_headers/comm_mixin_gate_message_generated.h"
 #include "communication/message.h"
 #include "communication/message_handler.h"
 #include "utility/constants.h"
@@ -59,14 +59,14 @@ struct CommMixin::GateMessageHandler : public Communication::MessageHandler {
   template <typename T>
   constexpr static CommMixin::GateMessageHandler::MsgValueType get_msg_value_type();
 
-  // (gate_id, msg_num)
+  // KeyType = (gate_id, msg_num)
   using KeyType = std::pair<std::size_t, std::size_t>;
 
-  // gate_id -> (size, type)
+  // KeyType -> (size, type)
   std::unordered_map<KeyType, std::pair<std::size_t, MsgValueType>, SizeTPairHash>
       expected_messages_;
 
-  // [gate_id -> promise]
+  // [KeyType -> promise]
   std::vector<std::unordered_map<KeyType, ENCRYPTO::ReusableFiberPromise<ENCRYPTO::BitVector<>>,
                                  SizeTPairHash>>
       bits_promises_;
@@ -170,7 +170,7 @@ void CommMixin::GateMessageHandler::received_message(std::size_t party_id,
   }
 
   auto gate_message =
-      flatbuffers::GetRoot<MOTION::Communication::GMWGateMessage>(message->payload()->data());
+      flatbuffers::GetRoot<MOTION::Communication::CommMixinGateMessage>(message->payload()->data());
   {
     flatbuffers::Verifier verifier(message->payload()->data(), message->payload()->size());
     if (!gate_message->Verify(verifier)) {
@@ -180,7 +180,7 @@ void CommMixin::GateMessageHandler::received_message(std::size_t party_id,
     }
   }
   auto gate_id = gate_message->gate_id();
-  std::size_t msg_num = 0;
+  auto msg_num = gate_message->msg_num();
   auto payload = gate_message->payload();
   auto it = expected_messages_.find({gate_id, msg_num});
   if (it == expected_messages_.end()) {
@@ -272,7 +272,7 @@ flatbuffers::FlatBufferBuilder CommMixin::build_gate_message(std::size_t gate_id
                                                              std::size_t size) const {
   flatbuffers::FlatBufferBuilder builder;
   auto vector = builder.CreateVector(message, size);
-  auto root = Communication::CreateGMWGateMessage(builder, gate_id, vector);
+  auto root = Communication::CreateCommMixinGateMessage(builder, gate_id, msg_num, vector);
   builder.Finish(root);
   return Communication::BuildMessage(gate_message_type_, builder.GetBufferPointer(),
                                      builder.GetSize());
