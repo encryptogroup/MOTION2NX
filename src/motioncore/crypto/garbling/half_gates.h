@@ -25,6 +25,10 @@
 #include "crypto/aes/aesni_primitives.h"
 #include "utility/block.h"
 
+namespace ENCRYPTO {
+struct AlgorithmDescription;
+}
+
 namespace MOTION::Crypto::garbling {
 
 struct HalfGatePublicData {
@@ -43,9 +47,16 @@ class HalfGateGarbler {
   void garble_and(ENCRYPTO::block128_t& key_c, ENCRYPTO::block128_t* garbled_table,
                   std::size_t index, const ENCRYPTO::block128_t& key_a,
                   const ENCRYPTO::block128_t& key_b) const;
+  void batch_garble_and(ENCRYPTO::block128_t* key_c, ENCRYPTO::block128_t* garbled_table,
+                        std::size_t index, const ENCRYPTO::block128_t* key_a,
+                        const ENCRYPTO::block128_t* key_b, std::size_t num_gates) const;
   void batch_garble_and(ENCRYPTO::block128_vector& key_c, ENCRYPTO::block128_t* garbled_table,
                         std::size_t index, const ENCRYPTO::block128_vector& key_a,
                         const ENCRYPTO::block128_vector& key_b) const;
+  void garble_circuit(ENCRYPTO::block128_vector& key_c, ENCRYPTO::block128_vector& garbled_tables,
+                      std::size_t index, const ENCRYPTO::block128_vector& key_a,
+                      const ENCRYPTO::block128_vector& key_b, std::size_t num_simd,
+                      const ENCRYPTO::AlgorithmDescription&) const;
 
  private:
   ENCRYPTO::block128_t offset_;
@@ -60,10 +71,18 @@ class HalfGateEvaluator {
   void evaluate_and(ENCRYPTO::block128_t& key_c, const ENCRYPTO::block128_t* garbled_table,
                     std::size_t index, const ENCRYPTO::block128_t& key_a,
                     const ENCRYPTO::block128_t& key_b) const;
+  void batch_evaluate_and(ENCRYPTO::block128_t* key_c, const ENCRYPTO::block128_t* garbled_table,
+                          std::size_t index, const ENCRYPTO::block128_t* key_a,
+                          const ENCRYPTO::block128_t* key_b, std::size_t num_gates) const;
   void batch_evaluate_and(ENCRYPTO::block128_vector& key_c,
                           const ENCRYPTO::block128_t* garbled_table, std::size_t index,
                           const ENCRYPTO::block128_vector& key_a,
                           const ENCRYPTO::block128_vector& key_b) const;
+  void evaluate_circuit(ENCRYPTO::block128_vector& key_c,
+                        const ENCRYPTO::block128_vector& garbled_tables, std::size_t index,
+                        const ENCRYPTO::block128_vector& key_a,
+                        const ENCRYPTO::block128_vector& key_b, std::size_t num_simd,
+                        const ENCRYPTO::AlgorithmDescription&) const;
 
  private:
   ENCRYPTO::block128_t hash_key_;

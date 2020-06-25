@@ -20,8 +20,12 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-#include "crypto/aes/aesni_primitives.h"
 #include "half_gates.h"
+
+#include <numeric>
+
+#include "algorithm/algorithm_description.h"
+#include "crypto/aes/aesni_primitives.h"
 
 namespace MOTION::Crypto::garbling {
 
@@ -69,6 +73,16 @@ void HalfGateGarbler::garble_and(ENCRYPTO::block128_t& key_c, ENCRYPTO::block128
   if (p_b) key_c ^= garbled_table[1] ^ key_a;
 }
 
+void HalfGateGarbler::batch_garble_and(ENCRYPTO::block128_t* key_cs,
+                                       ENCRYPTO::block128_t* garbled_tables,
+                                       std::size_t start_index, const ENCRYPTO::block128_t* key_as,
+                                       const ENCRYPTO::block128_t* key_bs,
+                                       std::size_t num_gates) const {
+  for (std::size_t i = 0; i < num_gates; ++i) {
+    garble_and(key_cs[i], &garbled_tables[2 * i], start_index + i, key_as[i], key_bs[i]);
+  }
+}
+
 void HalfGateGarbler::batch_garble_and(ENCRYPTO::block128_vector& key_cs,
                                        ENCRYPTO::block128_t* garbled_tables,
                                        std::size_t start_index,
@@ -77,9 +91,62 @@ void HalfGateGarbler::batch_garble_and(ENCRYPTO::block128_vector& key_cs,
   assert(key_as.size() == key_bs.size());
   std::size_t num_gates = key_as.size();
   key_cs.resize(num_gates);
-  for (std::size_t i = 0; i < num_gates; ++i) {
-    garble_and(key_cs[i], &garbled_tables[2 * i], start_index + i, key_as[i], key_bs[i]);
+  batch_garble_and(key_cs.data(), garbled_tables, start_index, key_as.data(), key_bs.data(),
+                   num_gates);
+}
+
+void HalfGateGarbler::garble_circuit(ENCRYPTO::block128_vector& output_keys,
+                                     ENCRYPTO::block128_vector& garbled_tables,
+                                     std::size_t start_index,
+                                     const ENCRYPTO::block128_vector& input_keys_a,
+                                     const ENCRYPTO::block128_vector& input_keys_b,
+                                     std::size_t num_simd,
+                                     const ENCRYPTO::AlgorithmDescription& algo) const {
+  assert(algo.n_input_wires_parent_b_.has_value());
+  assert(input_keys_a.size() == algo.n_input_wires_parent_a_ * num_simd);
+  assert(input_keys_b.size() == *algo.n_input_wires_parent_b_ * num_simd);
+  output_keys.resize(algo.n_output_wires_ * num_simd);
+  std::size_t num_and_gates = std::transform_reduce(
+      std::begin(algo.gates_), std::end(algo.gates_), 0, std::plus{}, [](const auto& op) {
+        if (op.type_ == ENCRYPTO::PrimitiveOperationType::AND) {
+          return 1;
+        } else {
+          return 0;
+        }
+      });
+  garbled_tables.resize(2 * num_and_gates * num_simd);
+  ENCRYPTO::block128_vector wire_keys(algo.n_wires_ * num_simd);
+  auto it = std::copy_n(input_keys_a.data(), input_keys_a.size(), wire_keys.data());
+  std::copy_n(input_keys_b.data(), input_keys_b.size(), it);
+  assert(algo.n_gates_ == algo.gates_.size());
+  for (std::size_t op_i = 0, and_j = 0; op_i < algo.n_gates_; ++op_i) {
+    const auto& op = algo.gates_[op_i];
+    const auto* gate_input_keys_a = &wire_keys[op.parent_a_];
+    auto* gate_output_keys = &wire_keys[op.output_wire_];
+    if (op.parent_b_.has_value()) {
+      const auto* gate_input_keys_b = &wire_keys[*op.parent_b_];
+      if (op.type_ == ENCRYPTO::PrimitiveOperationType::XOR) {
+        std::transform(gate_input_keys_a, gate_input_keys_a + num_simd, gate_input_keys_b,
+                       gate_output_keys, [](const auto& ka, const auto& kb) { return ka ^ kb; });
+      } else if (op.type_ == ENCRYPTO::PrimitiveOperationType::AND) {
+        batch_garble_and(gate_output_keys, &garbled_tables[and_j * 2 * num_simd], start_index,
+                         gate_input_keys_a, gate_input_keys_b, num_simd);
+        ++and_j;
+        start_index += num_simd;
+      } else {
+        throw std::runtime_error("unsupported operation");
+      }
+    } else {
+      if (op.type_ == ENCRYPTO::PrimitiveOperationType::INV) {
+        std::transform(gate_input_keys_a, gate_input_keys_a + num_simd, gate_output_keys,
+                       [this](const auto& k) { return k ^ offset_; });
+      } else {
+        throw std::runtime_error("unsupported operation");
+      }
+    }
   }
+  std::copy_n(wire_keys.data() + (algo.n_wires_ - algo.n_output_wires_) * num_simd,
+              algo.n_output_wires_, output_keys.data());
 }
 
 HalfGateEvaluator::HalfGateEvaluator(const HalfGatePublicData& public_data)
@@ -106,6 +173,17 @@ void HalfGateEvaluator::evaluate_and(ENCRYPTO::block128_t& key_c,
   if (p_b) key_c ^= (garbled_table[1] ^ key_a);
 }
 
+void HalfGateEvaluator::batch_evaluate_and(ENCRYPTO::block128_t* key_cs,
+                                           const ENCRYPTO::block128_t* garbled_tables,
+                                           std::size_t start_index,
+                                           const ENCRYPTO::block128_t* key_as,
+                                           const ENCRYPTO::block128_t* key_bs,
+                                           std::size_t num_gates) const {
+  for (std::size_t i = 0; i < num_gates; ++i) {
+    evaluate_and(key_cs[i], &garbled_tables[2 * i], start_index + i, key_as[i], key_bs[i]);
+  }
+}
+
 void HalfGateEvaluator::batch_evaluate_and(ENCRYPTO::block128_vector& key_cs,
                                            const ENCRYPTO::block128_t* garbled_tables,
                                            std::size_t start_index,
@@ -115,9 +193,52 @@ void HalfGateEvaluator::batch_evaluate_and(ENCRYPTO::block128_vector& key_cs,
   assert(key_as.size() == num_gates);
   assert(key_bs.size() == num_gates);
   key_cs.resize(num_gates);
-  for (std::size_t i = 0; i < num_gates; ++i) {
-    evaluate_and(key_cs[i], &garbled_tables[2 * i], start_index + i, key_as[i], key_bs[i]);
+  batch_evaluate_and(key_cs.data(), garbled_tables, start_index, key_as.data(), key_bs.data(),
+                     num_gates);
+}
+
+void HalfGateEvaluator::evaluate_circuit(ENCRYPTO::block128_vector& output_keys,
+                                         const ENCRYPTO::block128_vector& garbled_tables,
+                                         std::size_t start_index,
+                                         const ENCRYPTO::block128_vector& input_keys_a,
+                                         const ENCRYPTO::block128_vector& input_keys_b,
+                                         std::size_t num_simd,
+                                         const ENCRYPTO::AlgorithmDescription& algo) const {
+  assert(algo.n_input_wires_parent_b_.has_value());
+  assert(input_keys_a.size() == algo.n_input_wires_parent_a_ * num_simd);
+  assert(input_keys_b.size() == *algo.n_input_wires_parent_b_ * num_simd);
+  output_keys.resize(algo.n_output_wires_ * num_simd);
+  ENCRYPTO::block128_vector wire_keys(algo.n_wires_ * num_simd);
+  auto it = std::copy_n(input_keys_a.data(), input_keys_a.size(), wire_keys.data());
+  std::copy_n(input_keys_b.data(), input_keys_b.size(), it);
+  assert(algo.n_gates_ == algo.gates_.size());
+  for (std::size_t op_i = 0, and_j = 0; op_i < algo.n_gates_; ++op_i) {
+    const auto& op = algo.gates_[op_i];
+    const ENCRYPTO::block128_t* gate_input_keys_a = &wire_keys[op.parent_a_];
+    auto* gate_output_keys = &wire_keys[op.output_wire_];
+    if (op.parent_b_.has_value()) {
+      const auto* gate_input_keys_b = &wire_keys[*op.parent_b_];
+      if (op.type_ == ENCRYPTO::PrimitiveOperationType::XOR) {
+        std::transform(gate_input_keys_a, gate_input_keys_a + num_simd, gate_input_keys_b,
+                       gate_output_keys, [](const auto& ka, const auto& kb) { return ka ^ kb; });
+      } else if (op.type_ == ENCRYPTO::PrimitiveOperationType::AND) {
+        batch_evaluate_and(gate_output_keys, &garbled_tables[and_j * 2 * num_simd], start_index,
+                           gate_input_keys_a, gate_input_keys_b, num_simd);
+        ++and_j;
+        start_index += num_simd;
+      } else {
+        throw std::runtime_error("unsupported operation");
+      }
+    } else {
+      if (op.type_ == ENCRYPTO::PrimitiveOperationType::INV) {
+        std::copy_n(gate_input_keys_a, num_simd, gate_output_keys);
+      } else {
+        throw std::runtime_error("unsupported operation");
+      }
+    }
   }
+  std::copy_n(wire_keys.data() + (algo.n_wires_ - algo.n_output_wires_) * num_simd,
+              algo.n_output_wires_, output_keys.data());
 }
 
 }  // namespace MOTION::Crypto::garbling

@@ -26,6 +26,7 @@
 
 #include "test_constants.h"
 
+#include "algorithm/circuit_loader.h"
 #include "crypto/garbling/half_gates.h"
 
 using namespace MOTION::Crypto::garbling;
@@ -89,6 +90,48 @@ TEST(half_gates, batch_garble_eval) {
 
   for (std::size_t i = 0; i < size; ++i) {
     if (dist(gen_a) + dist(gen_b) == 2)
+      EXPECT_EQ(key_cs[i], key_cs_original[i] ^ offset);
+    else
+      EXPECT_EQ(key_cs[i], key_cs_original[i]);
+  }
+}
+
+TEST(half_gates, circuit_garble_eval) {
+  HalfGateGarbler garbler;
+  HalfGateEvaluator evaluator(garbler.get_public_data());
+  MOTION::CircuitLoader circuit_loader;
+  const auto& algo =
+      circuit_loader.load_circuit("int_add8_size.bristol", MOTION::CircuitFormat::Bristol);
+  const std::size_t size = 8;
+  const auto offset = garbler.get_offset();
+  auto key_as = ENCRYPTO::block128_vector::make_random(size);
+  auto key_bs = ENCRYPTO::block128_vector::make_random(size);
+  const std::size_t index = 42;
+  const std::size_t num_simd = 1;
+
+  ENCRYPTO::block128_vector key_cs_original(size);
+  ENCRYPTO::block128_vector garbled_tables;
+
+  garbler.garble_circuit(key_cs_original, garbled_tables, index, key_as, key_bs, num_simd, algo);
+
+  EXPECT_EQ(garbled_tables.size(), 2 * (size - 1));
+  EXPECT_EQ(key_cs_original.size(), size);
+
+  ENCRYPTO::block128_vector key_cs(size);
+
+  const std::uint8_t x = 0x42;
+  const std::uint8_t y = 0x47;
+  const std::uint8_t z = x + y;
+
+  for (std::size_t i = 0; i < size; ++i) {
+    if (x & (1 << i)) key_as[i] ^= offset;
+    if (y & (1 << i)) key_bs[i] ^= offset;
+  }
+
+  evaluator.evaluate_circuit(key_cs, garbled_tables, index, key_as, key_bs, num_simd, algo);
+
+  for (std::size_t i = 0; i < size; ++i) {
+    if (z & (1 << i))
       EXPECT_EQ(key_cs[i], key_cs_original[i] ^ offset);
     else
       EXPECT_EQ(key_cs[i], key_cs_original[i]);
