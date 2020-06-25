@@ -39,7 +39,7 @@ struct CommMixin::GateMessageHandler : public Communication::MessageHandler {
                      std::shared_ptr<Logger> logger);
   void received_message(std::size_t, std::vector<std::uint8_t>&& raw_message) override;
 
-  enum class MsgValueType { bit, uint8, uint16, uint32, uint64 };
+  enum class MsgValueType { bit, block, uint8, uint16, uint32, uint64 };
 
   template <typename T>
   constexpr static CommMixin::GateMessageHandler::MsgValueType get_msg_value_type();
@@ -51,6 +51,9 @@ struct CommMixin::GateMessageHandler : public Communication::MessageHandler {
   std::vector<
       std::unordered_map<std::size_t, ENCRYPTO::ReusableFiberPromise<ENCRYPTO::BitVector<>>>>
       bits_promises_;
+  std::vector<
+      std::unordered_map<std::size_t, ENCRYPTO::ReusableFiberPromise<ENCRYPTO::block128_vector>>>
+      blocks_promises_;
   std::vector<
       std::unordered_map<std::size_t, ENCRYPTO::ReusableFiberPromise<std::vector<std::uint8_t>>>>
       uint8_promises_;
@@ -115,6 +118,7 @@ CommMixin::GateMessageHandler::GateMessageHandler(std::size_t num_parties,
                                                   Communication::MessageType gate_message_type,
                                                   std::shared_ptr<Logger> logger)
     : bits_promises_(num_parties),
+      blocks_promises_(num_parties),
       uint8_promises_(num_parties),
       uint16_promises_(num_parties),
       uint32_promises_(num_parties),
@@ -190,6 +194,18 @@ void CommMixin::GateMessageHandler::received_message(std::size_t party_id,
       promise.set_value(ENCRYPTO::BitVector(payload->data(), expected_size));
       break;
     }
+    case MsgValueType::block: {
+      auto byte_size = 16 * expected_size;
+      if (byte_size != payload->size()) {
+        logger_->LogError(fmt::format(
+            "received {} for gate {} of size {} while expecting size {}, dropping",
+            EnumNameMessageType(gate_message_type_), gate_id, payload->size(), byte_size));
+        return;
+      }
+      auto& promise = blocks_promises_[party_id].at(gate_id);
+      promise.set_value(ENCRYPTO::block128_vector(expected_size, payload->data()));
+      break;
+    }
     case MsgValueType::uint8: {
       set_value_helper(uint8_promises_, std::uint8_t{});
       break;
@@ -250,6 +266,13 @@ flatbuffers::FlatBufferBuilder CommMixin::build_gate_message(
                             vector.size());
 }
 
+flatbuffers::FlatBufferBuilder CommMixin::build_gate_message(
+    std::size_t gate_id, const ENCRYPTO::block128_vector& message) const {
+  auto data = message.data();
+  return build_gate_message(gate_id, reinterpret_cast<const std::uint8_t*>(data),
+                            16 * message.size());
+}
+
 void CommMixin::broadcast_bits_message(std::size_t gate_id,
                                        const ENCRYPTO::BitVector<>& message) const {
   communication_layer_.broadcast_message(build_gate_message(gate_id, message));
@@ -290,7 +313,8 @@ CommMixin::register_for_bits_messages(std::size_t gate_id, std::size_t num_bits)
 }
 
 [[nodiscard]] ENCRYPTO::ReusableFiberFuture<ENCRYPTO::BitVector<>>
-CommMixin::register_for_bits_message(std::size_t party_id, std::size_t gate_id, std::size_t num_bits) {
+CommMixin::register_for_bits_message(std::size_t party_id, std::size_t gate_id,
+                                     std::size_t num_bits) {
   assert(party_id != my_id_);
   auto& mh = *message_handler_;
   ENCRYPTO::ReusableFiberPromise<ENCRYPTO::BitVector<>> promise;
@@ -309,6 +333,71 @@ CommMixin::register_for_bits_message(std::size_t party_id, std::size_t gate_id, 
     if (logger_) {
       logger_->LogTrace(
           fmt::format("Gate {}: registered for bits message of size {}", gate_id, num_bits));
+    }
+  }
+  return future;
+}
+
+void CommMixin::broadcast_blocks_message(std::size_t gate_id,
+                                         const ENCRYPTO::block128_vector& message) const {
+  communication_layer_.broadcast_message(build_gate_message(gate_id, message));
+}
+
+void CommMixin::send_blocks_message(std::size_t party_id, std::size_t gate_id,
+                                    const ENCRYPTO::block128_vector& message) const {
+  communication_layer_.send_message(party_id, build_gate_message(gate_id, message));
+}
+
+[[nodiscard]] std::vector<ENCRYPTO::ReusableFiberFuture<ENCRYPTO::block128_vector>>
+CommMixin::register_for_blocks_messages(std::size_t gate_id, std::size_t num_blocks) {
+  auto& mh = *message_handler_;
+  std::vector<ENCRYPTO::ReusableFiberPromise<ENCRYPTO::block128_vector>> promises(num_parties_);
+  std::vector<ENCRYPTO::ReusableFiberFuture<ENCRYPTO::block128_vector>> futures;
+  std::transform(std::begin(promises), std::end(promises), std::back_inserter(futures),
+                 [](auto& p) { return p.get_future(); });
+  auto [_, success] = mh.expected_messages_.insert(
+      {gate_id, std::make_pair(num_blocks, GateMessageHandler::MsgValueType::block)});
+  if (!success) {
+    throw std::logic_error(fmt::format("tried to register twice for message for gate {}", gate_id));
+  }
+  for (std::size_t party_id = 0; party_id < num_parties_; ++party_id) {
+    if (party_id == my_id_) {
+      continue;
+    }
+    auto& promise_map = mh.blocks_promises_.at(party_id);
+    auto [_, success] = promise_map.insert({gate_id, std::move(promises.at(party_id))});
+    assert(success);
+  }
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    if (logger_) {
+      logger_->LogTrace(
+          fmt::format("Gate {}: registered for blocks messages of size {}", gate_id, num_blocks));
+    }
+  }
+  return futures;
+}
+
+[[nodiscard]] ENCRYPTO::ReusableFiberFuture<ENCRYPTO::block128_vector>
+CommMixin::register_for_blocks_message(std::size_t party_id, std::size_t gate_id,
+                                       std::size_t num_blocks) {
+  assert(party_id != my_id_);
+  auto& mh = *message_handler_;
+  ENCRYPTO::ReusableFiberPromise<ENCRYPTO::block128_vector> promise;
+  ENCRYPTO::ReusableFiberFuture<ENCRYPTO::block128_vector> future = promise.get_future();
+  auto [_, success] = mh.expected_messages_.insert(
+      {gate_id, std::make_pair(num_blocks, GateMessageHandler::MsgValueType::block)});
+  if (!success) {
+    throw std::logic_error(fmt::format("tried to register twice for message for gate {}", gate_id));
+  }
+  {
+    auto& promise_map = mh.blocks_promises_.at(party_id);
+    auto [_, success] = promise_map.insert({gate_id, std::move(promise)});
+    assert(success);
+  }
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    if (logger_) {
+      logger_->LogTrace(
+          fmt::format("Gate {}: registered for blocks message of size {}", gate_id, num_blocks));
     }
   }
   return future;

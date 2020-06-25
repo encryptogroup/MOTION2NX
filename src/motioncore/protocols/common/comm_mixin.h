@@ -25,6 +25,7 @@
 #include <memory>
 
 #include "utility/bit_vector.h"
+#include "utility/block.h"
 #include "utility/reusable_future.h"
 
 namespace MOTION {
@@ -49,8 +50,17 @@ class CommMixin {
                          const ENCRYPTO::BitVector<>& message) const;
   [[nodiscard]] std::vector<ENCRYPTO::ReusableFiberFuture<ENCRYPTO::BitVector<>>>
   register_for_bits_messages(std::size_t gate_id, std::size_t num_bits);
-  [[nodiscard]] ENCRYPTO::ReusableFiberFuture<ENCRYPTO::BitVector<>>
-  register_for_bits_message(std::size_t party_id, std::size_t gate_id, std::size_t num_bits);
+  [[nodiscard]] ENCRYPTO::ReusableFiberFuture<ENCRYPTO::BitVector<>> register_for_bits_message(
+      std::size_t party_id, std::size_t gate_id, std::size_t num_bits);
+
+  void broadcast_blocks_message(std::size_t gate_id,
+                                const ENCRYPTO::block128_vector& message) const;
+  void send_blocks_message(std::size_t party_id, std::size_t gate_id,
+                           const ENCRYPTO::block128_vector& message) const;
+  [[nodiscard]] std::vector<ENCRYPTO::ReusableFiberFuture<ENCRYPTO::block128_vector>>
+  register_for_blocks_messages(std::size_t gate_id, std::size_t num_bits);
+  [[nodiscard]] ENCRYPTO::ReusableFiberFuture<ENCRYPTO::block128_vector>
+  register_for_blocks_message(std::size_t party_id, std::size_t gate_id, std::size_t num_bits);
 
   template <typename T>
   void broadcast_ints_message(std::size_t gate_id, const std::vector<T>& message) const;
@@ -61,8 +71,8 @@ class CommMixin {
   [[nodiscard]] std::vector<ENCRYPTO::ReusableFiberFuture<std::vector<T>>>
   register_for_ints_messages(std::size_t gate_id, std::size_t num_elements);
   template <typename T>
-  [[nodiscard]] ENCRYPTO::ReusableFiberFuture<std::vector<T>>
-  register_for_ints_message(std::size_t party_id, std::size_t gate_id, std::size_t num_elements);
+  [[nodiscard]] ENCRYPTO::ReusableFiberFuture<std::vector<T>> register_for_ints_message(
+      std::size_t party_id, std::size_t gate_id, std::size_t num_elements);
 
  private:
   flatbuffers::FlatBufferBuilder build_gate_message(std::size_t gate_id,
@@ -73,6 +83,8 @@ class CommMixin {
                                                     const std::vector<T>& vector) const;
   flatbuffers::FlatBufferBuilder build_gate_message(std::size_t gate_id,
                                                     const ENCRYPTO::BitVector<>& message) const;
+  flatbuffers::FlatBufferBuilder build_gate_message(std::size_t gate_id,
+                                                    const ENCRYPTO::block128_vector& message) const;
 
   struct GateMessageHandler;
   Communication::CommunicationLayer& communication_layer_;

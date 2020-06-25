@@ -28,6 +28,7 @@
 #include <vector>
 
 #include "base/gate_factory.h"
+#include "protocols/common/comm_mixin.h"
 #include "utility/bit_vector.h"
 #include "utility/block.h"
 #include "utility/reusable_future.h"
@@ -69,7 +70,7 @@ using YaoWireVector = std::vector<std::shared_ptr<YaoWire>>;
 
 struct YaoMessageHandler;
 
-class YaoProvider : public GateFactory {
+class YaoProvider : public GateFactory, public ENCRYPTO::enable_wait_setup, public CommMixin {
  public:
   enum class Role { garbler, evaluator };
   struct my_input_t {};

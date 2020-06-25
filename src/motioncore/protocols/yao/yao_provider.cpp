@@ -53,13 +53,6 @@ struct YaoMessageHandler : public Communication::MessageHandler {
 
   ENCRYPTO::ReusableFiberPromise<Crypto::garbling::HalfGatePublicData> hg_public_data_promise_;
   ENCRYPTO::ReusableFiberFuture<Crypto::garbling::HalfGatePublicData> hg_public_data_future_;
-  std::unordered_map<
-      std::size_t,
-      std::pair<std::size_t, ENCRYPTO::ReusableFiberPromise<ENCRYPTO::block128_vector>>>
-      blocks_promises_;
-  std::unordered_map<std::size_t,
-                     std::pair<std::size_t, ENCRYPTO::ReusableFiberPromise<ENCRYPTO::BitVector<>>>>
-      bits_promises_;
   std::shared_ptr<Logger> logger_;
 };
 
@@ -99,41 +92,6 @@ void YaoMessageHandler::received_message([[maybe_unused]] std::size_t party_id,
       }
       break;
     }
-    case Communication::MessageType::YaoGate: {
-      flatbuffers::Verifier verifier(message->payload()->data(), message->payload()->size());
-      auto gate_message =
-          flatbuffers::GetRoot<MOTION::Communication::YaoGateMessage>(message->payload()->data());
-      if (!gate_message->Verify(verifier)) {
-        throw std::runtime_error("received malformed YaoGateMessage");
-        // TODO: log and drop instead
-      }
-      auto gate_id = gate_message->gate_id();
-      auto payload = gate_message->payload();
-      if (auto it = blocks_promises_.find(gate_id); it != blocks_promises_.end()) {
-        auto &[num_blocks, promise] = it->second;
-        if (payload->size() == num_blocks * 16) {
-          promise.set_value(ENCRYPTO::block128_vector(num_blocks, payload->data()));
-        } else if (logger_) {
-          logger_->LogError(fmt::format(
-              "received YaoGateMessage for gate {} of size {} while expecting size {}, dropping",
-              gate_id, payload->size(), num_blocks * 16));
-        }
-      } else if (auto it = bits_promises_.find(gate_id); it != bits_promises_.end()) {
-        auto &[num_bits, promise] = it->second;
-        auto num_bytes = (num_bits + 7) / 8;
-        if (payload->size() == num_bytes) {
-          promise.set_value(ENCRYPTO::BitVector(payload->data(), num_bits));
-        } else if (logger_) {
-          logger_->LogError(fmt::format(
-              "received YaoGateMessage for gate {} of size {} while expecting size {}, dropping",
-              gate_id, payload->size(), num_bytes));
-        }
-      } else {
-        logger_->LogError(
-            fmt::format("received unexpected YaoGateMessage for gate {}, dropping", gate_id));
-      }
-      break;
-    }
     default: {
       assert(false);
       break;
@@ -146,7 +104,8 @@ YaoProvider::YaoProvider(Communication::CommunicationLayer &communication_layer,
                          Crypto::MotionBaseProvider &motion_base_provider,
                          ENCRYPTO::ObliviousTransfer::OTProvider &ot_provider,
                          std::shared_ptr<Logger> logger)
-    : communication_layer_(communication_layer),
+    : CommMixin(communication_layer, Communication::MessageType::YaoGate, logger),
+      communication_layer_(communication_layer),
       gate_register_(gate_register),
       circuit_loader_(circuit_loader),
       motion_base_provider_(motion_base_provider),
@@ -161,13 +120,9 @@ YaoProvider::YaoProvider(Communication::CommunicationLayer &communication_layer,
   if (communication_layer.get_num_parties() != 2) {
     throw std::logic_error("Yao is a two party protocol");
   }
-  if (role_ == Role::garbler) {
+  if (role_ == Role::evaluator) {
     communication_layer_.register_message_handler([this](auto) { return message_handler_; },
-                                                  {Communication::MessageType::YaoGate});
-  } else {
-    communication_layer_.register_message_handler(
-        [this](auto) { return message_handler_; },
-        {Communication::MessageType::YaoSetup, Communication::MessageType::YaoGate});
+                                                  {Communication::MessageType::YaoSetup});
   }
 }
 
@@ -383,95 +338,28 @@ void YaoProvider::setup() {
   setup_ran_ = true;
 }
 
-static flatbuffers::FlatBufferBuilder build_yao_gate_message(std::size_t gate_id,
-                                                             const std::uint8_t *message,
-                                                             std::size_t size) {
-  flatbuffers::FlatBufferBuilder builder;
-  auto vector = builder.CreateVector(message, size);
-  auto root = Communication::CreateYaoGateMessage(builder, gate_id, vector);
-  builder.Finish(root);
-  return Communication::BuildMessage(Communication::MessageType::YaoGate,
-                                     builder.GetBufferPointer(), builder.GetSize());
-}
-
-static flatbuffers::FlatBufferBuilder build_yao_gate_message(
-    std::size_t gate_id, const ENCRYPTO::block128_vector &message) {
-  return build_yao_gate_message(
-      gate_id, reinterpret_cast<const std::uint8_t *>(message.data()->data()), message.byte_size());
-}
-
-static flatbuffers::FlatBufferBuilder build_yao_gate_message(std::size_t gate_id,
-                                                             const ENCRYPTO::BitVector<> &message) {
-  const auto &vector = message.GetData();
-  return build_yao_gate_message(gate_id, reinterpret_cast<const std::uint8_t *>(vector.data()),
-                                vector.size());
-}
 void YaoProvider::send_blocks_message(std::size_t gate_id,
                                       ENCRYPTO::block128_vector &&message) const {
-  communication_layer_.broadcast_message(build_yao_gate_message(gate_id, message));
+  CommMixin::send_blocks_message(1 - my_id_, gate_id, std::move(message));
 }
 
 void YaoProvider::send_bits_message(std::size_t gate_id, ENCRYPTO::BitVector<> &&message) const {
-  send_bits_message(gate_id, message);
+  CommMixin::send_bits_message(1 - my_id_, gate_id, std::move(message));
 }
 
 void YaoProvider::send_bits_message(std::size_t gate_id,
                                     const ENCRYPTO::BitVector<> &message) const {
-  communication_layer_.broadcast_message(build_yao_gate_message(gate_id, message));
+  CommMixin::send_bits_message(1 - my_id_, gate_id, message);
 }
 
 ENCRYPTO::ReusableFiberFuture<ENCRYPTO::block128_vector> YaoProvider::register_for_blocks_message(
     std::size_t gate_id, std::size_t num_blocks) {
-  auto &mh = *message_handler_;
-  {
-    auto it = mh.bits_promises_.find(gate_id);
-    if (it != mh.bits_promises_.end()) {
-      throw std::logic_error(
-          fmt::format("tried to register twice for yao message for gate {}", gate_id));
-    }
-  }
-  ENCRYPTO::ReusableFiberPromise<ENCRYPTO::block128_vector> promise;
-  auto future = promise.get_future();
-  auto [_, success] =
-      mh.blocks_promises_.insert({gate_id, std::make_pair(num_blocks, std::move(promise))});
-  if (!success) {
-    throw std::logic_error(
-        fmt::format("tried to register twice for yao message for gate {}", gate_id));
-  }
-  if constexpr (MOTION_VERBOSE_DEBUG) {
-    if (logger_) {
-      logger_->LogTrace(
-          fmt::format("Gate {}: registered for blocks message of size {}", gate_id, num_blocks));
-    }
-  }
-  return future;
+  return CommMixin::register_for_blocks_message(1 - my_id_, gate_id, num_blocks);
 }
 
 ENCRYPTO::ReusableFiberFuture<ENCRYPTO::BitVector<>> YaoProvider::register_for_bits_message(
     std::size_t gate_id, std::size_t num_bits) {
-  auto &mh = *message_handler_;
-  {
-    auto it = mh.blocks_promises_.find(gate_id);
-    if (it != mh.blocks_promises_.end()) {
-      throw std::logic_error(
-          fmt::format("tried to register twice for yao message for gate {}", gate_id));
-    }
-  }
-  ENCRYPTO::ReusableFiberPromise<ENCRYPTO::BitVector<>> promise;
-  auto future = promise.get_future();
-  auto [_, success] =
-      mh.bits_promises_.insert({gate_id, std::make_pair(num_bits, std::move(promise))});
-  if (!success) {
-    throw std::logic_error(
-        fmt::format("tried to register twice for yao message for gate {}", gate_id));
-  }
-  if constexpr (MOTION_VERBOSE_DEBUG) {
-    if (logger_) {
-      logger_->LogTrace(
-          fmt::format("Gate {}: registered for bits message of size {}", gate_id, num_bits));
-    }
-  }
-  return future;
+  return CommMixin::register_for_bits_message(1 - my_id_, gate_id, num_bits);
 }
 
 void YaoProvider::create_garbled_tables(std::size_t gate_id,
