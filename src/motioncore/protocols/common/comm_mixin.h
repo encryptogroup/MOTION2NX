@@ -45,45 +45,49 @@ class CommMixin {
             std::shared_ptr<Logger>);
   ~CommMixin();
 
-  void broadcast_bits_message(std::size_t gate_id, const ENCRYPTO::BitVector<>& message) const;
+  void broadcast_bits_message(std::size_t gate_id, const ENCRYPTO::BitVector<>& message,
+                              std::size_t msg_num = 0) const;
   void send_bits_message(std::size_t party_id, std::size_t gate_id,
-                         const ENCRYPTO::BitVector<>& message) const;
+                         const ENCRYPTO::BitVector<>& message, std::size_t msg_num = 0) const;
   [[nodiscard]] std::vector<ENCRYPTO::ReusableFiberFuture<ENCRYPTO::BitVector<>>>
-  register_for_bits_messages(std::size_t gate_id, std::size_t num_bits);
+  register_for_bits_messages(std::size_t gate_id, std::size_t num_bits, std::size_t msg_num = 0);
   [[nodiscard]] ENCRYPTO::ReusableFiberFuture<ENCRYPTO::BitVector<>> register_for_bits_message(
-      std::size_t party_id, std::size_t gate_id, std::size_t num_bits);
+      std::size_t party_id, std::size_t gate_id, std::size_t num_bits, std::size_t msg_num = 0);
 
-  void broadcast_blocks_message(std::size_t gate_id,
-                                const ENCRYPTO::block128_vector& message) const;
+  void broadcast_blocks_message(std::size_t gate_id, const ENCRYPTO::block128_vector& message,
+                                std::size_t msg_num = 0) const;
   void send_blocks_message(std::size_t party_id, std::size_t gate_id,
-                           const ENCRYPTO::block128_vector& message) const;
+                           const ENCRYPTO::block128_vector& message, std::size_t msg_num = 0) const;
   [[nodiscard]] std::vector<ENCRYPTO::ReusableFiberFuture<ENCRYPTO::block128_vector>>
-  register_for_blocks_messages(std::size_t gate_id, std::size_t num_bits);
+  register_for_blocks_messages(std::size_t gate_id, std::size_t num_bits, std::size_t msg_num = 0);
   [[nodiscard]] ENCRYPTO::ReusableFiberFuture<ENCRYPTO::block128_vector>
-  register_for_blocks_message(std::size_t party_id, std::size_t gate_id, std::size_t num_bits);
+  register_for_blocks_message(std::size_t party_id, std::size_t gate_id, std::size_t num_bits,
+                              std::size_t msg_num = 0);
 
   template <typename T>
-  void broadcast_ints_message(std::size_t gate_id, const std::vector<T>& message) const;
+  void broadcast_ints_message(std::size_t gate_id, const std::vector<T>& message,
+                              std::size_t msg_num = 0) const;
   template <typename T>
-  void send_ints_message(std::size_t party_id, std::size_t gate_id,
-                         const std::vector<T>& message) const;
+  void send_ints_message(std::size_t party_id, std::size_t gate_id, const std::vector<T>& message,
+                         std::size_t msg_num = 0) const;
   template <typename T>
   [[nodiscard]] std::vector<ENCRYPTO::ReusableFiberFuture<std::vector<T>>>
-  register_for_ints_messages(std::size_t gate_id, std::size_t num_elements);
+  register_for_ints_messages(std::size_t gate_id, std::size_t num_elements,
+                             std::size_t msg_num = 0);
   template <typename T>
   [[nodiscard]] ENCRYPTO::ReusableFiberFuture<std::vector<T>> register_for_ints_message(
-      std::size_t party_id, std::size_t gate_id, std::size_t num_elements);
+      std::size_t party_id, std::size_t gate_id, std::size_t num_elements, std::size_t msg_num = 0);
 
  private:
-  flatbuffers::FlatBufferBuilder build_gate_message(std::size_t gate_id,
+  flatbuffers::FlatBufferBuilder build_gate_message(std::size_t gate_id, std::size_t msg_num,
                                                     const std::uint8_t* message,
                                                     std::size_t size) const;
   template <typename T>
-  flatbuffers::FlatBufferBuilder build_gate_message(std::size_t gate_id,
+  flatbuffers::FlatBufferBuilder build_gate_message(std::size_t gate_id, std::size_t msg_num,
                                                     const std::vector<T>& vector) const;
-  flatbuffers::FlatBufferBuilder build_gate_message(std::size_t gate_id,
+  flatbuffers::FlatBufferBuilder build_gate_message(std::size_t gate_id, std::size_t msg_num,
                                                     const ENCRYPTO::BitVector<>& message) const;
-  flatbuffers::FlatBufferBuilder build_gate_message(std::size_t gate_id,
+  flatbuffers::FlatBufferBuilder build_gate_message(std::size_t gate_id, std::size_t msg_num,
                                                     const ENCRYPTO::block128_vector& message) const;
 
   struct GateMessageHandler;
