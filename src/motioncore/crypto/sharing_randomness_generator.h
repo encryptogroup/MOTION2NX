@@ -104,16 +104,12 @@ class SharingRandomnessGenerator {
   }
 
   template <typename T, typename = std::enable_if_t<std::is_unsigned_v<T>>>
-  std::vector<T> GetUnsigned(std::size_t gate_id, const std::size_t num_of_gates) {
+  void GetUnsigned(std::size_t gate_id, const std::size_t num_of_gates, T* output_ptr) {
     if (num_of_gates == 0) {
-      return {};  // return an empty vector if num_of_gates is zero
+      return;
     }
 
     initialized_condition_->Wait();
-
-    // Pre-initialize output vector
-    std::vector<T> results;
-    results.reserve(num_of_gates);
 
     auto size_in_bytes = AES_BLOCK_SIZE * (num_of_gates);
     std::vector<std::byte> input(size_in_bytes + AES_BLOCK_SIZE);
@@ -135,10 +131,20 @@ class SharingRandomnessGenerator {
       single_result <<= 64;
       single_result ^= reinterpret_cast<std::uint64_t *>(output.data())[i * 2 + 1] ^ gate_id++;
       single_result %= mod;
-      results.push_back(
-          static_cast<T>(single_result));  // static-cast the result to the smaller ring
+      output_ptr[i] = static_cast<T>(single_result);  // static-cast the result to the smaller ring
+    }
+  }
+
+  template <typename T, typename = std::enable_if_t<std::is_unsigned_v<T>>>
+  std::vector<T> GetUnsigned(std::size_t gate_id, const std::size_t num_of_gates) {
+    if (num_of_gates == 0) {
+      return {};  // return an empty vector if num_of_gates is zero
     }
 
+    // Pre-initialize output vector
+    std::vector<T> results;
+    results.reserve(num_of_gates);
+    GetUnsigned(gate_id, num_of_gates, results.data());
     return results;
   }
 
