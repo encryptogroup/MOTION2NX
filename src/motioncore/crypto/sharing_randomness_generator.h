@@ -142,8 +142,7 @@ class SharingRandomnessGenerator {
     }
 
     // Pre-initialize output vector
-    std::vector<T> results;
-    results.reserve(num_of_gates);
+    std::vector<T> results(num_of_gates);
     GetUnsigned(gate_id, num_of_gates, results.data());
     return results;
   }
