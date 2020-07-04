@@ -50,6 +50,7 @@ class ArithmeticGMWTensorInputSender : public NewGate {
   std::size_t input_id_;
   ENCRYPTO::ReusableFiberFuture<std::vector<T>> input_future_;
   ArithmeticGMWTensorP<T> output_;
+  constexpr static std::size_t bit_size_ = ENCRYPTO::bit_size_v<T>;
 };
 
 template <typename T>
@@ -69,6 +70,7 @@ class ArithmeticGMWTensorInputReceiver : public NewGate {
   GMWProvider& gmw_provider_;
   std::size_t input_id_;
   ArithmeticGMWTensorP<T> output_;
+  constexpr static std::size_t bit_size_ = ENCRYPTO::bit_size_v<T>;
 };
 
 template <typename T>

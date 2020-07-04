@@ -46,6 +46,7 @@ ArithmeticGMWTensorInputSender<T>::ArithmeticGMWTensorInputSender(
   if (gmw_provider_.get_num_parties() != 2) {
     throw std::logic_error("only two parties are currently supported");
   }
+  output_->get_share().resize(dimensions.get_data_size());
 }
 
 template <typename T>
@@ -61,7 +62,8 @@ void ArithmeticGMWTensorInputSender<T>::evaluate_setup() {
   const auto my_id = gmw_provider_.get_my_id();
   auto& mbp = gmw_provider_.get_motion_base_provider();
   auto& rng = mbp.get_my_randomness_generator(1 - my_id);
-  output_->get_share() = rng.GetUnsigned<T>(input_id_, output_->get_dimensions().get_data_size());
+  rng.GetUnsigned<T>(input_id_, output_->get_dimensions().get_data_size(),
+                     output_->get_share().data());
 
   if constexpr (MOTION_VERBOSE_DEBUG) {
     auto logger = gmw_provider_.get_logger();
@@ -111,7 +113,9 @@ ArithmeticGMWTensorInputReceiver<T>::ArithmeticGMWTensorInputReceiver(
     : NewGate(gate_id),
       gmw_provider_(gmw_provider),
       input_id_(gmw_provider.get_next_input_id(1)),
-      output_(std::make_shared<ArithmeticGMWTensor<T>>(dimensions)) {}
+      output_(std::make_shared<ArithmeticGMWTensor<T>>(dimensions)) {
+  output_->get_share().resize(dimensions.get_data_size());
+}
 
 template <typename T>
 void ArithmeticGMWTensorInputReceiver<T>::evaluate_setup() {
@@ -126,7 +130,8 @@ void ArithmeticGMWTensorInputReceiver<T>::evaluate_setup() {
   const auto my_id = gmw_provider_.get_my_id();
   auto& mbp = gmw_provider_.get_motion_base_provider();
   auto& rng = mbp.get_their_randomness_generator(1 - my_id);
-  output_->get_share() = rng.GetUnsigned<T>(input_id_, output_->get_dimensions().get_data_size());
+  rng.GetUnsigned<T>(input_id_, output_->get_dimensions().get_data_size(),
+                     output_->get_share().data());
   output_->set_online_ready();
 
   if constexpr (MOTION_VERBOSE_DEBUG) {
@@ -164,6 +169,7 @@ void ArithmeticGMWTensorOutput<T>::evaluate_online() {
   }
 
   auto my_id = gmw_provider_.get_my_id();
+  input_->wait_online();
   if (output_owner_ == my_id) {
     auto other_share = share_future_.get();
     assert(other_share.size() == input_->get_dimensions().get_data_size());
