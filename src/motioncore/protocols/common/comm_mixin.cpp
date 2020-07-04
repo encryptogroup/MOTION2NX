@@ -196,14 +196,20 @@ void CommMixin::GateMessageHandler::received_message(std::size_t party_id,
     auto byte_size = expected_size * sizeof(type_tag);
     if (byte_size != payload->size()) {
       logger_->LogError(fmt::format(
-          "received {} for gate {} of size {} while expecting size {}, dropping",
-          EnumNameMessageType(gate_message_type_), gate_id, payload->size(), byte_size));
+          "received {} for gate {} (msg_num {}) of size {} while expecting size {}, dropping",
+          EnumNameMessageType(gate_message_type_), gate_id, msg_num, payload->size(), byte_size));
       return;
     }
     auto& promise_map = map_vec[party_id];
     auto& promise = promise_map.at({gate_id, msg_num});
     auto ptr = reinterpret_cast<const decltype(type_tag)*>(payload->data());
-    promise.set_value(std::vector(ptr, ptr + expected_size));
+    try {
+      promise.set_value(std::vector(ptr, ptr + expected_size));
+    } catch (std::future_error& e) {
+      logger_->LogError(fmt::format(
+          "unable to fulfill promise ({}) for {} (ints) for gate {} (msg_num {}), dropping",
+          e.what(), EnumNameMessageType(gate_message_type_), gate_id, msg_num));
+    }
   };
 
   switch (type) {
@@ -211,24 +217,36 @@ void CommMixin::GateMessageHandler::received_message(std::size_t party_id,
       auto byte_size = Helpers::Convert::BitsToBytes(expected_size);
       if (byte_size != payload->size()) {
         logger_->LogError(fmt::format(
-            "received {} for gate {} of size {} while expecting size {}, dropping",
-            EnumNameMessageType(gate_message_type_), gate_id, payload->size(), byte_size));
+            "received {} for gate {} (msg_num {}) of size {} while expecting size {}, dropping",
+            EnumNameMessageType(gate_message_type_), gate_id, msg_num, payload->size(), byte_size));
         return;
       }
       auto& promise = bits_promises_[party_id].at({gate_id, msg_num});
-      promise.set_value(ENCRYPTO::BitVector(payload->data(), expected_size));
+      try {
+        promise.set_value(ENCRYPTO::BitVector(payload->data(), expected_size));
+      } catch (std::future_error& e) {
+        logger_->LogError(fmt::format(
+            "unable to fulfill promise ({}) for {} (bits) for gate {} (msg_num {}), dropping",
+            e.what(), EnumNameMessageType(gate_message_type_), gate_id, msg_num));
+      }
       break;
     }
     case MsgValueType::block: {
       auto byte_size = 16 * expected_size;
       if (byte_size != payload->size()) {
         logger_->LogError(fmt::format(
-            "received {} for gate {} of size {} while expecting size {}, dropping",
-            EnumNameMessageType(gate_message_type_), gate_id, payload->size(), byte_size));
+            "received {} for gate {} (msg_num {}) of size {} while expecting size {}, dropping",
+            EnumNameMessageType(gate_message_type_), gate_id, msg_num, payload->size(), byte_size));
         return;
       }
       auto& promise = blocks_promises_[party_id].at({gate_id, msg_num});
-      promise.set_value(ENCRYPTO::block128_vector(expected_size, payload->data()));
+      try {
+        promise.set_value(ENCRYPTO::block128_vector(expected_size, payload->data()));
+      } catch (std::future_error& e) {
+        logger_->LogError(fmt::format(
+            "unable to fulfill promise ({}) for {} (blocks) for gate {} (msg_num {}), dropping",
+            e.what(), EnumNameMessageType(gate_message_type_), gate_id, msg_num));
+      }
       break;
     }
     case MsgValueType::uint8: {
