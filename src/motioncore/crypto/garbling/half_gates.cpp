@@ -121,10 +121,10 @@ void HalfGateGarbler::garble_circuit(ENCRYPTO::block128_vector& output_keys,
   assert(algo.n_gates_ == algo.gates_.size());
   for (std::size_t op_i = 0, and_j = 0; op_i < algo.n_gates_; ++op_i) {
     const auto& op = algo.gates_[op_i];
-    const auto* gate_input_keys_a = &wire_keys[op.parent_a_];
-    auto* gate_output_keys = &wire_keys[op.output_wire_];
+    const auto* gate_input_keys_a = &wire_keys[op.parent_a_ * num_simd];
+    auto* gate_output_keys = &wire_keys[op.output_wire_ * num_simd];
     if (op.parent_b_.has_value()) {
-      const auto* gate_input_keys_b = &wire_keys[*op.parent_b_];
+      const auto* gate_input_keys_b = &wire_keys[*op.parent_b_ * num_simd];
       if (op.type_ == ENCRYPTO::PrimitiveOperationType::XOR) {
         std::transform(gate_input_keys_a, gate_input_keys_a + num_simd, gate_input_keys_b,
                        gate_output_keys, [](const auto& ka, const auto& kb) { return ka ^ kb; });
@@ -146,7 +146,7 @@ void HalfGateGarbler::garble_circuit(ENCRYPTO::block128_vector& output_keys,
     }
   }
   std::copy_n(wire_keys.data() + (algo.n_wires_ - algo.n_output_wires_) * num_simd,
-              algo.n_output_wires_, output_keys.data());
+              algo.n_output_wires_ * num_simd, output_keys.data());
 }
 
 HalfGateEvaluator::HalfGateEvaluator(const HalfGatePublicData& public_data)
@@ -214,10 +214,10 @@ void HalfGateEvaluator::evaluate_circuit(ENCRYPTO::block128_vector& output_keys,
   assert(algo.n_gates_ == algo.gates_.size());
   for (std::size_t op_i = 0, and_j = 0; op_i < algo.n_gates_; ++op_i) {
     const auto& op = algo.gates_[op_i];
-    const ENCRYPTO::block128_t* gate_input_keys_a = &wire_keys[op.parent_a_];
-    auto* gate_output_keys = &wire_keys[op.output_wire_];
+    const ENCRYPTO::block128_t* gate_input_keys_a = &wire_keys[op.parent_a_ * num_simd];
+    auto* gate_output_keys = &wire_keys[op.output_wire_ * num_simd];
     if (op.parent_b_.has_value()) {
-      const auto* gate_input_keys_b = &wire_keys[*op.parent_b_];
+      const auto* gate_input_keys_b = &wire_keys[*op.parent_b_ * num_simd];
       if (op.type_ == ENCRYPTO::PrimitiveOperationType::XOR) {
         std::transform(gate_input_keys_a, gate_input_keys_a + num_simd, gate_input_keys_b,
                        gate_output_keys, [](const auto& ka, const auto& kb) { return ka ^ kb; });
@@ -238,7 +238,7 @@ void HalfGateEvaluator::evaluate_circuit(ENCRYPTO::block128_vector& output_keys,
     }
   }
   std::copy_n(wire_keys.data() + (algo.n_wires_ - algo.n_output_wires_) * num_simd,
-              algo.n_output_wires_, output_keys.data());
+              algo.n_output_wires_ * num_simd, output_keys.data());
 }
 
 }  // namespace MOTION::Crypto::garbling

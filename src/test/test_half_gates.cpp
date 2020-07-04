@@ -137,3 +137,51 @@ TEST(half_gates, circuit_garble_eval) {
       EXPECT_EQ(key_cs[i], key_cs_original[i]);
   }
 }
+
+TEST(half_gates, circuit_garble_eval_batch) {
+  HalfGateGarbler garbler;
+  HalfGateEvaluator evaluator(garbler.get_public_data());
+  MOTION::CircuitLoader circuit_loader;
+  const auto& algo =
+      circuit_loader.load_circuit("int_add8_size.bristol", MOTION::CircuitFormat::Bristol);
+  const std::size_t size = 8;
+  const std::size_t num_simd = 4;
+  const auto offset = garbler.get_offset();
+  auto key_as = ENCRYPTO::block128_vector::make_random(size * num_simd);
+  auto key_bs = ENCRYPTO::block128_vector::make_random(size * num_simd);
+  const std::size_t index = 42;
+
+  ENCRYPTO::block128_vector key_cs_original(size);
+  ENCRYPTO::block128_vector garbled_tables;
+
+  garbler.garble_circuit(key_cs_original, garbled_tables, index, key_as, key_bs, num_simd, algo);
+
+  EXPECT_EQ(garbled_tables.size(), 2 * (size - 1) * num_simd);
+  EXPECT_EQ(key_cs_original.size(), size * num_simd);
+
+  ENCRYPTO::block128_vector key_cs(size);
+
+  const std::array<std::uint8_t, num_simd> xs = {0x42, 0x13, 0x37, 0x47};
+  const std::array<std::uint8_t, num_simd> ys = {0xd9, 0x6e, 0xcf, 0xf9};
+  std::array<std::uint8_t, num_simd> zs;
+  for (std::size_t simd_j = 0; simd_j < num_simd; ++simd_j) {
+    zs[simd_j] = xs[simd_j] + ys[simd_j];
+    for (std::size_t i = 0; i < size; ++i) {
+      if (xs[simd_j] & (1 << i)) key_as[i * num_simd + simd_j] ^= offset;
+      if (ys[simd_j] & (1 << i)) key_bs[i * num_simd + simd_j] ^= offset;
+    }
+  }
+
+  evaluator.evaluate_circuit(key_cs, garbled_tables, index, key_as, key_bs, num_simd, algo);
+  EXPECT_EQ(key_cs.size(), size * num_simd);
+
+  for (std::size_t simd_j = 0; simd_j < num_simd; ++simd_j) {
+    for (std::size_t i = 0; i < size; ++i) {
+      auto idx = i * num_simd + simd_j;
+      if (zs[simd_j] & (1 << i))
+        EXPECT_EQ(key_cs[idx], key_cs_original[idx] ^ offset);
+      else
+        EXPECT_EQ(key_cs[idx], key_cs_original[idx]);
+    }
+  }
+}
