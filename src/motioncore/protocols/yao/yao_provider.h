@@ -29,11 +29,14 @@
 
 #include "base/gate_factory.h"
 #include "protocols/common/comm_mixin.h"
+#include "tensor/tensor.h"
 #include "utility/bit_vector.h"
 #include "utility/block.h"
 #include "utility/reusable_future.h"
 
 namespace ENCRYPTO {
+
+struct AlgorithmDescription;
 
 enum class PrimitiveOperationType : std::uint8_t;
 
@@ -125,12 +128,25 @@ class YaoProvider : public GateFactory, public ENCRYPTO::enable_wait_setup, publ
                                const ENCRYPTO::block128_vector& keys_b,
                                const ENCRYPTO::block128_t* tables,
                                ENCRYPTO::block128_vector& keys_out) const noexcept;
+  void create_garbled_circuit(std::size_t gate_id, std::size_t num_simd,
+                              const ENCRYPTO::AlgorithmDescription&,
+                              const ENCRYPTO::block128_vector& input_keys_a,
+                              const ENCRYPTO::block128_vector& input_keys_b,
+                              ENCRYPTO::block128_vector& tables,
+                              ENCRYPTO::block128_vector& keys_out) const;
+  void evaluate_garbled_circuit(std::size_t gate_id, std::size_t num_simd,
+                                const ENCRYPTO::AlgorithmDescription&,
+                                const ENCRYPTO::block128_vector& input_keys_a,
+                                const ENCRYPTO::block128_vector& input_keys_b,
+                                const ENCRYPTO::block128_vector& tables,
+                                ENCRYPTO::block128_vector& keys_out) const;
   constexpr static std::size_t garbled_table_size = 2;
 
   Crypto::MotionBaseProvider& get_motion_base_provider() const noexcept {
     return motion_base_provider_;
   }
   ENCRYPTO::ObliviousTransfer::OTProvider& get_ot_provider() const noexcept { return ot_provider_; }
+  CircuitLoader& get_circuit_loader() noexcept { return circuit_loader_; }
   std::shared_ptr<Logger> get_logger() const noexcept { return logger_; }
 
  private:
@@ -151,6 +167,15 @@ class YaoProvider : public GateFactory, public ENCRYPTO::enable_wait_setup, publ
   template <typename T>
   WireVector basic_make_convert_from_arithmetic_beavy_gate(const WireVector& in_a);
   WireVector make_convert_from_arithmetic_beavy_gate(const WireVector& in_a);
+
+ public:
+  // tensor stuff
+  template <typename T>
+  tensor::TensorCP basic_make_convert_from_arithmetic_gmw_tensor(const tensor::TensorCP in_a);
+  tensor::TensorCP make_convert_from_arithmetic_gmw_tensor(const tensor::TensorCP in_a);
+  template <typename T>
+  tensor::TensorCP basic_make_convert_to_arithmetic_gmw_tensor(const tensor::TensorCP in_a);
+  tensor::TensorCP make_convert_to_arithmetic_gmw_tensor(const tensor::TensorCP in_a);
 
  private:
   Communication::CommunicationLayer& communication_layer_;

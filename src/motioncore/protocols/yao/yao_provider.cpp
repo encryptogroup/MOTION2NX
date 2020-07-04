@@ -40,7 +40,9 @@
 #include "protocols/beavy/gate.h"
 #include "protocols/beavy/wire.h"
 #include "protocols/gmw/gate.h"
+#include "protocols/gmw/tensor.h"
 #include "protocols/gmw/wire.h"
+#include "tensor_op.h"
 #include "utility/constants.h"
 #include "utility/logger.h"
 #include "utility/typedefs.h"
@@ -380,6 +382,28 @@ void YaoProvider::evaluate_garbled_tables(std::size_t gate_id,
   hg_evaluator_->batch_evaluate_and(keys_out, tables, gate_id, keys_a, keys_b);
 }
 
+void YaoProvider::create_garbled_circuit(std::size_t gate_id, std::size_t num_simd,
+                                         const ENCRYPTO::AlgorithmDescription& algo,
+                                         const ENCRYPTO::block128_vector& input_keys_a,
+                                         const ENCRYPTO::block128_vector& input_keys_b,
+                                         ENCRYPTO::block128_vector& tables,
+                                         ENCRYPTO::block128_vector& output_keys) const {
+  assert(hg_garbler_);
+  hg_garbler_->garble_circuit(output_keys, tables, gate_id, input_keys_a, input_keys_b, num_simd,
+                              algo);
+}
+
+void YaoProvider::evaluate_garbled_circuit(std::size_t gate_id, std::size_t num_simd,
+                                           const ENCRYPTO::AlgorithmDescription& algo,
+                                           const ENCRYPTO::block128_vector& input_keys_a,
+                                           const ENCRYPTO::block128_vector& input_keys_b,
+                                           const ENCRYPTO::block128_vector& tables,
+                                           ENCRYPTO::block128_vector& output_keys) const {
+  assert(hg_evaluator_);
+  hg_evaluator_->evaluate_circuit(output_keys, tables, gate_id, input_keys_a, input_keys_b,
+                                  num_simd, algo);
+}
+
 static std::vector<std::shared_ptr<NewWire>> cast_wires(gmw::BooleanGMWWireVector &&wires) {
   return std::vector<std::shared_ptr<NewWire>>(std::begin(wires), std::end(wires));
 }
@@ -697,4 +721,75 @@ WireVector YaoProvider::convert_from(MPCProtocol proto, const WireVector &in) {
   }
 }
 
+template <typename T>
+tensor::TensorCP YaoProvider::basic_make_convert_from_arithmetic_gmw_tensor(
+    const tensor::TensorCP in) {
+  const auto input_tensor = std::dynamic_pointer_cast<const gmw::ArithmeticGMWTensor<T>>(in);
+  assert(input_tensor != nullptr);
+  auto gate_id = gate_register_.get_next_gate_id();
+  tensor::TensorCP output;
+  if (role_ == Role::garbler) {
+    auto tensor_op = std::make_unique<ArithmeticGMWToYaoTensorConversionGarbler<T>>(gate_id, *this,
+                                                                                    input_tensor);
+    output = tensor_op->get_output_tensor();
+    gate_register_.register_gate(std::move(tensor_op));
+  } else {
+    auto tensor_op = std::make_unique<ArithmeticGMWToYaoTensorConversionEvaluator<T>>(gate_id, *this,
+                                                                                    input_tensor);
+    output = tensor_op->get_output_tensor();
+    gate_register_.register_gate(std::move(tensor_op));
+  }
+  return output;
+}
+
+template tensor::TensorCP YaoProvider::basic_make_convert_from_arithmetic_gmw_tensor<std::uint64_t>(
+    const tensor::TensorCP);
+
+tensor::TensorCP YaoProvider::make_convert_from_arithmetic_gmw_tensor(const tensor::TensorCP in) {
+  switch (in->get_bit_size()) {
+    case 64: {
+      return basic_make_convert_from_arithmetic_gmw_tensor<std::uint64_t>(std::move(in));
+      break;
+    }
+    default: {
+      throw std::logic_error("unsupprted bit size");
+    }
+  }
+}
+
+template <typename T>
+tensor::TensorCP YaoProvider::basic_make_convert_to_arithmetic_gmw_tensor(
+    const tensor::TensorCP in) {
+  const auto input_tensor = std::dynamic_pointer_cast<const YaoTensor>(in);
+  assert(input_tensor != nullptr);
+  auto gate_id = gate_register_.get_next_gate_id();
+  tensor::TensorCP output;
+  if (role_ == Role::garbler) {
+    auto tensor_op = std::make_unique<YaoToArithmeticGMWTensorConversionGarbler<T>>(gate_id, *this,
+                                                                                    input_tensor);
+    output = tensor_op->get_output_tensor();
+    gate_register_.register_gate(std::move(tensor_op));
+  } else {
+    auto tensor_op = std::make_unique<YaoToArithmeticGMWTensorConversionEvaluator<T>>(
+        gate_id, *this, input_tensor);
+    output = tensor_op->get_output_tensor();
+    gate_register_.register_gate(std::move(tensor_op));
+  }
+  return output;
+}
+
+template tensor::TensorCP YaoProvider::basic_make_convert_to_arithmetic_gmw_tensor<std::uint64_t>(
+    const tensor::TensorCP);
+
+tensor::TensorCP YaoProvider::make_convert_to_arithmetic_gmw_tensor(const tensor::TensorCP in) {
+  switch (in->get_bit_size()) {
+    case 64: {
+      return basic_make_convert_to_arithmetic_gmw_tensor<std::uint64_t>(std::move(in));
+      break;
+    }
+    default: {
+      throw std::logic_error("unsupprted bit size");
+    }
+  }
+}
 }  // namespace MOTION::proto::yao

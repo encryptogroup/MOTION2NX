@@ -29,6 +29,7 @@ add_executable(motiontest
         test_type_traits.cpp
         test_tcp_transport.cpp
         test_yao.cpp
+        test_yao_tensor.cpp
         )
 
 target_compile_features(motiontest PRIVATE cxx_std_17)
