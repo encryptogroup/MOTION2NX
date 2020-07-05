@@ -4,6 +4,7 @@ add_executable(motiontest
         test_arithmetic_provider.cpp
         test_base_ot.cpp
         test_beavy.cpp
+        test_beavy_tensor.cpp
         test_bgmw.cpp
         test_bitmatrix.cpp
         test_bitvector.cpp

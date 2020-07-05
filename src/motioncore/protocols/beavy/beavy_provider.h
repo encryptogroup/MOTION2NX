@@ -26,6 +26,8 @@
 
 #include "base/gate_factory.h"
 #include "protocols/common/comm_mixin.h"
+#include "tensor/tensor_op.h"
+#include "tensor/tensor_op_factory.h"
 #include "utility/bit_vector.h"
 #include "utility/enable_wait.h"
 #include "utility/type_traits.hpp"
@@ -57,7 +59,10 @@ enum class OutputRecipient : std::uint8_t { garbler, evaluator, both };
 class BooleanBEAVYWire;
 using BooleanBEAVYWireVector = std::vector<std::shared_ptr<BooleanBEAVYWire>>;
 
-class BEAVYProvider : public GateFactory, public ENCRYPTO::enable_wait_setup, public CommMixin {
+class BEAVYProvider : public GateFactory,
+                      public ENCRYPTO::enable_wait_setup,
+                      public CommMixin,
+                      public tensor::TensorOpFactory {
  public:
   enum class Role { garbler, evaluator };
   struct my_input_t {};
@@ -136,6 +141,27 @@ class BEAVYProvider : public GateFactory, public ENCRYPTO::enable_wait_setup, pu
   WireVector convert_to(MPCProtocol protocol, const WireVector&) override;
   WireVector convert_from(MPCProtocol protocol, const WireVector&) override;
 
+  // implementation of TensorOpFactory
+  std::pair<ENCRYPTO::ReusableFiberPromise<IntegerValues<std::uint64_t>>, tensor::TensorCP>
+  make_arithmetic_64_tensor_input_my(const tensor::TensorDimensions&) override;
+
+  tensor::TensorCP make_arithmetic_64_tensor_input_other(const tensor::TensorDimensions&) override;
+
+  // arithmetic outputs
+  ENCRYPTO::ReusableFiberFuture<IntegerValues<std::uint64_t>> make_arithmetic_64_tensor_output_my(
+      const tensor::TensorCP&) override;
+
+  void make_arithmetic_tensor_output_other(const tensor::TensorCP&) override;
+
+  tensor::TensorCP make_arithmetic_tensor_conv2d_op(const tensor::Conv2DOp& conv_op,
+                                                    const tensor::TensorCP input,
+                                                    const tensor::TensorCP kernel);
+
+  tensor::TensorCP make_arithmetic_tensor_gemm_op(const tensor::GemmOp& conv_op,
+                                                  const tensor::TensorCP input_A,
+                                                  const tensor::TensorCP input_B);
+  tensor::TensorCP make_arithmetic_tensor_sqr_op(const tensor::TensorCP input);
+
  private:
   template <typename T>
   std::pair<ENCRYPTO::ReusableFiberPromise<IntegerValues<T>>, WireVector>
@@ -163,6 +189,16 @@ class BEAVYProvider : public GateFactory, public ENCRYPTO::enable_wait_setup, pu
   WireVector make_add_gate(const WireVector& in_a, const WireVector& in_b);
   WireVector make_mul_gate(const WireVector& in_a, const WireVector& in_b);
   WireVector make_sqr_gate(const WireVector& in_a);
+
+  // tensor stuff
+  template <typename T>
+  std::pair<ENCRYPTO::ReusableFiberPromise<IntegerValues<T>>, tensor::TensorCP>
+  basic_make_arithmetic_tensor_input_my(const tensor::TensorDimensions&);
+  template <typename T>
+  tensor::TensorCP basic_make_arithmetic_tensor_input_other(const tensor::TensorDimensions&);
+  template <typename T>
+  ENCRYPTO::ReusableFiberFuture<IntegerValues<T>> basic_make_arithmetic_tensor_output_my(
+      const tensor::TensorCP&);
 
  private:
   Communication::CommunicationLayer& communication_layer_;
