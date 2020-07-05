@@ -169,6 +169,7 @@ class GMWProvider : public GateFactory,
   tensor::TensorCP make_arithmetic_tensor_gemm_op(const tensor::GemmOp& conv_op,
                                                   const tensor::TensorCP input_A,
                                                   const tensor::TensorCP input_B);
+  tensor::TensorCP make_arithmetic_tensor_sqr_op(const tensor::TensorCP input);
 
  private:
   template <typename T>

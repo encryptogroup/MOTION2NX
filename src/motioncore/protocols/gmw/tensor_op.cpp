@@ -26,6 +26,7 @@
 
 #include "crypto/motion_base_provider.h"
 #include "crypto/multiplication_triple/linalg_triple_provider.h"
+#include "crypto/multiplication_triple/sp_provider.h"
 #include "crypto/sharing_randomness_generator.h"
 #include "gmw_provider.h"
 #include "utility/constants.h"
@@ -344,5 +345,59 @@ void ArithmeticGMWTensorGemm<T>::evaluate_online() {
 }
 
 template class ArithmeticGMWTensorGemm<std::uint64_t>;
+
+template <typename T>
+ArithmeticGMWTensorSqr<T>::ArithmeticGMWTensorSqr(std::size_t gate_id, GMWProvider& gmw_provider,
+                                                  const ArithmeticGMWTensorCP<T> input)
+    : NewGate(gate_id),
+      gmw_provider_(gmw_provider),
+      data_size_(input->get_dimensions().get_data_size()),
+      input_(input),
+      output_(std::make_shared<ArithmeticGMWTensor<T>>(input_->get_dimensions())),
+      triple_index_(gmw_provider.get_sp_provider().RequestSPs<T>(data_size_)),
+      share_future_(gmw_provider_.register_for_ints_message<T>(1 - gmw_provider.get_my_id(),
+                                                               this->gate_id_, data_size_)) {}
+
+template <typename T>
+void ArithmeticGMWTensorSqr<T>::evaluate_online() {
+  auto& spp = gmw_provider_.get_sp_provider();
+  const auto& all_triples = spp.GetSPsAll<T>();
+
+  this->input_->wait_online();
+  const auto& input_buffer = this->input_->get_share();
+  assert(input_buffer.size() == data_size_);
+
+  const auto my_id = gmw_provider_.get_my_id();
+
+  //  mask inputs
+  std::vector<T> d(data_size_);
+  std::transform(std::begin(input_buffer), std::end(input_buffer), &all_triples.a[triple_index_],
+                 std::begin(d), std::minus{});
+  this->gmw_provider_.send_ints_message(1 - my_id, this->gate_id_, d);
+
+  // compute d
+  auto other_share = share_future_.get();
+  std::transform(std::begin(d), std::end(d), std::begin(other_share), std::begin(d), std::plus{});
+
+  std::vector<T> result(data_size_);
+
+  // result = 2 * d * x
+  std::transform(std::begin(d), std::end(d), std::begin(input_buffer), std::begin(result),
+                 [](auto d, auto x) { return 2 * d * x; });
+
+  // ... + c ...
+  std::transform(std::begin(result), std::end(result), &all_triples.c[triple_index_],
+                 std::begin(result), std::plus{});
+
+  // ... - d^2
+  if (this->gmw_provider_.is_my_job(this->gate_id_)) {
+    std::transform(std::begin(result), std::end(result), std::begin(d), std::begin(result),
+                   [](auto res, auto d) { return res - d * d; });
+  }
+  this->output_->get_share() = std::move(result);
+  this->output_->set_online_ready();
+}
+
+template class ArithmeticGMWTensorSqr<std::uint64_t>;
 
 }  // namespace MOTION::proto::gmw

@@ -666,7 +666,7 @@ tensor::TensorCP GMWProvider::make_arithmetic_tensor_gemm_op(const tensor::GemmO
   std::unique_ptr<NewGate> gate;
   auto gate_id = gate_register_.get_next_gate_id();
   tensor::TensorCP output;
-  const auto make_conv_op = [this, input_A, gemm_op, input_B, gate_id, &output](auto dummy_arg) {
+  const auto make_op = [this, input_A, gemm_op, input_B, gate_id, &output](auto dummy_arg) {
     using T = decltype(dummy_arg);
     auto tensor_op = std::make_unique<ArithmeticGMWTensorGemm<T>>(
         gate_id, *this, gemm_op, std::dynamic_pointer_cast<const ArithmeticGMWTensor<T>>(input_A),
@@ -676,7 +676,30 @@ tensor::TensorCP GMWProvider::make_arithmetic_tensor_gemm_op(const tensor::GemmO
   };
   switch (bit_size) {
     case 64:
-      gate = make_conv_op(std::uint64_t{});
+      gate = make_op(std::uint64_t{});
+      break;
+    default:
+      throw std::logic_error(fmt::format("unexpected bit size {}", bit_size));
+  }
+  gate_register_.register_gate(std::move(gate));
+  return output;
+}
+
+tensor::TensorCP GMWProvider::make_arithmetic_tensor_sqr_op(const tensor::TensorCP input) {
+  auto bit_size = input->get_bit_size();
+  std::unique_ptr<NewGate> gate;
+  auto gate_id = gate_register_.get_next_gate_id();
+  tensor::TensorCP output;
+  const auto make_op = [this, input, gate_id, &output](auto dummy_arg) {
+    using T = decltype(dummy_arg);
+    auto tensor_op = std::make_unique<ArithmeticGMWTensorSqr<T>>(
+        gate_id, *this, std::dynamic_pointer_cast<const ArithmeticGMWTensor<T>>(input));
+    output = tensor_op->get_output_tensor();
+    return tensor_op;
+  };
+  switch (bit_size) {
+    case 64:
+      gate = make_op(std::uint64_t{});
       break;
     default:
       throw std::logic_error(fmt::format("unexpected bit size {}", bit_size));

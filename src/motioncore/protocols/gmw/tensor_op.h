@@ -138,4 +138,23 @@ class ArithmeticGMWTensorGemm : public NewGate {
   ENCRYPTO::ReusableFiberFuture<std::vector<T>> share_future_;
 };
 
+template <typename T>
+class ArithmeticGMWTensorSqr : public NewGate {
+ public:
+  ArithmeticGMWTensorSqr(std::size_t gate_id, GMWProvider&, const ArithmeticGMWTensorCP<T> input);
+  bool need_setup() const noexcept override { return false; }
+  bool need_online() const noexcept override { return true; }
+  void evaluate_setup() override {}
+  void evaluate_online() override;
+  const ArithmeticGMWTensorP<T>& get_output_tensor() const { return output_; }
+
+ private:
+  GMWProvider& gmw_provider_;
+  std::size_t data_size_;
+  const ArithmeticGMWTensorCP<T> input_;
+  std::shared_ptr<ArithmeticGMWTensor<T>> output_;
+  std::size_t triple_index_;
+  ENCRYPTO::ReusableFiberFuture<std::vector<T>> share_future_;
+};
+
 }  // namespace MOTION::proto::gmw
