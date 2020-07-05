@@ -36,6 +36,10 @@ std::vector<T> matrix_multiply(std::size_t dim_l, std::size_t dim_m, std::size_t
                                const std::vector<T>& A, const std::vector<T>& B);
 
 template <typename T>
+void matrix_multiply(std::size_t dim_l, std::size_t dim_m, std::size_t dim_n, const T* A,
+                     const T* B, T* output);
+
+template <typename T>
 std::vector<T> convolution(const tensor::Conv2DOp&, const std::vector<T>& input,
                            const std::vector<T>& kernel);
 

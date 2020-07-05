@@ -108,12 +108,9 @@ using integer_types =
     ::testing::Types<std::uint8_t, std::uint16_t, std::uint32_t, std::uint64_t, __uint128_t>;
 TYPED_TEST_SUITE(LinAlgTripleProviderTest, integer_types);
 
-#define FMT_HEADER_ONLY 1
-#include <fmt/format.h>
-
 TYPED_TEST(LinAlgTripleProviderTest, Gemm) {
   const MOTION::tensor::GemmOp gemm_op = {
-      .input_shape_ = {7, 11}, .factor_shape_ = {11, 13}, .output_shape_ = {7, 13}};
+      .input_A_shape_ = {7, 11}, .input_B_shape_ = {11, 13}, .output_shape_ = {7, 13}};
   ASSERT_TRUE(gemm_op.verify());
 
   auto index_0 =
@@ -128,8 +125,8 @@ TYPED_TEST(LinAlgTripleProviderTest, Gemm) {
   auto triple_1 =
       this->linalg_triple_providers_[1]->template get_gemm_triple<TypeParam>(gemm_op, index_1);
 
-  ASSERT_EQ(triple_0.a_.size(), gemm_op.compute_input_size());
-  ASSERT_EQ(triple_0.b_.size(), gemm_op.compute_factor_size());
+  ASSERT_EQ(triple_0.a_.size(), gemm_op.compute_input_A_size());
+  ASSERT_EQ(triple_0.b_.size(), gemm_op.compute_input_B_size());
   ASSERT_EQ(triple_0.c_.size(), gemm_op.compute_output_size());
 
   ASSERT_EQ(triple_0.a_.size(), triple_1.a_.size());
@@ -143,7 +140,7 @@ TYPED_TEST(LinAlgTripleProviderTest, Gemm) {
   plain_triple.c_ = MOTION::Helpers::AddVectors(triple_0.c_, triple_1.c_);
 
   auto expected_c =
-      MOTION::matrix_multiply(gemm_op.input_shape_[0], gemm_op.input_shape_[1],
+      MOTION::matrix_multiply(gemm_op.input_A_shape_[0], gemm_op.input_A_shape_[1],
                               gemm_op.output_shape_[1], plain_triple.a_, plain_triple.b_);
   ASSERT_EQ(plain_triple.c_, expected_c);
 }

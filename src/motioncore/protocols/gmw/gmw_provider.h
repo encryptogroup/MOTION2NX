@@ -166,6 +166,10 @@ class GMWProvider : public GateFactory,
                                                     const tensor::TensorCP input,
                                                     const tensor::TensorCP kernel);
 
+  tensor::TensorCP make_arithmetic_tensor_gemm_op(const tensor::GemmOp& conv_op,
+                                                  const tensor::TensorCP input_A,
+                                                  const tensor::TensorCP input_B);
+
  private:
   template <typename T>
   std::pair<ENCRYPTO::ReusableFiberPromise<IntegerValues<T>>, WireVector>

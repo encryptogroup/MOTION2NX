@@ -99,9 +99,9 @@ class ArithmeticGMWTensorConv2D : public NewGate {
                             const ArithmeticGMWTensorCP<T> input,
                             const ArithmeticGMWTensorCP<T> kernel,
                             const ArithmeticGMWTensorCP<T> bias);
-  bool need_setup() const noexcept override { return true; }
-  bool need_online() const noexcept override { return false; }
-  void evaluate_setup() override{};
+  bool need_setup() const noexcept override { return false; }
+  bool need_online() const noexcept override { return true; }
+  void evaluate_setup() override {}
   void evaluate_online() override;
   const ArithmeticGMWTensorP<T>& get_output_tensor() const { return output_; }
 
@@ -111,6 +111,28 @@ class ArithmeticGMWTensorConv2D : public NewGate {
   const ArithmeticGMWTensorCP<T> input_;
   const ArithmeticGMWTensorCP<T> kernel_;
   const ArithmeticGMWTensorCP<T> bias_;
+  std::shared_ptr<ArithmeticGMWTensor<T>> output_;
+  std::size_t triple_index_;
+  ENCRYPTO::ReusableFiberFuture<std::vector<T>> share_future_;
+};
+
+template <typename T>
+class ArithmeticGMWTensorGemm : public NewGate {
+ public:
+  ArithmeticGMWTensorGemm(std::size_t gate_id, GMWProvider&, tensor::GemmOp,
+                          const ArithmeticGMWTensorCP<T> input_A,
+                          const ArithmeticGMWTensorCP<T> input_B);
+  bool need_setup() const noexcept override { return false; }
+  bool need_online() const noexcept override { return true; }
+  void evaluate_setup() override {}
+  void evaluate_online() override;
+  const ArithmeticGMWTensorP<T>& get_output_tensor() const { return output_; }
+
+ private:
+  GMWProvider& gmw_provider_;
+  tensor::GemmOp gemm_op_;
+  const ArithmeticGMWTensorCP<T> input_A_;
+  const ArithmeticGMWTensorCP<T> input_B_;
   std::shared_ptr<ArithmeticGMWTensor<T>> output_;
   std::size_t triple_index_;
   ENCRYPTO::ReusableFiberFuture<std::vector<T>> share_future_;

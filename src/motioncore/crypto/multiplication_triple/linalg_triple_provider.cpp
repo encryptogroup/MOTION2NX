@@ -211,9 +211,9 @@ void LinAlgTriplesFromAP::setup() {
       for (std::size_t i = 0; i < count; ++i) {
         auto& triple = triple_vec.emplace_back();
         using T = typename decltype(triple.a_)::value_type;
-        triple.a_ = Helpers::RandomVector<T>(gemm_op.compute_input_size());
-        triple.b_ = Helpers::RandomVector<T>(gemm_op.compute_factor_size());
-        triple.c_ = matrix_multiply(gemm_op.input_shape_[0], gemm_op.input_shape_[1],
+        triple.a_ = Helpers::RandomVector<T>(gemm_op.compute_input_A_size());
+        triple.b_ = Helpers::RandomVector<T>(gemm_op.compute_input_B_size());
+        triple.c_ = matrix_multiply(gemm_op.input_A_shape_[0], gemm_op.input_A_shape_[1],
                                     gemm_op.output_shape_[1], triple.a_, triple.b_);
         assert(triple.c_.size() == gemm_op.compute_output_size());
         auto& [handle_input, handle_kernel] = handle_vec.at(i);
@@ -320,9 +320,9 @@ void LinAlgTriplesFromAP::registration_hook(const tensor::GemmOp& gemm_op, std::
   const auto register_gemms = [this, &gemm_op](auto& gemm_handle_map, auto dummy_arg) {
     using T = decltype(dummy_arg);
     auto matrix_lhs = arith_provider_.register_matrix_multiplication_lhs<T>(
-        gemm_op.input_shape_[0], gemm_op.input_shape_[1], gemm_op.output_shape_[1]);
+        gemm_op.input_A_shape_[0], gemm_op.input_A_shape_[1], gemm_op.output_shape_[1]);
     auto matrix_rhs = arith_provider_.register_matrix_multiplication_rhs<T>(
-        gemm_op.input_shape_[0], gemm_op.input_shape_[1], gemm_op.output_shape_[1]);
+        gemm_op.input_A_shape_[0], gemm_op.input_A_shape_[1], gemm_op.output_shape_[1]);
     auto [it, inserted] = gemm_handle_map.try_emplace(gemm_op, gemm_value_type<T>{});
     auto pair = std::make_pair<std::unique_ptr<MatrixMultiplicationLHS<T>>,
                                std::unique_ptr<MatrixMultiplicationRHS<T>>>(std::move(matrix_lhs),

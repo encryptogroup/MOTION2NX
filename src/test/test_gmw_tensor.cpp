@@ -328,3 +328,58 @@ TYPED_TEST(ArithmeticGMWTensorTest, Convolution) {
 
   ASSERT_EQ(plain_output, expected_output);
 }
+
+TYPED_TEST(ArithmeticGMWTensorTest, Gemm) {
+  const MOTION::tensor::GemmOp gemm_op = {
+      .input_A_shape_ = {1, 100}, .input_B_shape_ = {100, 10}, .output_shape_ = {1, 10}};
+  ASSERT_TRUE(gemm_op.verify());
+  const auto input_A_dims = gemm_op.get_input_A_tensor_dims();
+  const auto input_B_dims = gemm_op.get_input_B_tensor_dims();
+  const auto output_dims = gemm_op.get_output_tensor_dims();
+  const auto input_A = this->generate_inputs(input_A_dims);
+  const auto input_B = this->generate_inputs(input_B_dims);
+
+  auto [input_A_promise, tensor_input_A_0] =
+      this->make_arithmetic_T_tensor_input_my(0, input_A_dims);
+  auto tensor_input_A_1 = this->make_arithmetic_T_tensor_input_other(1, input_A_dims);
+  auto tensor_input_B_0 = this->make_arithmetic_T_tensor_input_other(0, input_B_dims);
+  auto [input_B_promise, tensor_input_B_1] =
+      this->make_arithmetic_T_tensor_input_my(1, input_B_dims);
+
+  ASSERT_EQ(tensor_input_A_0->get_dimensions(), input_A_dims);
+  ASSERT_EQ(tensor_input_A_1->get_dimensions(), input_A_dims);
+  ASSERT_EQ(tensor_input_B_0->get_dimensions(), input_B_dims);
+  ASSERT_EQ(tensor_input_B_1->get_dimensions(), input_B_dims);
+
+  auto tensor_output_0 = this->gmw_providers_[0]->make_arithmetic_tensor_gemm_op(
+      gemm_op, tensor_input_A_0, tensor_input_B_0);
+  auto tensor_output_1 = this->gmw_providers_[1]->make_arithmetic_tensor_gemm_op(
+      gemm_op, tensor_input_A_1, tensor_input_B_1);
+
+  ASSERT_EQ(tensor_output_0->get_dimensions(), output_dims);
+  ASSERT_EQ(tensor_output_1->get_dimensions(), output_dims);
+
+  this->run_setup();
+  this->run_gates_setup();
+  input_A_promise.set_value(input_A);
+  input_B_promise.set_value(input_B);
+  this->run_gates_online();
+
+  const auto output_gmw_tensor_0 =
+      std::dynamic_pointer_cast<const ArithmeticGMWTensor<TypeParam>>(tensor_output_0);
+  const auto output_gmw_tensor_1 =
+      std::dynamic_pointer_cast<const ArithmeticGMWTensor<TypeParam>>(tensor_output_1);
+
+  const auto& output_share_0 = output_gmw_tensor_0->get_share();
+  const auto& output_share_1 = output_gmw_tensor_1->get_share();
+
+  ASSERT_EQ(output_share_0.size(), output_dims.get_data_size());
+  ASSERT_EQ(output_share_1.size(), output_dims.get_data_size());
+
+  const auto expected_output =
+      MOTION::matrix_multiply(gemm_op.input_A_shape_[0], gemm_op.input_A_shape_[1],
+                              gemm_op.input_B_shape_[1], input_A, input_B);
+  const auto plain_output = MOTION::Helpers::AddVectors(output_share_0, output_share_1);
+
+  ASSERT_EQ(plain_output, expected_output);
+}

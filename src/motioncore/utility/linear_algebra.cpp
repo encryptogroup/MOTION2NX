@@ -32,17 +32,22 @@
 namespace MOTION {
 
 template <typename T>
+void matrix_multiply(std::size_t dim_l, std::size_t dim_m, std::size_t dim_n, const T* A,
+                     const T* B, T* output) {
+  using MatrixType = Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>;
+  Eigen::Map<MatrixType> matrix_output(output, dim_l, dim_n);
+  Eigen::Map<const MatrixType> matrix_A(A, dim_l, dim_m);
+  Eigen::Map<const MatrixType> matrix_B(B, dim_m, dim_n);
+  matrix_output = matrix_A * matrix_B;
+}
+
+template <typename T>
 std::vector<T> matrix_multiply(std::size_t dim_l, std::size_t dim_m, std::size_t dim_n,
                                const std::vector<T>& A, const std::vector<T>& B) {
   assert(A.size() == dim_l * dim_m);
   assert(B.size() == dim_m * dim_n);
   std::vector<T> output(dim_l * dim_n);
-  using MatrixType = Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>;
-  Eigen::Map<MatrixType> matrix_output(output.data(), dim_l, dim_n);
-  Eigen::Map<const MatrixType> matrix_A(A.data(), dim_l, dim_m);
-  Eigen::Map<const MatrixType> matrix_B(B.data(), dim_m, dim_n);
-  matrix_output = matrix_A * matrix_B;
-
+  matrix_multiply(dim_l, dim_m, dim_n, A.data(), B.data(), output.data());
   return output;
 }
 

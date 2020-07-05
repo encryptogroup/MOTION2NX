@@ -271,4 +271,78 @@ void ArithmeticGMWTensorConv2D<T>::evaluate_online() {
 
 template class ArithmeticGMWTensorConv2D<std::uint64_t>;
 
+template <typename T>
+ArithmeticGMWTensorGemm<T>::ArithmeticGMWTensorGemm(std::size_t gate_id, GMWProvider& gmw_provider,
+                                                    tensor::GemmOp gemm_op,
+                                                    const ArithmeticGMWTensorCP<T> input_A,
+                                                    const ArithmeticGMWTensorCP<T> input_B)
+    : NewGate(gate_id),
+      gmw_provider_(gmw_provider),
+      gemm_op_(gemm_op),
+      input_A_(input_A),
+      input_B_(input_B),
+      output_(std::make_shared<ArithmeticGMWTensor<T>>(gemm_op.get_output_tensor_dims())),
+      triple_index_(gmw_provider.get_linalg_triple_provider().register_for_gemm_triple<T>(gemm_op)),
+      share_future_(gmw_provider_.register_for_ints_message<T>(
+          1 - gmw_provider.get_my_id(), this->gate_id_,
+          gemm_op.compute_input_A_size() + gemm_op.compute_input_B_size())) {
+  assert(input_A_->get_dimensions() == gemm_op.get_input_A_tensor_dims());
+  assert(input_B_->get_dimensions() == gemm_op.get_input_B_tensor_dims());
+  assert(gemm_op.verify());
+}
+
+template <typename T>
+void ArithmeticGMWTensorGemm<T>::evaluate_online() {
+  auto& ltp = gmw_provider_.get_linalg_triple_provider();
+  auto triple = ltp.get_gemm_triple<T>(gemm_op_, triple_index_);
+  this->input_A_->wait_online();
+  this->input_B_->wait_online();
+  const auto& input_A_buffer = this->input_A_->get_share();
+  const auto& input_B_buffer = this->input_B_->get_share();
+  const auto input_A_size = gemm_op_.compute_input_A_size();
+  const auto input_B_size = gemm_op_.compute_input_B_size();
+  assert(input_A_buffer.size() == input_A_size);
+  assert(input_B_buffer.size() == input_B_size);
+
+  const auto my_id = gmw_provider_.get_my_id();
+
+  //  mask inputs
+  std::vector<T> de(input_A_size + input_B_size);
+  auto it = std::transform(std::begin(input_A_buffer), std::end(input_A_buffer), std::begin(triple.a_),
+                           std::begin(de), std::minus{});
+  std::transform(std::begin(input_B_buffer), std::end(input_B_buffer), std::begin(triple.b_), it,
+                 std::minus{});
+  this->gmw_provider_.send_ints_message(1 - my_id, this->gate_id_, de);
+
+  // compute d, e
+  auto other_share = share_future_.get();
+  std::transform(std::begin(de), std::end(de), std::begin(other_share), std::begin(de),
+                 std::plus{});
+
+  // result = c ...
+  std::vector<T> result(std::move(triple.c_));
+  std::vector<T> tmp(result.size());
+
+  const auto dim_l = gemm_op_.input_A_shape_[0];
+  const auto dim_m = gemm_op_.input_A_shape_[1];
+  const auto dim_n = gemm_op_.input_B_shape_[1];
+  // ... - d * e ...
+  if (this->gmw_provider_.is_my_job(this->gate_id_)) {
+    matrix_multiply(dim_l, dim_m, dim_n, de.data(), de.data() + input_A_size, tmp.data());
+    std::transform(std::begin(result), std::end(result), std::begin(tmp), std::begin(result),
+                   std::minus{});
+  }
+  // ... + e * x + d * y
+  matrix_multiply(dim_l, dim_m, dim_n, input_A_buffer.data(), de.data() + input_A_size, tmp.data());
+  std::transform(std::begin(result), std::end(result), std::begin(tmp), std::begin(result),
+                 std::plus{});
+  matrix_multiply(dim_l, dim_m, dim_n, de.data(), input_B_buffer.data(), tmp.data());
+  std::transform(std::begin(result), std::end(result), std::begin(tmp), std::begin(result),
+                 std::plus{});
+  this->output_->get_share() = std::move(result);
+  this->output_->set_online_ready();
+}
+
+template class ArithmeticGMWTensorGemm<std::uint64_t>;
+
 }  // namespace MOTION::proto::gmw

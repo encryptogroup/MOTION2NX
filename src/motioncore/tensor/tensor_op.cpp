@@ -127,15 +127,15 @@ bool Conv2DOp::operator==(const Conv2DOp& other) const noexcept {
 
 bool GemmOp::verify() const noexcept {
   bool result = true;
-  result = result && (input_shape_[1] == factor_shape_[0]);
-  result = result && (input_shape_[0] == output_shape_[0]);
-  result = result && (factor_shape_[1] == output_shape_[1]);
+  result = result && (input_A_shape_[1] == input_B_shape_[0]);
+  result = result && (input_A_shape_[0] == output_shape_[0]);
+  result = result && (input_B_shape_[1] == output_shape_[1]);
   // maybe add more checks here
   return true;
 }
 
 std::array<std::size_t, 2> GemmOp::compute_output_shape() const noexcept {
-  return {input_shape_[0], factor_shape_[1]};
+  return {input_A_shape_[0], input_B_shape_[1]};
 }
 
 std::size_t GemmOp::compute_output_size() const noexcept {
@@ -144,22 +144,46 @@ std::size_t GemmOp::compute_output_size() const noexcept {
   return output_shape[0] * output_shape[1];
 }
 
-std::size_t GemmOp::compute_input_size() const noexcept {
+std::size_t GemmOp::compute_input_A_size() const noexcept {
   assert(verify());
-  return input_shape_[0] * input_shape_[1];
+  return input_A_shape_[0] * input_A_shape_[1];
 }
 
-std::size_t GemmOp::compute_factor_size() const noexcept {
+std::size_t GemmOp::compute_input_B_size() const noexcept {
   assert(verify());
-  return factor_shape_[0] * factor_shape_[1];
+  return input_B_shape_[0] * input_B_shape_[1];
+}
+
+TensorDimensions GemmOp::get_input_A_tensor_dims() const noexcept {
+  assert(verify());
+  return {.batch_size_ = 1,
+          .num_channels_ = 1,
+          .height_ = input_A_shape_[0],
+          .width_ = input_A_shape_[1]};
+}
+
+TensorDimensions GemmOp::get_input_B_tensor_dims() const noexcept {
+  assert(verify());
+  return {.batch_size_ = 1,
+          .num_channels_ = 1,
+          .height_ = input_B_shape_[0],
+          .width_ = input_B_shape_[1]};
+}
+
+TensorDimensions GemmOp::get_output_tensor_dims() const noexcept {
+  assert(verify());
+  return {.batch_size_ = 1,
+          .num_channels_ = 1,
+          .height_ = output_shape_[0],
+          .width_ = output_shape_[1]};
 }
 
 bool GemmOp::operator==(const GemmOp& other) const noexcept {
   assert(verify());
   assert(other.verify());
   bool result = true;
-  result = result && input_shape_ == other.input_shape_;
-  result = result && factor_shape_ == other.factor_shape_;
+  result = result && input_A_shape_ == other.input_A_shape_;
+  result = result && input_B_shape_ == other.input_B_shape_;
   result = result && output_shape_ == other.output_shape_;
   return result;
 }
@@ -184,10 +208,10 @@ std::size_t std::hash<MOTION::tensor::Conv2DOp>::operator()(
 std::size_t std::hash<MOTION::tensor::GemmOp>::operator()(
     const MOTION::tensor::GemmOp& op) const noexcept {
   std::size_t seed = 0;
-  boost::hash_combine(seed,
-                      boost::hash_range(std::begin(op.input_shape_), std::end(op.input_shape_)));
-  boost::hash_combine(seed,
-                      boost::hash_range(std::begin(op.factor_shape_), std::end(op.factor_shape_)));
+  boost::hash_combine(
+      seed, boost::hash_range(std::begin(op.input_A_shape_), std::end(op.input_A_shape_)));
+  boost::hash_combine(
+      seed, boost::hash_range(std::begin(op.input_B_shape_), std::end(op.input_B_shape_)));
   return seed;
 }
 

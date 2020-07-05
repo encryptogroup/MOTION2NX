@@ -647,4 +647,42 @@ tensor::TensorCP GMWProvider::make_arithmetic_tensor_conv2d_op(const tensor::Con
   return output;
 }
 
+tensor::TensorCP GMWProvider::make_arithmetic_tensor_gemm_op(const tensor::GemmOp& gemm_op,
+                                                             const tensor::TensorCP input_A,
+                                                             const tensor::TensorCP input_B) {
+  if (!gemm_op.verify()) {
+    throw std::invalid_argument("invalid GemmOp");
+  }
+  if (input_A->get_dimensions() != gemm_op.get_input_A_tensor_dims()) {
+    throw std::invalid_argument("invalid input_A dimensions");
+  }
+  if (input_B->get_dimensions() != gemm_op.get_input_B_tensor_dims()) {
+    throw std::invalid_argument("invalid input_B dimensions");
+  }
+  auto bit_size = input_A->get_bit_size();
+  if (bit_size != input_B->get_bit_size()) {
+    throw std::invalid_argument("bit size mismatch");
+  }
+  std::unique_ptr<NewGate> gate;
+  auto gate_id = gate_register_.get_next_gate_id();
+  tensor::TensorCP output;
+  const auto make_conv_op = [this, input_A, gemm_op, input_B, gate_id, &output](auto dummy_arg) {
+    using T = decltype(dummy_arg);
+    auto tensor_op = std::make_unique<ArithmeticGMWTensorGemm<T>>(
+        gate_id, *this, gemm_op, std::dynamic_pointer_cast<const ArithmeticGMWTensor<T>>(input_A),
+        std::dynamic_pointer_cast<const ArithmeticGMWTensor<T>>(input_B));
+    output = tensor_op->get_output_tensor();
+    return tensor_op;
+  };
+  switch (bit_size) {
+    case 64:
+      gate = make_conv_op(std::uint64_t{});
+      break;
+    default:
+      throw std::logic_error(fmt::format("unexpected bit size {}", bit_size));
+  }
+  gate_register_.register_gate(std::move(gate));
+  return output;
+}
+
 }  // namespace MOTION::proto::gmw

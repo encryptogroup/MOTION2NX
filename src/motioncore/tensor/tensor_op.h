@@ -60,15 +60,18 @@ struct Conv2DOp {
 };
 
 struct GemmOp {
-  std::array<std::size_t, 2> input_shape_;
-  std::array<std::size_t, 2> factor_shape_;
+  std::array<std::size_t, 2> input_A_shape_;
+  std::array<std::size_t, 2> input_B_shape_;
   std::array<std::size_t, 2> output_shape_;
 
   bool verify() const noexcept;
   std::array<std::size_t, 2> compute_output_shape() const noexcept;
   std::size_t compute_output_size() const noexcept;
-  std::size_t compute_input_size() const noexcept;
-  std::size_t compute_factor_size() const noexcept;
+  std::size_t compute_input_A_size() const noexcept;
+  std::size_t compute_input_B_size() const noexcept;
+  TensorDimensions get_input_A_tensor_dims() const noexcept;
+  TensorDimensions get_input_B_tensor_dims() const noexcept;
+  TensorDimensions get_output_tensor_dims() const noexcept;
 
   bool operator==(const GemmOp&) const noexcept;
 };
