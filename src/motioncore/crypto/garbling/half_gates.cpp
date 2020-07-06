@@ -102,9 +102,9 @@ void HalfGateGarbler::garble_circuit(ENCRYPTO::block128_vector& output_keys,
                                      const ENCRYPTO::block128_vector& input_keys_b,
                                      std::size_t num_simd,
                                      const ENCRYPTO::AlgorithmDescription& algo) const {
-  assert(algo.n_input_wires_parent_b_.has_value());
   assert(input_keys_a.size() == algo.n_input_wires_parent_a_ * num_simd);
-  assert(input_keys_b.size() == *algo.n_input_wires_parent_b_ * num_simd);
+  assert((!algo.n_input_wires_parent_b_.has_value()) ||
+         (input_keys_b.size() == *algo.n_input_wires_parent_b_ * num_simd));
   output_keys.resize(algo.n_output_wires_ * num_simd);
   std::size_t num_and_gates = std::transform_reduce(
       std::begin(algo.gates_), std::end(algo.gates_), 0, std::plus{}, [](const auto& op) {
@@ -117,7 +117,9 @@ void HalfGateGarbler::garble_circuit(ENCRYPTO::block128_vector& output_keys,
   garbled_tables.resize(2 * num_and_gates * num_simd);
   ENCRYPTO::block128_vector wire_keys(algo.n_wires_ * num_simd);
   auto it = std::copy_n(input_keys_a.data(), input_keys_a.size(), wire_keys.data());
-  std::copy_n(input_keys_b.data(), input_keys_b.size(), it);
+  if (algo.n_input_wires_parent_b_.has_value()) {
+    std::copy_n(input_keys_b.data(), input_keys_b.size(), it);
+  }
   assert(algo.n_gates_ == algo.gates_.size());
   for (std::size_t op_i = 0, and_j = 0; op_i < algo.n_gates_; ++op_i) {
     const auto& op = algo.gates_[op_i];
@@ -204,13 +206,15 @@ void HalfGateEvaluator::evaluate_circuit(ENCRYPTO::block128_vector& output_keys,
                                          const ENCRYPTO::block128_vector& input_keys_b,
                                          std::size_t num_simd,
                                          const ENCRYPTO::AlgorithmDescription& algo) const {
-  assert(algo.n_input_wires_parent_b_.has_value());
   assert(input_keys_a.size() == algo.n_input_wires_parent_a_ * num_simd);
-  assert(input_keys_b.size() == *algo.n_input_wires_parent_b_ * num_simd);
+  assert((!algo.n_input_wires_parent_b_.has_value()) ||
+         (input_keys_b.size() == *algo.n_input_wires_parent_b_ * num_simd));
   output_keys.resize(algo.n_output_wires_ * num_simd);
   ENCRYPTO::block128_vector wire_keys(algo.n_wires_ * num_simd);
   auto it = std::copy_n(input_keys_a.data(), input_keys_a.size(), wire_keys.data());
-  std::copy_n(input_keys_b.data(), input_keys_b.size(), it);
+  if (algo.n_input_wires_parent_b_.has_value()) {
+    std::copy_n(input_keys_b.data(), input_keys_b.size(), it);
+  }
   assert(algo.n_gates_ == algo.gates_.size());
   for (std::size_t op_i = 0, and_j = 0; op_i < algo.n_gates_; ++op_i) {
     const auto& op = algo.gates_[op_i];
