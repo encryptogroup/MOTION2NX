@@ -55,6 +55,7 @@ add_library(motion
         protocols/common/comm_mixin.cpp
         protocols/beavy/beavy_provider.cpp
         protocols/beavy/gate.cpp
+        protocols/beavy/tensor_op.cpp
         protocols/gmw/conversion.cpp
         protocols/gmw/gate.cpp
         protocols/gmw/gmw_provider.cpp

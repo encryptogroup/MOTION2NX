@@ -93,6 +93,23 @@ class ArithmeticGMWTensorOutput : public NewGate {
 };
 
 template <typename T>
+class ArithmeticGMWTensorFlatten : public NewGate {
+ public:
+  ArithmeticGMWTensorFlatten(std::size_t gate_id, GMWProvider&, std::size_t axis,
+                             const ArithmeticGMWTensorCP<T> input);
+  bool need_setup() const noexcept override { return false; }
+  bool need_online() const noexcept override { return true; }
+  void evaluate_setup() override {}
+  void evaluate_online() override;
+  const ArithmeticGMWTensorP<T>& get_output_tensor() const { return output_; }
+
+ private:
+  GMWProvider& gmw_provider_;
+  const ArithmeticGMWTensorCP<T> input_;
+  std::shared_ptr<ArithmeticGMWTensor<T>> output_;
+};
+
+template <typename T>
 class ArithmeticGMWTensorConv2D : public NewGate {
  public:
   ArithmeticGMWTensorConv2D(std::size_t gate_id, GMWProvider&, tensor::Conv2DOp,

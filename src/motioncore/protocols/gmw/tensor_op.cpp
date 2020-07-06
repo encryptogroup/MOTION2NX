@@ -101,7 +101,7 @@ void ArithmeticGMWTensorInputSender<T>::evaluate_online() {
     auto logger = gmw_provider_.get_logger();
     if (logger) {
       logger->LogTrace(
-          fmt::format("Gate {}: BooleanGMWTensorInputSender::evaluate_online end", gate_id_));
+          fmt::format("Gate {}: ArithmeticGMWTensorInputSender<T>::evaluate_online end", gate_id_));
     }
   }
 }
@@ -123,8 +123,8 @@ void ArithmeticGMWTensorInputReceiver<T>::evaluate_setup() {
   if constexpr (MOTION_VERBOSE_DEBUG) {
     auto logger = gmw_provider_.get_logger();
     if (logger) {
-      logger->LogTrace(
-          fmt::format("Gate {}: ArithmeticGMWTensorInputReceiver::evaluate_setup start", gate_id_));
+      logger->LogTrace(fmt::format(
+          "Gate {}: ArithmeticGMWTensorInputReceiver<T>::evaluate_setup start", gate_id_));
     }
   }
 
@@ -138,8 +138,8 @@ void ArithmeticGMWTensorInputReceiver<T>::evaluate_setup() {
   if constexpr (MOTION_VERBOSE_DEBUG) {
     auto logger = gmw_provider_.get_logger();
     if (logger) {
-      logger->LogTrace(
-          fmt::format("Gate {}: ArithmeticGMWTensorInputReceiver::evaluate_setup end", gate_id_));
+      logger->LogTrace(fmt::format(
+          "Gate {}: ArithmeticGMWTensorInputReceiver<T>::evaluate_setup end", gate_id_));
     }
   }
 }
@@ -165,7 +165,7 @@ void ArithmeticGMWTensorOutput<T>::evaluate_online() {
     auto logger = gmw_provider_.get_logger();
     if (logger) {
       logger->LogTrace(
-          fmt::format("Gate {}: ArithmeticGMWTensorOutput::evaluate_online start", gate_id_));
+          fmt::format("Gate {}: ArithmeticGMWTensorOutput<T>::evaluate_online start", gate_id_));
     }
   }
 
@@ -185,7 +185,7 @@ void ArithmeticGMWTensorOutput<T>::evaluate_online() {
     auto logger = gmw_provider_.get_logger();
     if (logger) {
       logger->LogTrace(
-          fmt::format("Gate {}: ArithmeticGMWTensorOutput::evaluate_online end", gate_id_));
+          fmt::format("Gate {}: ArithmeticGMWTensorOutput<T>::evaluate_online end", gate_id_));
     }
   }
 }
@@ -201,6 +201,41 @@ ENCRYPTO::ReusableFiberFuture<std::vector<T>> ArithmeticGMWTensorOutput<T>::get_
 }
 
 template class ArithmeticGMWTensorOutput<std::uint64_t>;
+
+template <typename T>
+ArithmeticGMWTensorFlatten<T>::ArithmeticGMWTensorFlatten(std::size_t gate_id,
+                                                          GMWProvider& gmw_provider,
+                                                          std::size_t axis,
+                                                          const ArithmeticGMWTensorCP<T> input)
+    : NewGate(gate_id), gmw_provider_(gmw_provider), input_(input) {
+  const auto& input_dims = input_->get_dimensions();
+  output_ = std::make_shared<ArithmeticGMWTensor<T>>(flatten(input_dims, axis));
+}
+
+template <typename T>
+void ArithmeticGMWTensorFlatten<T>::evaluate_online() {
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = gmw_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(
+          fmt::format("Gate {}: ArithmeticGMWTensorFlatten<T>::evaluate_online start", gate_id_));
+    }
+  }
+
+  input_->wait_online();
+  output_->get_share() = input_->get_share();
+  output_->set_online_ready();
+
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = gmw_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(
+          fmt::format("Gate {}: ArithmeticGMWTensorFlatten<T>::evaluate_online end", gate_id_));
+    }
+  }
+}
+
+template class ArithmeticGMWTensorFlatten<std::uint64_t>;
 
 template <typename T>
 ArithmeticGMWTensorConv2D<T>::ArithmeticGMWTensorConv2D(std::size_t gate_id,
@@ -219,17 +254,25 @@ ArithmeticGMWTensorConv2D<T>::ArithmeticGMWTensorConv2D(std::size_t gate_id,
       triple_index_(
           gmw_provider.get_linalg_triple_provider().register_for_conv2d_triple<T>(conv_op)),
       share_future_(gmw_provider_.register_for_ints_message<T>(
-          1 - gmw_provider.get_my_id(), this->gate_id_,
+          1 - gmw_provider.get_my_id(), gate_id_,
           conv_op.compute_input_size() + conv_op.compute_kernel_size())) {}
 
 template <typename T>
 void ArithmeticGMWTensorConv2D<T>::evaluate_online() {
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = gmw_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(
+          fmt::format("Gate {}: ArithmeticGMWTensorConv2D<T>::evaluate_online start", gate_id_));
+    }
+  }
+
   auto& ltp = gmw_provider_.get_linalg_triple_provider();
   auto triple = ltp.get_conv2d_triple<T>(conv_op_, triple_index_);
-  this->input_->wait_online();
-  this->kernel_->wait_online();
-  const auto& input_buffer = this->input_->get_share();
-  const auto& kernel_buffer = this->kernel_->get_share();
+  input_->wait_online();
+  kernel_->wait_online();
+  const auto& input_buffer = input_->get_share();
+  const auto& kernel_buffer = kernel_->get_share();
   const auto input_size = conv_op_.compute_input_size();
   const auto kernel_size = conv_op_.compute_kernel_size();
   assert(input_buffer.size() == input_size);
@@ -243,7 +286,7 @@ void ArithmeticGMWTensorConv2D<T>::evaluate_online() {
                            std::begin(de), std::minus{});
   std::transform(std::begin(kernel_buffer), std::end(kernel_buffer), std::begin(triple.b_), it,
                  std::minus{});
-  this->gmw_provider_.send_ints_message(1 - my_id, this->gate_id_, de);
+  gmw_provider_.send_ints_message(1 - my_id, gate_id_, de);
 
   // compute d, e
   auto other_share = share_future_.get();
@@ -254,7 +297,7 @@ void ArithmeticGMWTensorConv2D<T>::evaluate_online() {
   std::vector<T> result(std::move(triple.c_));
   std::vector<T> tmp(result.size());
   // ... - d * e ...
-  if (this->gmw_provider_.is_my_job(this->gate_id_)) {
+  if (gmw_provider_.is_my_job(gate_id_)) {
     convolution(conv_op_, de.data(), de.data() + input_size, tmp.data());
     std::transform(std::begin(result), std::end(result), std::begin(tmp), std::begin(result),
                    std::minus{});
@@ -266,8 +309,16 @@ void ArithmeticGMWTensorConv2D<T>::evaluate_online() {
   convolution(conv_op_, de.data(), kernel_buffer.data(), tmp.data());
   std::transform(std::begin(result), std::end(result), std::begin(tmp), std::begin(result),
                  std::plus{});
-  this->output_->get_share() = std::move(result);
-  this->output_->set_online_ready();
+  output_->get_share() = std::move(result);
+  output_->set_online_ready();
+
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = gmw_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(
+          fmt::format("Gate {}: ArithmeticGMWTensorConv2D<T>::evaluate_online end", gate_id_));
+    }
+  }
 }
 
 template class ArithmeticGMWTensorConv2D<std::uint64_t>;
@@ -285,7 +336,7 @@ ArithmeticGMWTensorGemm<T>::ArithmeticGMWTensorGemm(std::size_t gate_id, GMWProv
       output_(std::make_shared<ArithmeticGMWTensor<T>>(gemm_op.get_output_tensor_dims())),
       triple_index_(gmw_provider.get_linalg_triple_provider().register_for_gemm_triple<T>(gemm_op)),
       share_future_(gmw_provider_.register_for_ints_message<T>(
-          1 - gmw_provider.get_my_id(), this->gate_id_,
+          1 - gmw_provider.get_my_id(), gate_id_,
           gemm_op.compute_input_A_size() + gemm_op.compute_input_B_size())) {
   assert(input_A_->get_dimensions() == gemm_op.get_input_A_tensor_dims());
   assert(input_B_->get_dimensions() == gemm_op.get_input_B_tensor_dims());
@@ -294,12 +345,20 @@ ArithmeticGMWTensorGemm<T>::ArithmeticGMWTensorGemm(std::size_t gate_id, GMWProv
 
 template <typename T>
 void ArithmeticGMWTensorGemm<T>::evaluate_online() {
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = gmw_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(
+          fmt::format("Gate {}: ArithmeticGMWTensorGemm<T>::evaluate_online start", gate_id_));
+    }
+  }
+
   auto& ltp = gmw_provider_.get_linalg_triple_provider();
   auto triple = ltp.get_gemm_triple<T>(gemm_op_, triple_index_);
-  this->input_A_->wait_online();
-  this->input_B_->wait_online();
-  const auto& input_A_buffer = this->input_A_->get_share();
-  const auto& input_B_buffer = this->input_B_->get_share();
+  input_A_->wait_online();
+  input_B_->wait_online();
+  const auto& input_A_buffer = input_A_->get_share();
+  const auto& input_B_buffer = input_B_->get_share();
   const auto input_A_size = gemm_op_.compute_input_A_size();
   const auto input_B_size = gemm_op_.compute_input_B_size();
   assert(input_A_buffer.size() == input_A_size);
@@ -309,11 +368,11 @@ void ArithmeticGMWTensorGemm<T>::evaluate_online() {
 
   //  mask inputs
   std::vector<T> de(input_A_size + input_B_size);
-  auto it = std::transform(std::begin(input_A_buffer), std::end(input_A_buffer), std::begin(triple.a_),
-                           std::begin(de), std::minus{});
+  auto it = std::transform(std::begin(input_A_buffer), std::end(input_A_buffer),
+                           std::begin(triple.a_), std::begin(de), std::minus{});
   std::transform(std::begin(input_B_buffer), std::end(input_B_buffer), std::begin(triple.b_), it,
                  std::minus{});
-  this->gmw_provider_.send_ints_message(1 - my_id, this->gate_id_, de);
+  gmw_provider_.send_ints_message(1 - my_id, gate_id_, de);
 
   // compute d, e
   auto other_share = share_future_.get();
@@ -328,7 +387,7 @@ void ArithmeticGMWTensorGemm<T>::evaluate_online() {
   const auto dim_m = gemm_op_.input_A_shape_[1];
   const auto dim_n = gemm_op_.input_B_shape_[1];
   // ... - d * e ...
-  if (this->gmw_provider_.is_my_job(this->gate_id_)) {
+  if (gmw_provider_.is_my_job(gate_id_)) {
     matrix_multiply(dim_l, dim_m, dim_n, de.data(), de.data() + input_A_size, tmp.data());
     std::transform(std::begin(result), std::end(result), std::begin(tmp), std::begin(result),
                    std::minus{});
@@ -340,8 +399,16 @@ void ArithmeticGMWTensorGemm<T>::evaluate_online() {
   matrix_multiply(dim_l, dim_m, dim_n, de.data(), input_B_buffer.data(), tmp.data());
   std::transform(std::begin(result), std::end(result), std::begin(tmp), std::begin(result),
                  std::plus{});
-  this->output_->get_share() = std::move(result);
-  this->output_->set_online_ready();
+  output_->get_share() = std::move(result);
+  output_->set_online_ready();
+
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = gmw_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(
+          fmt::format("Gate {}: ArithmeticGMWTensorGemm<T>::evaluate_online end", gate_id_));
+    }
+  }
 }
 
 template class ArithmeticGMWTensorGemm<std::uint64_t>;
@@ -356,15 +423,23 @@ ArithmeticGMWTensorSqr<T>::ArithmeticGMWTensorSqr(std::size_t gate_id, GMWProvid
       output_(std::make_shared<ArithmeticGMWTensor<T>>(input_->get_dimensions())),
       triple_index_(gmw_provider.get_sp_provider().RequestSPs<T>(data_size_)),
       share_future_(gmw_provider_.register_for_ints_message<T>(1 - gmw_provider.get_my_id(),
-                                                               this->gate_id_, data_size_)) {}
+                                                               gate_id_, data_size_)) {}
 
 template <typename T>
 void ArithmeticGMWTensorSqr<T>::evaluate_online() {
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = gmw_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(
+          fmt::format("Gate {}: ArithmeticGMWTensorSqr<T>::evaluate_online start", gate_id_));
+    }
+  }
+
   auto& spp = gmw_provider_.get_sp_provider();
   const auto& all_triples = spp.GetSPsAll<T>();
 
-  this->input_->wait_online();
-  const auto& input_buffer = this->input_->get_share();
+  input_->wait_online();
+  const auto& input_buffer = input_->get_share();
   assert(input_buffer.size() == data_size_);
 
   const auto my_id = gmw_provider_.get_my_id();
@@ -373,7 +448,7 @@ void ArithmeticGMWTensorSqr<T>::evaluate_online() {
   std::vector<T> d(data_size_);
   std::transform(std::begin(input_buffer), std::end(input_buffer), &all_triples.a[triple_index_],
                  std::begin(d), std::minus{});
-  this->gmw_provider_.send_ints_message(1 - my_id, this->gate_id_, d);
+  gmw_provider_.send_ints_message(1 - my_id, gate_id_, d);
 
   // compute d
   auto other_share = share_future_.get();
@@ -390,12 +465,20 @@ void ArithmeticGMWTensorSqr<T>::evaluate_online() {
                  std::begin(result), std::plus{});
 
   // ... - d^2
-  if (this->gmw_provider_.is_my_job(this->gate_id_)) {
+  if (gmw_provider_.is_my_job(gate_id_)) {
     std::transform(std::begin(result), std::end(result), std::begin(d), std::begin(result),
                    [](auto res, auto d) { return res - d * d; });
   }
-  this->output_->get_share() = std::move(result);
-  this->output_->set_online_ready();
+  output_->get_share() = std::move(result);
+  output_->set_online_ready();
+
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = gmw_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(
+          fmt::format("Gate {}: ArithmeticGMWTensorSqr<T>::evaluate_online end", gate_id_));
+    }
+  }
 }
 
 template class ArithmeticGMWTensorSqr<std::uint64_t>;

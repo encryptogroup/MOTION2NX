@@ -162,14 +162,15 @@ class GMWProvider : public GateFactory,
 
   void make_arithmetic_tensor_output_other(const tensor::TensorCP&) override;
 
+  tensor::TensorCP make_tensor_flatten_op(const tensor::TensorCP input, std::size_t axis) override;
+
   tensor::TensorCP make_arithmetic_tensor_conv2d_op(const tensor::Conv2DOp& conv_op,
                                                     const tensor::TensorCP input,
-                                                    const tensor::TensorCP kernel);
-
+                                                    const tensor::TensorCP kernel) override;
   tensor::TensorCP make_arithmetic_tensor_gemm_op(const tensor::GemmOp& conv_op,
                                                   const tensor::TensorCP input_A,
-                                                  const tensor::TensorCP input_B);
-  tensor::TensorCP make_arithmetic_tensor_sqr_op(const tensor::TensorCP input);
+                                                  const tensor::TensorCP input_B) override;
+  tensor::TensorCP make_arithmetic_tensor_sqr_op(const tensor::TensorCP input) override;
 
  private:
   template <typename T>

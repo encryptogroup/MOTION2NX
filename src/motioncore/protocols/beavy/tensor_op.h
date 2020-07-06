@@ -112,6 +112,23 @@ class ArithmeticBEAVYTensorOutput : public NewGate {
 };
 
 template <typename T>
+class ArithmeticBEAVYTensorFlatten : public NewGate {
+ public:
+  ArithmeticBEAVYTensorFlatten(std::size_t gate_id, BEAVYProvider&, std::size_t axis,
+                             const ArithmeticBEAVYTensorCP<T> input);
+  bool need_setup() const noexcept override { return true; }
+  bool need_online() const noexcept override { return true; }
+  void evaluate_setup() override;
+  void evaluate_online() override;
+  const ArithmeticBEAVYTensorP<T>& get_output_tensor() const { return output_; }
+
+ private:
+  BEAVYProvider& gmw_provider_;
+  const ArithmeticBEAVYTensorCP<T> input_;
+  std::shared_ptr<ArithmeticBEAVYTensor<T>> output_;
+};
+
+template <typename T>
 class ArithmeticBEAVYTensorConv2D : public NewGate {
  public:
   ArithmeticBEAVYTensorConv2D(std::size_t gate_id, BEAVYProvider&, tensor::Conv2DOp,

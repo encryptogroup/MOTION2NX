@@ -534,6 +534,33 @@ void BEAVYProvider::make_arithmetic_tensor_output_other(const tensor::TensorCP& 
   gate_register_.register_gate(std::move(gate));
 }
 
+tensor::TensorCP BEAVYProvider::make_tensor_flatten_op(const tensor::TensorCP input,
+                                                     std::size_t axis) {
+  if (axis > 4) {
+    throw std::invalid_argument("invalid axis argument > 4");
+  }
+  auto bit_size = input->get_bit_size();
+  std::unique_ptr<NewGate> gate;
+  auto gate_id = gate_register_.get_next_gate_id();
+  tensor::TensorCP output;
+  const auto make_op = [this, input, axis, gate_id, &output](auto dummy_arg) {
+    using T = decltype(dummy_arg);
+    auto tensor_op = std::make_unique<ArithmeticBEAVYTensorFlatten<T>>(
+        gate_id, *this, axis, std::dynamic_pointer_cast<const ArithmeticBEAVYTensor<T>>(input));
+    output = tensor_op->get_output_tensor();
+    return tensor_op;
+  };
+  switch (bit_size) {
+    case 64:
+      gate = make_op(std::uint64_t{});
+      break;
+    default:
+      throw std::logic_error(fmt::format("unexpected bit size {}", bit_size));
+  }
+  gate_register_.register_gate(std::move(gate));
+  return output;
+}
+
 tensor::TensorCP BEAVYProvider::make_arithmetic_tensor_conv2d_op(const tensor::Conv2DOp& conv_op,
                                                                  const tensor::TensorCP input,
                                                                  const tensor::TensorCP kernel) {

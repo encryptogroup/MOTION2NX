@@ -110,8 +110,8 @@ void ArithmeticBEAVYTensorInputSender<T>::evaluate_online() {
   if constexpr (MOTION_VERBOSE_DEBUG) {
     auto logger = beavy_provider_.get_logger();
     if (logger) {
-      logger->LogTrace(
-          fmt::format("Gate {}: BooleanBEAVYTensorInputSender::evaluate_online end", gate_id_));
+      logger->LogTrace(fmt::format(
+          "Gate {}: ArithmeticBEAVYTensorInputSender<T>::evaluate_online end", gate_id_));
     }
   }
 }
@@ -138,7 +138,7 @@ void ArithmeticBEAVYTensorInputReceiver<T>::evaluate_setup() {
     auto logger = beavy_provider_.get_logger();
     if (logger) {
       logger->LogTrace(fmt::format(
-          "Gate {}: ArithmeticBEAVYTensorInputReceiver::evaluate_setup start", gate_id_));
+          "Gate {}: ArithmeticBEAVYTensorInputReceiver<T>::evaluate_setup start", gate_id_));
     }
   }
 
@@ -152,8 +152,8 @@ void ArithmeticBEAVYTensorInputReceiver<T>::evaluate_setup() {
   if constexpr (MOTION_VERBOSE_DEBUG) {
     auto logger = beavy_provider_.get_logger();
     if (logger) {
-      logger->LogTrace(
-          fmt::format("Gate {}: ArithmeticBEAVYTensorInputReceiver::evaluate_setup end", gate_id_));
+      logger->LogTrace(fmt::format(
+          "Gate {}: ArithmeticBEAVYTensorInputReceiver<T>::evaluate_setup end", gate_id_));
     }
   }
 }
@@ -164,7 +164,7 @@ void ArithmeticBEAVYTensorInputReceiver<T>::evaluate_online() {
     auto logger = beavy_provider_.get_logger();
     if (logger) {
       logger->LogTrace(fmt::format(
-          "Gate {}: ArithmeticBEAVYTensorInputReceiver::evaluate_online start", gate_id_));
+          "Gate {}: ArithmeticBEAVYTensorInputReceiver<T>::evaluate_online start", gate_id_));
     }
   }
 
@@ -175,7 +175,7 @@ void ArithmeticBEAVYTensorInputReceiver<T>::evaluate_online() {
     auto logger = beavy_provider_.get_logger();
     if (logger) {
       logger->LogTrace(fmt::format(
-          "Gate {}: ArithmeticBEAVYTensorInputReceiver::evaluate_online end", gate_id_));
+          "Gate {}: ArithmeticBEAVYTensorInputReceiver<T>::evaluate_online end", gate_id_));
     }
   }
 }
@@ -204,7 +204,7 @@ void ArithmeticBEAVYTensorOutput<T>::evaluate_setup() {
     auto logger = beavy_provider_.get_logger();
     if (logger) {
       logger->LogTrace(
-          fmt::format("Gate {}: ArithmeticBEAVYTensorOutput::evaluate_setup start", gate_id_));
+          fmt::format("Gate {}: ArithmeticBEAVYTensorOutput<T>::evaluate_setup start", gate_id_));
     }
   }
 
@@ -225,7 +225,7 @@ void ArithmeticBEAVYTensorOutput<T>::evaluate_setup() {
     auto logger = beavy_provider_.get_logger();
     if (logger) {
       logger->LogTrace(
-          fmt::format("Gate {}: ArithmeticBEAVYTensorOutput::evaluate_setup end", gate_id_));
+          fmt::format("Gate {}: ArithmeticBEAVYTensorOutput<T>::evaluate_setup end", gate_id_));
     }
   }
 }
@@ -236,7 +236,7 @@ void ArithmeticBEAVYTensorOutput<T>::evaluate_online() {
     auto logger = beavy_provider_.get_logger();
     if (logger) {
       logger->LogTrace(
-          fmt::format("Gate {}: ArithmeticBEAVYTensorOutput::evaluate_online start", gate_id_));
+          fmt::format("Gate {}: ArithmeticBEAVYTensorOutput<T>::evaluate_online start", gate_id_));
     }
   }
 
@@ -255,7 +255,7 @@ void ArithmeticBEAVYTensorOutput<T>::evaluate_online() {
     auto logger = beavy_provider_.get_logger();
     if (logger) {
       logger->LogTrace(
-          fmt::format("Gate {}: ArithmeticBEAVYTensorOutput::evaluate_online end", gate_id_));
+          fmt::format("Gate {}: ArithmeticBEAVYTensorOutput<T>::evaluate_online end", gate_id_));
     }
   }
 }
@@ -271,6 +271,63 @@ ENCRYPTO::ReusableFiberFuture<std::vector<T>> ArithmeticBEAVYTensorOutput<T>::ge
 }
 
 template class ArithmeticBEAVYTensorOutput<std::uint64_t>;
+
+template <typename T>
+ArithmeticBEAVYTensorFlatten<T>::ArithmeticBEAVYTensorFlatten(
+    std::size_t gate_id, BEAVYProvider& gmw_provider, std::size_t axis,
+    const ArithmeticBEAVYTensorCP<T> input)
+    : NewGate(gate_id), gmw_provider_(gmw_provider), input_(input) {
+  const auto& input_dims = input_->get_dimensions();
+  output_ = std::make_shared<ArithmeticBEAVYTensor<T>>(flatten(input_dims, axis));
+}
+
+template <typename T>
+void ArithmeticBEAVYTensorFlatten<T>::evaluate_setup() {
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = gmw_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(
+          fmt::format("Gate {}: ArithmeticBEAVYTensorFlatten<T>::evaluate_setup start", gate_id_));
+    }
+  }
+
+  input_->wait_setup();
+  output_->get_secret_share() = input_->get_secret_share();
+  output_->set_setup_ready();
+
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = gmw_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(
+          fmt::format("Gate {}: ArithmeticBEAVYTensorFlatten<T>::evaluate_setup end", gate_id_));
+    }
+  }
+}
+
+template <typename T>
+void ArithmeticBEAVYTensorFlatten<T>::evaluate_online() {
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = gmw_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(
+          fmt::format("Gate {}: ArithmeticBEAVYTensorFlatten<T>::evaluate_online start", gate_id_));
+    }
+  }
+
+  input_->wait_online();
+  output_->get_public_share() = input_->get_public_share();
+  output_->set_online_ready();
+
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = gmw_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(
+          fmt::format("Gate {}: ArithmeticBEAVYTensorFlatten<T>::evaluate_online end", gate_id_));
+    }
+  }
+}
+
+template class ArithmeticBEAVYTensorFlatten<std::uint64_t>;
 
 template <typename T>
 ArithmeticBEAVYTensorConv2D<T>::ArithmeticBEAVYTensorConv2D(std::size_t gate_id,
@@ -304,7 +361,7 @@ void ArithmeticBEAVYTensorConv2D<T>::evaluate_setup() {
     auto logger = beavy_provider_.get_logger();
     if (logger) {
       logger->LogTrace(
-          fmt::format("Gate {}: ArithmeticBEAVYTensorGemm::evaluate_setup start", gate_id_));
+          fmt::format("Gate {}: ArithmeticBEAVYTensorConv2D<T>::evaluate_setup start", gate_id_));
     }
   }
 
@@ -346,7 +403,7 @@ void ArithmeticBEAVYTensorConv2D<T>::evaluate_setup() {
     auto logger = beavy_provider_.get_logger();
     if (logger) {
       logger->LogTrace(
-          fmt::format("Gate {}: ArithmeticBEAVYTensorGemm::evaluate_setup end", gate_id_));
+          fmt::format("Gate {}: ArithmeticBEAVYTensorConv2D<T>::evaluate_setup end", gate_id_));
     }
   }
 }
@@ -357,7 +414,7 @@ void ArithmeticBEAVYTensorConv2D<T>::evaluate_online() {
     auto logger = beavy_provider_.get_logger();
     if (logger) {
       logger->LogTrace(
-          fmt::format("Gate {}: ArithmeticBEAVYTensorConv2D::evaluate_online start", gate_id_));
+          fmt::format("Gate {}: ArithmeticBEAVYTensorConv2D<T>::evaluate_online start", gate_id_));
     }
   }
 
@@ -400,7 +457,7 @@ void ArithmeticBEAVYTensorConv2D<T>::evaluate_online() {
     auto logger = beavy_provider_.get_logger();
     if (logger) {
       logger->LogTrace(
-          fmt::format("Gate {}: ArithmeticBEAVYTensorConv2D::evaluate_online end", gate_id_));
+          fmt::format("Gate {}: ArithmeticBEAVYTensorConv2D<T>::evaluate_online end", gate_id_));
     }
   }
 }
@@ -440,7 +497,7 @@ void ArithmeticBEAVYTensorGemm<T>::evaluate_setup() {
     auto logger = beavy_provider_.get_logger();
     if (logger) {
       logger->LogTrace(
-          fmt::format("Gate {}: ArithmeticBEAVYTensorGemm::evaluate_setup start", gate_id_));
+          fmt::format("Gate {}: ArithmeticBEAVYTensorGemm<T>::evaluate_setup start", gate_id_));
     }
   }
 
@@ -464,7 +521,8 @@ void ArithmeticBEAVYTensorGemm<T>::evaluate_setup() {
   const auto dim_n = gemm_op_.input_B_shape_[1];
 
   // [Delta_y]_i = [delta_a]_i * [delta_b]_i
-  matrix_multiply(dim_l, dim_m, dim_n, delta_a_share.data(), delta_b_share.data(), Delta_y_share_.data());
+  matrix_multiply(dim_l, dim_m, dim_n, delta_a_share.data(), delta_b_share.data(),
+                  Delta_y_share_.data());
   // [Delta_y]_i += [delta_y]_i
   std::transform(std::begin(Delta_y_share_), std::end(Delta_y_share_), std::begin(delta_y_share),
                  std::begin(Delta_y_share_), std::plus{});
@@ -486,7 +544,7 @@ void ArithmeticBEAVYTensorGemm<T>::evaluate_setup() {
     auto logger = beavy_provider_.get_logger();
     if (logger) {
       logger->LogTrace(
-          fmt::format("Gate {}: ArithmeticBEAVYTensorGemm::evaluate_setup end", gate_id_));
+          fmt::format("Gate {}: ArithmeticBEAVYTensorGemm<T>::evaluate_setup end", gate_id_));
     }
   }
 }
@@ -497,7 +555,7 @@ void ArithmeticBEAVYTensorGemm<T>::evaluate_online() {
     auto logger = beavy_provider_.get_logger();
     if (logger) {
       logger->LogTrace(
-          fmt::format("Gate {}: ArithmeticBEAVYTensorGemm::evaluate_online start", gate_id_));
+          fmt::format("Gate {}: ArithmeticBEAVYTensorGemm<T>::evaluate_online start", gate_id_));
     }
   }
 
@@ -544,7 +602,7 @@ void ArithmeticBEAVYTensorGemm<T>::evaluate_online() {
     auto logger = beavy_provider_.get_logger();
     if (logger) {
       logger->LogTrace(
-          fmt::format("Gate {}: ArithmeticBEAVYTensorGemm::evaluate_online end", gate_id_));
+          fmt::format("Gate {}: ArithmeticBEAVYTensorGemm<T>::evaluate_online end", gate_id_));
     }
   }
 }
@@ -582,7 +640,7 @@ void ArithmeticBEAVYTensorMul<T>::evaluate_setup() {
     auto logger = beavy_provider_.get_logger();
     if (logger) {
       logger->LogTrace(
-          fmt::format("Gate {}: ArithmeticBEAVYTensorMul::evaluate_setup start", gate_id_));
+          fmt::format("Gate {}: ArithmeticBEAVYTensorMul<T>::evaluate_setup start", gate_id_));
     }
   }
 
@@ -622,7 +680,7 @@ void ArithmeticBEAVYTensorMul<T>::evaluate_setup() {
     auto logger = beavy_provider_.get_logger();
     if (logger) {
       logger->LogTrace(
-          fmt::format("Gate {}: ArithmeticBEAVYTensorMul::evaluate_setup end", gate_id_));
+          fmt::format("Gate {}: ArithmeticBEAVYTensorMul<T>::evaluate_setup end", gate_id_));
     }
   }
 }
@@ -633,7 +691,7 @@ void ArithmeticBEAVYTensorMul<T>::evaluate_online() {
     auto logger = beavy_provider_.get_logger();
     if (logger) {
       logger->LogTrace(
-          fmt::format("Gate {}: ArithmeticBEAVYTensorMul::evaluate_online start", gate_id_));
+          fmt::format("Gate {}: ArithmeticBEAVYTensorMul<T>::evaluate_online start", gate_id_));
     }
   }
 
@@ -679,7 +737,7 @@ void ArithmeticBEAVYTensorMul<T>::evaluate_online() {
     auto logger = beavy_provider_.get_logger();
     if (logger) {
       logger->LogTrace(
-          fmt::format("Gate {}: ArithmeticBEAVYTensorMul::evaluate_online end", gate_id_));
+          fmt::format("Gate {}: ArithmeticBEAVYTensorMul<T>::evaluate_online end", gate_id_));
     }
   }
 }
