@@ -51,6 +51,14 @@ std::vector<T> matrix_multiply(std::size_t dim_l, std::size_t dim_m, std::size_t
   return output;
 }
 
+template void matrix_multiply(std::size_t, std::size_t, std::size_t, const std::uint8_t*,
+                              const std::uint8_t*, std::uint8_t*);
+template void matrix_multiply(std::size_t, std::size_t, std::size_t, const std::uint16_t*,
+                              const std::uint16_t*, std::uint16_t*);
+template void matrix_multiply(std::size_t, std::size_t, std::size_t, const std::uint32_t*,
+                              const std::uint32_t*, std::uint32_t*);
+template void matrix_multiply(std::size_t, std::size_t, std::size_t, const std::uint64_t*,
+                              const std::uint64_t*, std::uint64_t*);
 template std::vector<std::uint8_t> matrix_multiply(std::size_t, std::size_t, std::size_t,
                                                    const std::vector<std::uint8_t>&,
                                                    const std::vector<std::uint8_t>&);
@@ -126,6 +134,13 @@ std::vector<T> convolution(const tensor::Conv2DOp& conv_op, const std::vector<T>
   return output_buffer;
 }
 
+void convolution(const tensor::Conv2DOp&, const std::uint8_t*, const std::uint8_t*, std::uint8_t*);
+void convolution(const tensor::Conv2DOp&, const std::uint16_t*, const std::uint16_t*,
+                 std::uint16_t*);
+void convolution(const tensor::Conv2DOp&, const std::uint32_t*, const std::uint32_t*,
+                 std::uint32_t*);
+void convolution(const tensor::Conv2DOp&, const std::uint64_t*, const std::uint64_t*,
+                 std::uint64_t*);
 template std::vector<std::uint8_t> convolution(const tensor::Conv2DOp&,
                                                const std::vector<std::uint8_t>&,
                                                const std::vector<std::uint8_t>&);
