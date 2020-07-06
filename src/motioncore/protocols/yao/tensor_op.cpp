@@ -429,4 +429,80 @@ void YaoToArithmeticGMWTensorConversionEvaluator<T>::evaluate_online() {
 
 template class YaoToArithmeticGMWTensorConversionEvaluator<std::uint64_t>;
 
+// Relu
+
+YaoTensorReluGarbler::YaoTensorReluGarbler(std::size_t gate_id, YaoProvider& yao_provider,
+                                           const YaoTensorCP input)
+    : NewGate(gate_id),
+      yao_provider_(yao_provider),
+      bit_size_(input->get_bit_size()),
+      data_size_(input->get_dimensions().get_data_size()),
+      input_(input),
+      output_(std::make_shared<YaoTensor>(input->get_dimensions(), bit_size_)),
+      relu_algo_(yao_provider_.get_circuit_loader().load_relu_circuit(bit_size_)) {
+  garbled_tables_.resize(data_size_ * (bit_size_ - 1));
+  output_->get_keys().resize(bit_size_);
+}
+
+void YaoTensorReluGarbler::evaluate_setup() {
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = yao_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(
+          fmt::format("Gate {}: YaoTensorReluGarbler::evaluate_setup start", gate_id_));
+    }
+  }
+
+  // garble ReLU circuit
+  yao_provider_.create_garbled_circuit(gate_id_, data_size_, relu_algo_, input_->get_keys(), {},
+                                       garbled_tables_, output_->get_keys());
+  yao_provider_.send_blocks_message(gate_id_, std::move(garbled_tables_));
+  output_->set_setup_ready();
+
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = yao_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(fmt::format("Gate {}: YaoTensorReluGarbler::evaluate_setup end", gate_id_));
+    }
+  }
+}
+
+YaoTensorReluEvaluator::YaoTensorReluEvaluator(std::size_t gate_id, YaoProvider& yao_provider,
+                                               const YaoTensorCP input)
+    : NewGate(gate_id),
+      yao_provider_(yao_provider),
+      bit_size_(input->get_bit_size()),
+      data_size_(input->get_dimensions().get_data_size()),
+      input_(input),
+      output_(std::make_shared<YaoTensor>(input->get_dimensions(), bit_size_)),
+      relu_algo_(yao_provider_.get_circuit_loader().load_relu_circuit(bit_size_)) {
+  garbled_tables_future_ =
+      yao_provider_.register_for_blocks_message(gate_id, 2 * (bit_size_ - 1) * data_size_);
+  output_->get_keys().resize(bit_size_);
+}
+
+void YaoTensorReluEvaluator::evaluate_online() {
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = yao_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(
+          fmt::format("Gate {}: YaoTensorReluEvaluator::evaluate_online start", gate_id_));
+    }
+  }
+
+  // evaluate ReLU circuit
+  const auto garbled_tables = garbled_tables_future_.get();
+  yao_provider_.evaluate_garbled_circuit(gate_id_, data_size_, relu_algo_, input_->get_keys(), {},
+                                         garbled_tables, output_->get_keys());
+  output_->set_online_ready();
+
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = yao_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(
+          fmt::format("Gate {}: YaoTensorReluEvaluator::evaluate_online end", gate_id_));
+    }
+  }
+}
+
 }  // namespace MOTION::proto::yao

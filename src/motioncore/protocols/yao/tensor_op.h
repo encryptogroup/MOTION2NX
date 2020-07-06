@@ -138,4 +138,42 @@ class YaoToArithmeticGMWTensorConversionEvaluator : public NewGate {
   const ENCRYPTO::AlgorithmDescription& addition_algo_;
 };
 
+class YaoTensorReluGarbler : public NewGate {
+ public:
+  YaoTensorReluGarbler(std::size_t gate_id, YaoProvider&, const YaoTensorCP input);
+  bool need_setup() const noexcept override { return true; }
+  bool need_online() const noexcept override { return false; }
+  void evaluate_setup() override;
+  void evaluate_online() override {}
+  YaoTensorCP get_output_tensor() const noexcept { return output_; }
+
+ private:
+  YaoProvider& yao_provider_;
+  const std::size_t bit_size_;
+  const std::size_t data_size_;
+  const YaoTensorCP input_;
+  const YaoTensorP output_;
+  ENCRYPTO::block128_vector garbled_tables_;
+  const ENCRYPTO::AlgorithmDescription& relu_algo_;
+};
+
+class YaoTensorReluEvaluator : public NewGate {
+ public:
+  YaoTensorReluEvaluator(std::size_t gate_id, YaoProvider&, const YaoTensorCP input);
+  bool need_setup() const noexcept override { return false; }
+  bool need_online() const noexcept override { return true; }
+  void evaluate_setup() override {}
+  void evaluate_online() override;
+  YaoTensorCP get_output_tensor() const noexcept { return output_; }
+
+ private:
+  YaoProvider& yao_provider_;
+  const std::size_t bit_size_;
+  const std::size_t data_size_;
+  const YaoTensorCP input_;
+  const YaoTensorP output_;
+  ENCRYPTO::ReusableFiberFuture<ENCRYPTO::block128_vector> garbled_tables_future_;
+  const ENCRYPTO::AlgorithmDescription& relu_algo_;
+};
+
 }  // namespace MOTION::proto::yao
