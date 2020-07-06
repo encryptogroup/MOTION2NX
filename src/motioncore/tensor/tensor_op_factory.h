@@ -31,6 +31,8 @@
 namespace MOTION::tensor {
 
 struct TensorDimensions;
+struct Conv2DOp;
+struct GemmOp;
 class Tensor;
 using TensorP = std::shared_ptr<Tensor>;
 using TensorCP = std::shared_ptr<const Tensor>;
@@ -55,6 +57,17 @@ class TensorOpFactory {
   make_arithmetic_64_tensor_output_my(const TensorCP&) = 0;
 
   virtual void make_arithmetic_tensor_output_other(const TensorCP&) = 0;
+
+  virtual tensor::TensorCP make_tensor_flatten_op(const tensor::TensorCP input, std::size_t axis) = 0;
+
+  // arithmetic operations
+  virtual tensor::TensorCP make_arithmetic_tensor_conv2d_op(const tensor::Conv2DOp& conv_op,
+                                                            const tensor::TensorCP input,
+                                                            const tensor::TensorCP kernel) = 0;
+  virtual tensor::TensorCP make_arithmetic_tensor_gemm_op(const tensor::GemmOp& conv_op,
+                                                          const tensor::TensorCP input_A,
+                                                          const tensor::TensorCP input_B) = 0;
+  virtual tensor::TensorCP make_arithmetic_tensor_sqr_op(const tensor::TensorCP input) = 0;
 };
 
 }  // namespace MOTION::tensor
