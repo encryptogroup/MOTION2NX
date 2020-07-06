@@ -23,6 +23,7 @@
 #pragma once
 
 #include "gate/new_gate.h"
+#include "protocols/beavy/tensor.h"
 #include "protocols/gmw/tensor.h"
 #include "tensor.h"
 #include "utility/bit_vector.h"
@@ -135,6 +136,107 @@ class YaoToArithmeticGMWTensorConversionEvaluator : public NewGate {
   ENCRYPTO::ReusableFiberFuture<ENCRYPTO::block128_vector> garbler_input_keys_future_;
   ENCRYPTO::ReusableFiberFuture<ENCRYPTO::block128_vector> garbled_tables_future_;
   ENCRYPTO::ReusableFiberFuture<ENCRYPTO::BitVector<>> output_info_future_;
+  const ENCRYPTO::AlgorithmDescription& addition_algo_;
+};
+
+template <typename T>
+class ArithmeticBEAVYToYaoTensorConversionGarbler : public NewGate {
+ public:
+  ArithmeticBEAVYToYaoTensorConversionGarbler(std::size_t gate_id, YaoProvider&,
+                                              const beavy::ArithmeticBEAVYTensorCP<T> input);
+  ~ArithmeticBEAVYToYaoTensorConversionGarbler();
+  bool need_setup() const noexcept override { return true; }
+  bool need_online() const noexcept override { return true; }
+  void evaluate_setup() override;
+  void evaluate_online() override;
+  YaoTensorCP get_output_tensor() const noexcept { return output_; }
+
+ private:
+  YaoProvider& yao_provider_;
+  static constexpr auto bit_size_ = ENCRYPTO::bit_size_v<T>;
+  const std::size_t data_size_;
+  const beavy::ArithmeticBEAVYTensorCP<T> input_;
+  YaoTensorP output_;
+  std::unique_ptr<ENCRYPTO::ObliviousTransfer::GOT128Sender> ot_sender_;
+  ENCRYPTO::block128_vector garbler_input_keys_;
+  ENCRYPTO::block128_vector evaluator_input_keys_;
+  ENCRYPTO::block128_vector garbled_tables_;
+  const ENCRYPTO::AlgorithmDescription& addition_algo_;
+};
+
+template <typename T>
+class ArithmeticBEAVYToYaoTensorConversionEvaluator : public NewGate {
+ public:
+  ArithmeticBEAVYToYaoTensorConversionEvaluator(std::size_t gate_id, YaoProvider&,
+                                                const beavy::ArithmeticBEAVYTensorCP<T> input);
+  ~ArithmeticBEAVYToYaoTensorConversionEvaluator();
+  bool need_setup() const noexcept override { return true; }
+  bool need_online() const noexcept override { return true; }
+  void evaluate_setup() override;
+  void evaluate_online() override;
+  YaoTensorCP get_output_tensor() const noexcept { return output_; }
+
+ private:
+  YaoProvider& yao_provider_;
+  static constexpr auto bit_size_ = ENCRYPTO::bit_size_v<T>;
+  const std::size_t data_size_;
+  const beavy::ArithmeticBEAVYTensorCP<T> input_;
+  YaoTensorP output_;
+  std::unique_ptr<ENCRYPTO::ObliviousTransfer::GOT128Receiver> ot_receiver_;
+  ENCRYPTO::ReusableFiberFuture<ENCRYPTO::block128_vector> garbler_input_keys_future_;
+  ENCRYPTO::ReusableFiberFuture<ENCRYPTO::block128_vector> garbled_tables_future_;
+  ENCRYPTO::block128_vector garbler_input_keys_;
+  ENCRYPTO::block128_vector evaluator_input_keys_;
+  ENCRYPTO::block128_vector garbled_tables_;
+  const ENCRYPTO::AlgorithmDescription& addition_algo_;
+};
+
+template <typename T>
+class YaoToArithmeticBEAVYTensorConversionGarbler : public NewGate {
+ public:
+  YaoToArithmeticBEAVYTensorConversionGarbler(std::size_t gate_id, YaoProvider&,
+                                              const YaoTensorCP input);
+  bool need_setup() const noexcept override { return true; }
+  bool need_online() const noexcept override { return true; }
+  void evaluate_setup() override;
+  void evaluate_online() override;
+  beavy::ArithmeticBEAVYTensorCP<T> get_output_tensor() const noexcept { return output_; }
+
+ private:
+  YaoProvider& yao_provider_;
+  static constexpr auto bit_size_ = ENCRYPTO::bit_size_v<T>;
+  const std::size_t data_size_;
+  const YaoTensorCP input_;
+  beavy::ArithmeticBEAVYTensorP<T> output_;
+  ENCRYPTO::block128_vector mask_input_keys_;
+  ENCRYPTO::block128_vector output_keys_;
+  ENCRYPTO::block128_vector garbled_tables_;
+  ENCRYPTO::ReusableFiberFuture<std::vector<T>> masked_value_public_share_future_;
+  const ENCRYPTO::AlgorithmDescription& addition_algo_;
+};
+
+template <typename T>
+class YaoToArithmeticBEAVYTensorConversionEvaluator : public NewGate {
+ public:
+  YaoToArithmeticBEAVYTensorConversionEvaluator(std::size_t gate_id, YaoProvider&,
+                                                const YaoTensorCP input);
+  bool need_setup() const noexcept override { return true; }
+  bool need_online() const noexcept override { return true; }
+  void evaluate_setup() override;
+  void evaluate_online() override;
+  beavy::ArithmeticBEAVYTensorCP<T> get_output_tensor() const noexcept { return output_; }
+
+ private:
+  YaoProvider& yao_provider_;
+  static constexpr auto bit_size_ = ENCRYPTO::bit_size_v<T>;
+  const std::size_t data_size_;
+  const YaoTensorCP input_;
+  beavy::ArithmeticBEAVYTensorP<T> output_;
+  ENCRYPTO::ReusableFiberFuture<ENCRYPTO::block128_vector> garbler_input_keys_future_;
+  ENCRYPTO::ReusableFiberFuture<ENCRYPTO::block128_vector> garbled_tables_future_;
+  ENCRYPTO::ReusableFiberFuture<ENCRYPTO::BitVector<>> output_info_future_;
+  std::vector<T> masked_value_secret_share_;
+  std::vector<T> masked_value_public_share_;
   const ENCRYPTO::AlgorithmDescription& addition_algo_;
 };
 

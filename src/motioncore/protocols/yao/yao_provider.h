@@ -174,8 +174,14 @@ class YaoProvider : public GateFactory, public ENCRYPTO::enable_wait_setup, publ
   tensor::TensorCP basic_make_convert_from_arithmetic_gmw_tensor(const tensor::TensorCP in_a);
   tensor::TensorCP make_convert_from_arithmetic_gmw_tensor(const tensor::TensorCP in_a);
   template <typename T>
+  tensor::TensorCP basic_make_convert_from_arithmetic_beavy_tensor(const tensor::TensorCP in_a);
+  tensor::TensorCP make_convert_from_arithmetic_beavy_tensor(const tensor::TensorCP in_a);
+  template <typename T>
   tensor::TensorCP basic_make_convert_to_arithmetic_gmw_tensor(const tensor::TensorCP in_a);
   tensor::TensorCP make_convert_to_arithmetic_gmw_tensor(const tensor::TensorCP in_a);
+  template <typename T>
+  tensor::TensorCP basic_make_convert_to_arithmetic_beavy_tensor(const tensor::TensorCP in_a);
+  tensor::TensorCP make_convert_to_arithmetic_beavy_tensor(const tensor::TensorCP in_a);
   tensor::TensorCP make_boolean_tensor_relu_op(const tensor::TensorCP in_a);
 
  private:

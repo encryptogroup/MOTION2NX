@@ -38,6 +38,8 @@
 #include "crypto/multiplication_triple/sp_provider.h"
 #include "crypto/oblivious_transfer/ot_provider.h"
 #include "gate/new_gate.h"
+#include "protocols/beavy/beavy_provider.h"
+#include "protocols/beavy/tensor_op.h"
 #include "protocols/gmw/gmw_provider.h"
 #include "protocols/gmw/tensor_op.h"
 #include "protocols/yao/tensor.h"
@@ -48,10 +50,11 @@
 #include "utility/linear_algebra.h"
 #include "utility/logger.h"
 
+using namespace MOTION::proto::beavy;
 using namespace MOTION::proto::gmw;
 using namespace MOTION::proto::yao;
 
-class YaoGMWTensorTest : public ::testing::Test {
+class YaoTensorTest : public ::testing::Test {
  protected:
   void SetUp() override {
     comm_layers_ = MOTION::Communication::make_dummy_communication_layers(2);
@@ -78,6 +81,9 @@ class YaoGMWTensorTest : public ::testing::Test {
       yao_providers_[i] = std::make_unique<YaoProvider>(
           *comm_layers_[i], *gate_registers_[i], circuit_loader_, *motion_base_providers_[i],
           ot_provider_managers_[i]->get_provider(1 - i), loggers_[i]);
+      beavy_providers_[i] = std::make_unique<BEAVYProvider>(
+          *comm_layers_[i], *gate_registers_[i], *motion_base_providers_[i],
+          *ot_provider_managers_[i], *arithmetic_provider_managers_[i], loggers_[i]);
       gmw_providers_[i] = std::make_unique<GMWProvider>(
           *comm_layers_[i], *gate_registers_[i], *motion_base_providers_[i], *mt_providers_[i],
           *sp_providers_[i], *sb_providers_[i], loggers_[i]);
@@ -121,6 +127,7 @@ class YaoGMWTensorTest : public ::testing::Test {
         mt_providers_[i]->Setup();
         sp_providers_[i]->Setup();
         sb_providers_[i]->Setup();
+        beavy_providers_[i]->setup();
         gmw_providers_[i]->setup();
         yao_providers_[i]->setup();
       }));
@@ -182,6 +189,7 @@ class YaoGMWTensorTest : public ::testing::Test {
   std::array<std::unique_ptr<MOTION::SPProvider>, 2> sp_providers_;
   std::array<std::unique_ptr<MOTION::SBProvider>, 2> sb_providers_;
   std::array<std::unique_ptr<MOTION::GateRegister>, 2> gate_registers_;
+  std::array<std::unique_ptr<BEAVYProvider>, 2> beavy_providers_;
   std::array<std::unique_ptr<GMWProvider>, 2> gmw_providers_;
   std::array<std::unique_ptr<YaoProvider>, 2> yao_providers_;
   std::array<std::shared_ptr<MOTION::Logger>, 2> loggers_;
@@ -189,7 +197,7 @@ class YaoGMWTensorTest : public ::testing::Test {
 };
 
 template <typename T>
-class YaoArithmeticGMWTensorTest : public YaoGMWTensorTest {
+class YaoArithmeticGMWTensorTest : public YaoTensorTest {
  public:
   static std::vector<T> generate_inputs(const MOTION::tensor::TensorDimensions dims) {
     return MOTION::Helpers::RandomVector<T>(dims.get_data_size());
@@ -342,4 +350,109 @@ TYPED_TEST(YaoArithmeticGMWTensorTest, ReLU) {
       EXPECT_EQ(evaluator_keys.at(idx), zero_keys.at(idx) ^ R);
     }
   }
+}
+
+template <typename T>
+class YaoArithmeticBEAVYTensorTest : public YaoTensorTest {
+ public:
+  static std::vector<T> generate_inputs(const MOTION::tensor::TensorDimensions dims) {
+    return MOTION::Helpers::RandomVector<T>(dims.get_data_size());
+  }
+  std::pair<ENCRYPTO::ReusableFiberPromise<MOTION::IntegerValues<T>>, MOTION::tensor::TensorCP>
+  make_arithmetic_T_tensor_input_my(std::size_t party_id,
+                                    const MOTION::tensor::TensorDimensions& dims) {
+    auto& gp = *beavy_providers_.at(party_id);
+    static_assert(ENCRYPTO::bit_size_v<T> == 64);
+    return gp.make_arithmetic_64_tensor_input_my(dims);
+  }
+  MOTION::tensor::TensorCP make_arithmetic_T_tensor_input_other(
+      std::size_t party_id, const MOTION::tensor::TensorDimensions& dims) {
+    auto& gp = *beavy_providers_.at(party_id);
+    static_assert(ENCRYPTO::bit_size_v<T> == 64);
+    return gp.make_arithmetic_64_tensor_input_other(dims);
+  }
+  ENCRYPTO::ReusableFiberFuture<MOTION::IntegerValues<T>> make_arithmetic_T_tensor_output_my(
+      std::size_t party_id, const MOTION::tensor::TensorCP& in) {
+    auto& gp = *beavy_providers_.at(party_id);
+    static_assert(ENCRYPTO::bit_size_v<T> == 64);
+    return gp.make_arithmetic_64_tensor_output_my(in);
+  }
+};
+
+using integer_types = ::testing::Types<std::uint64_t>;
+TYPED_TEST_SUITE(YaoArithmeticBEAVYTensorTest, integer_types);
+
+TYPED_TEST(YaoArithmeticBEAVYTensorTest, ConversionToYao) {
+  MOTION::tensor::TensorDimensions dims = {
+      .batch_size_ = 1, .num_channels_ = 1, .height_ = 28, .width_ = 28};
+  const auto input = this->generate_inputs(dims);
+
+  auto [input_promise, tensor_in_0] = this->make_arithmetic_T_tensor_input_my(0, dims);
+  auto tensor_in_1 = this->make_arithmetic_T_tensor_input_other(1, dims);
+
+  auto tensor_0 = this->yao_providers_[0]->make_convert_from_arithmetic_beavy_tensor(tensor_in_0);
+  auto tensor_1 = this->yao_providers_[1]->make_convert_from_arithmetic_beavy_tensor(tensor_in_1);
+
+  this->run_setup();
+  this->run_gates_setup();
+  input_promise.set_value(input);
+  this->run_gates_online();
+
+  const auto yao_tensor_0 = std::dynamic_pointer_cast<const YaoTensor>(tensor_0);
+  const auto yao_tensor_1 = std::dynamic_pointer_cast<const YaoTensor>(tensor_1);
+  ASSERT_NE(yao_tensor_0, nullptr);
+  ASSERT_NE(yao_tensor_1, nullptr);
+  yao_tensor_0->wait_setup();
+  yao_tensor_1->wait_online();
+
+  const auto& R = this->yao_providers_[0]->get_global_offset();
+  const auto& zero_keys = yao_tensor_0->get_keys();
+  const auto& evaluator_keys = yao_tensor_1->get_keys();
+  constexpr auto bit_size = ENCRYPTO::bit_size_v<TypeParam>;
+  const auto data_size = input.size();
+  ASSERT_EQ(zero_keys.size(), data_size * bit_size);
+  ASSERT_EQ(evaluator_keys.size(), data_size * bit_size);
+  for (std::size_t int_i = 0; int_i < data_size; ++int_i) {
+    const auto value = input.at(int_i);
+    for (std::size_t bit_j = 0; bit_j < ENCRYPTO::bit_size_v<TypeParam>; ++bit_j) {
+      auto idx = bit_j * data_size + int_i;
+      if (value & (TypeParam(1) << bit_j)) {
+        EXPECT_EQ(evaluator_keys.at(idx), zero_keys.at(idx) ^ R);
+      } else {
+        EXPECT_EQ(evaluator_keys.at(idx), zero_keys.at(idx));
+      }
+    }
+  }
+}
+
+TYPED_TEST(YaoArithmeticBEAVYTensorTest, ConversionBoth) {
+  MOTION::tensor::TensorDimensions dims = {
+      .batch_size_ = 1, .num_channels_ = 1, .height_ = 28, .width_ = 28};
+  const auto input = this->generate_inputs(dims);
+
+  auto [input_promise, tensor_in_0] = this->make_arithmetic_T_tensor_input_my(0, dims);
+  auto tensor_in_1 = this->make_arithmetic_T_tensor_input_other(1, dims);
+
+  auto yao_tensor_0 =
+      this->yao_providers_[0]->make_convert_from_arithmetic_beavy_tensor(tensor_in_0);
+  auto yao_tensor_1 =
+      this->yao_providers_[1]->make_convert_from_arithmetic_beavy_tensor(tensor_in_1);
+
+  auto beavy_tensor_0 =
+      this->yao_providers_[0]->make_convert_to_arithmetic_beavy_tensor(yao_tensor_0);
+  auto beavy_tensor_1 =
+      this->yao_providers_[1]->make_convert_to_arithmetic_beavy_tensor(yao_tensor_1);
+
+  this->beavy_providers_[0]->make_arithmetic_tensor_output_other(beavy_tensor_0);
+  auto output_future = this->make_arithmetic_T_tensor_output_my(1, beavy_tensor_1);
+
+  this->run_setup();
+  this->run_gates_setup();
+  input_promise.set_value(input);
+  this->run_gates_online();
+
+  auto output = output_future.get();
+
+  ASSERT_EQ(output.size(), dims.get_data_size());
+  ASSERT_EQ(input, output);
 }
