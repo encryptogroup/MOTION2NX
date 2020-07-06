@@ -41,6 +41,7 @@ class CircuitLoader {
   CircuitLoader();
   ~CircuitLoader();
   const ENCRYPTO::AlgorithmDescription& load_circuit(std::string name, CircuitFormat);
+  const ENCRYPTO::AlgorithmDescription& load_relu_circuit(std::size_t bit_size);
 
  private:
   std::vector<std::filesystem::path> circuit_search_path_;

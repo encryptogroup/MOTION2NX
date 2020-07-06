@@ -95,4 +95,38 @@ const ENCRYPTO::AlgorithmDescription& CircuitLoader::load_circuit(std::string na
                                        name, format_search_path(circuit_search_path_)));
 }
 
+const ENCRYPTO::AlgorithmDescription& CircuitLoader::load_relu_circuit(std::size_t bit_size) {
+  const auto name = fmt::format("__circuit_loader_builtin__relu_{}_bit", bit_size);
+  auto it = algo_cache_.find(name);
+  if (it != std::end(algo_cache_)) {
+    return it->second;
+  }
+
+  std::vector<ENCRYPTO::PrimitiveOperation> gates(bit_size + 1);
+
+  // hack s.t. the last input becomes the last output
+  // neccessary since this format does not support simple passthrough
+  gates[0] = ENCRYPTO::PrimitiveOperation{.type_ = ENCRYPTO::PrimitiveOperationType::INV,
+                                          .parent_a_ = bit_size - 1,
+                                          .output_wire_ = bit_size};
+  gates[bit_size] = ENCRYPTO::PrimitiveOperation{.type_ = ENCRYPTO::PrimitiveOperationType::INV,
+                                                 .parent_a_ = bit_size,
+                                                 .output_wire_ = 2 * bit_size};
+
+  for (std::size_t i = 0; i < bit_size - 1; ++i) {
+    gates[i + 1] = ENCRYPTO::PrimitiveOperation{.type_ = ENCRYPTO::PrimitiveOperationType::AND,
+                                                .parent_a_ = i,
+                                                .parent_b_ = bit_size - 1,
+                                                .output_wire_ = bit_size + i + 1};
+  }
+
+  ENCRYPTO::AlgorithmDescription algo{.n_output_wires_ = bit_size,
+                                      .n_input_wires_parent_a_ = bit_size,
+                                      .n_wires_ = 2 * bit_size + 1,
+                                      .n_gates_ = bit_size + 1,
+                                      .gates_ = std::move(gates)};
+  algo_cache_[name] = std::move(algo);
+  return algo_cache_[name];
+}
+
 }  // namespace MOTION
