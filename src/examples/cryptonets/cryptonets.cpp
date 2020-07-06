@@ -95,10 +95,6 @@ std::optional<Options> parse_program_options(int argc, char* argv[]) {
     options.protocol = MOTION::MPCProtocol::ArithmeticGMW;
   } else if (protocol == "beavy") {
     options.protocol = MOTION::MPCProtocol::ArithmeticBEAVY;
-    if (options.relu) {
-      std::cerr << "ArithmeticBEAVY + Yao is not yet supported\n";
-      return std::nullopt;
-    }
   } else {
     std::cerr << "invalid protocol: " << protocol << "\n";
     return std::nullopt;
@@ -187,8 +183,14 @@ ENCRYPTO::ReusableFiberFuture<std::vector<std::uint64_t>> build_cryptonets(
       const auto relu_tensor = yao_provider.make_boolean_tensor_relu_op(yao_tensor);
       return yao_provider.make_convert_to_arithmetic_gmw_tensor(relu_tensor);
     };
+  } else if (options.protocol == MOTION::MPCProtocol::ArithmeticBEAVY) {
+    make_activation = [&yao_provider](const auto& input) {
+      const auto yao_tensor = yao_provider.make_convert_from_arithmetic_beavy_tensor(input);
+      const auto relu_tensor = yao_provider.make_boolean_tensor_relu_op(yao_tensor);
+      return yao_provider.make_convert_to_arithmetic_beavy_tensor(relu_tensor);
+    };
   } else {
-    throw std::logic_error("ArithmeticBEAVY + Yao is not yet supported");
+    throw std::logic_error("something went wrong ...");
   }
 
   if (options.my_id == 0) {
