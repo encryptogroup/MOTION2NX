@@ -10,6 +10,7 @@ add_library(motion
         base/party.cpp
         base/register.cpp
         base/two_party_backend.cpp
+        base/two_party_tensor_backend.cpp
         communication/base_ot_message.cpp
         communication/bmr_message.cpp
         communication/communication_layer.cpp
@@ -47,6 +48,7 @@ add_library(motion
         data_storage/shared_bits_data.cpp
         executor/gate_executor.cpp
         executor/new_gate_executor.cpp
+        executor/tensor_op_executor.cpp
         gate/bmr_gate.cpp
         gate/boolean_gmw_gate.cpp
         gate/constant_gate.cpp
