@@ -36,6 +36,7 @@
 #include "base/two_party_tensor_backend.h"
 #include "communication/communication_layer.h"
 #include "communication/tcp_transport.h"
+#include "protocols/yao/yao_provider.h"
 #include "tensor/tensor.h"
 #include "tensor/tensor_op.h"
 #include "tensor/tensor_op_factory.h"
@@ -49,9 +50,11 @@ struct Options {
   MOTION::MPCProtocol protocol;
   std::size_t my_id;
   MOTION::Communication::tcp_parties_config tcp_config;
+  bool relu;
 };
 
 std::optional<Options> parse_program_options(int argc, char* argv[]) {
+  Options options;
   boost::program_options::options_description desc("Allowed options");
   bool help;
   // clang-format off
@@ -61,7 +64,8 @@ std::optional<Options> parse_program_options(int argc, char* argv[]) {
     ("my-id", po::value<std::size_t>(), "my party id")
     ("party", po::value<std::vector<std::string>>()->multitoken(), "(party id, IP, port), e.g., --party 1,127.0.0.1,7777")
     ("protocol", po::value<std::string>(), "2PC protocol (GMW or BEAVY)")
-    ("repetitions", po::value<std::size_t>()->default_value(1), "number of repetitions");
+    ("repetitions", po::value<std::size_t>()->default_value(1), "number of repetitions")
+    ("relu", po::bool_switch(&options.relu)->default_value(false), "use ReLU instead of squaring as activation function");
   // clang-format on
 
   po::variables_map vm;
@@ -79,7 +83,6 @@ std::optional<Options> parse_program_options(int argc, char* argv[]) {
     po::notify(vm);
   }
 
-  Options options;
   options.my_id = vm["my-id"].as<std::size_t>();
   options.num_repetitions = vm["repetitions"].as<std::size_t>();
   if (options.my_id > 1) {
@@ -92,6 +95,10 @@ std::optional<Options> parse_program_options(int argc, char* argv[]) {
     options.protocol = MOTION::MPCProtocol::ArithmeticGMW;
   } else if (protocol == "beavy") {
     options.protocol = MOTION::MPCProtocol::ArithmeticBEAVY;
+    if (options.relu) {
+      std::cerr << "ArithmeticBEAVY + Yao is not yet supported\n";
+      return std::nullopt;
+    }
   } else {
     std::cerr << "invalid protocol: " << protocol << "\n";
     return std::nullopt;
@@ -141,6 +148,8 @@ std::unique_ptr<MOTION::Communication::CommunicationLayer> setup_communication(
 ENCRYPTO::ReusableFiberFuture<std::vector<std::uint64_t>> build_cryptonets(
     const Options& options, MOTION::TwoPartyTensorBackend& backend) {
   auto& tof = backend.get_tensor_op_factory(options.protocol);
+  auto& yao_provider = dynamic_cast<MOTION::proto::yao::YaoProvider&>(
+      backend.get_gate_factory(MOTION::MPCProtocol::Yao));
 
   const MOTION::tensor::TensorDimensions input_dims{
       .batch_size_ = 1, .num_channels_ = 1, .height_ = 28, .width_ = 28};
@@ -166,6 +175,21 @@ ENCRYPTO::ReusableFiberFuture<std::vector<std::uint64_t>> build_cryptonets(
   MOTION::tensor::TensorCP conv_weights_tensor;
   MOTION::tensor::TensorCP squashed_weights_tensor;
   MOTION::tensor::TensorCP fully_connected_weights_tensor;
+
+  std::function<MOTION::tensor::TensorCP(const MOTION::tensor::TensorCP&)> make_activation;
+  if (!options.relu) {
+    make_activation = [&tof](const auto& input) {
+      return tof.make_arithmetic_tensor_sqr_op(input);
+    };
+  } else if (options.protocol == MOTION::MPCProtocol::ArithmeticGMW) {
+    make_activation = [&yao_provider](const auto& input) {
+      const auto yao_tensor = yao_provider.make_convert_from_arithmetic_gmw_tensor(input);
+      const auto relu_tensor = yao_provider.make_boolean_tensor_relu_op(yao_tensor);
+      return yao_provider.make_convert_to_arithmetic_gmw_tensor(relu_tensor);
+    };
+  } else {
+    throw std::logic_error("ArithmeticBEAVY + Yao is not yet supported");
+  }
 
   if (options.my_id == 0) {
     input_tensor = tof.make_arithmetic_64_tensor_input_other(input_dims);
@@ -194,13 +218,13 @@ ENCRYPTO::ReusableFiberFuture<std::vector<std::uint64_t>> build_cryptonets(
 
   auto conv_output =
       tof.make_arithmetic_tensor_conv2d_op(conv_op, input_tensor, conv_weights_tensor);
-  auto sqr_1_output = tof.make_arithmetic_tensor_sqr_op(conv_output);
-  auto flatten_output = tof.make_tensor_flatten_op(sqr_1_output, 0);
+  auto act_1_output = make_activation(conv_output);
+  auto flatten_output = tof.make_tensor_flatten_op(act_1_output, 0);
   auto squashed_output =
       tof.make_arithmetic_tensor_gemm_op(gemm_op_1, flatten_output, squashed_weights_tensor);
-  auto sqr_2_output = tof.make_arithmetic_tensor_sqr_op(squashed_output);
+  auto act_2_output = make_activation(squashed_output);
   auto fully_connected_output =
-      tof.make_arithmetic_tensor_gemm_op(gemm_op_2, sqr_2_output, fully_connected_weights_tensor);
+      tof.make_arithmetic_tensor_gemm_op(gemm_op_2, act_2_output, fully_connected_weights_tensor);
 
   ENCRYPTO::ReusableFiberFuture<std::vector<std::uint64_t>> output_future;
   if (options.my_id == 0) {
@@ -227,8 +251,8 @@ int main(int argc, char* argv[]) {
 
   try {
     auto comm_layer = setup_communication(*options);
-    auto logger =
-        std::make_shared<MOTION::Logger>(options->my_id, boost::log::trivial::severity_level::trace);
+    auto logger = std::make_shared<MOTION::Logger>(options->my_id,
+                                                   boost::log::trivial::severity_level::trace);
     comm_layer->set_logger(logger);
     MOTION::TwoPartyTensorBackend backend(*comm_layer, logger);
     run_cryptonets(*options, backend);
