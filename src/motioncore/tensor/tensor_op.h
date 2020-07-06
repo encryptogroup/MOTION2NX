@@ -76,6 +76,8 @@ struct GemmOp {
   bool operator==(const GemmOp&) const noexcept;
 };
 
+TensorDimensions flatten(const TensorDimensions& dims, std::size_t axis);
+
 }  // namespace MOTION::tensor
 
 namespace std {

@@ -188,6 +188,38 @@ bool GemmOp::operator==(const GemmOp& other) const noexcept {
   return result;
 }
 
+TensorDimensions flatten(const TensorDimensions& dims, std::size_t axis) {
+  std::size_t height = 1;
+  std::size_t width = 1;
+  switch (axis) {
+    case 0:
+      width *= dims.batch_size_;
+      [[fallthrough]]
+    case 1:
+      width *= dims.num_channels_;
+      [[fallthrough]]
+    case 2:
+      width *= dims.height_;
+      [[fallthrough]]
+    case 3:
+      width *= dims.width_;
+  }
+  switch (axis) {
+    case 4:
+      height *= dims.width_;
+      [[fallthrough]]
+    case 3:
+      height *= dims.height_;
+      [[fallthrough]]
+    case 2:
+      height *= dims.num_channels_;
+      [[fallthrough]]
+    case 1:
+      height *= dims.batch_size_;
+  }
+  return {.batch_size_ = 1, .num_channels_ = 1, .height_ = height, .width_ = width};
+}
+
 }  // namespace MOTION::tensor
 
 namespace std {
