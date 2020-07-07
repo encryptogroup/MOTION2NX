@@ -32,7 +32,7 @@ bool Conv2DOp::verify() const noexcept {
   result = result && (output_shape_ == compute_output_shape());
   result = result && strides_[0] > 0 && strides_[1] > 0;
   // maybe add more checks here
-  return true;
+  return result;
 }
 
 std::array<std::size_t, 3> Conv2DOp::compute_output_shape() const noexcept {
@@ -131,7 +131,7 @@ bool GemmOp::verify() const noexcept {
   result = result && (input_A_shape_[0] == output_shape_[0]);
   result = result && (input_B_shape_[1] == output_shape_[1]);
   // maybe add more checks here
-  return true;
+  return result;
 }
 
 std::array<std::size_t, 2> GemmOp::compute_output_shape() const noexcept {
