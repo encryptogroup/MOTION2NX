@@ -194,26 +194,26 @@ TensorDimensions flatten(const TensorDimensions& dims, std::size_t axis) {
   switch (axis) {
     case 0:
       width *= dims.batch_size_;
-      [[fallthrough]]
+      [[fallthrough]];
     case 1:
       width *= dims.num_channels_;
-      [[fallthrough]]
+      [[fallthrough]];
     case 2:
       width *= dims.height_;
-      [[fallthrough]]
+      [[fallthrough]];
     case 3:
       width *= dims.width_;
   }
   switch (axis) {
     case 4:
       height *= dims.width_;
-      [[fallthrough]]
+      [[fallthrough]];
     case 3:
       height *= dims.height_;
-      [[fallthrough]]
+      [[fallthrough]];
     case 2:
       height *= dims.num_channels_;
-      [[fallthrough]]
+      [[fallthrough]];
     case 1:
       height *= dims.batch_size_;
   }
