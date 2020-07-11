@@ -12,6 +12,7 @@ add_executable(motiontest
         test_communication_layer.cpp
         test_conversions.cpp
         test_dummy_transport.cpp
+        test_fixed_point.cpp
         test_gmw.cpp
         test_gmw_tensor.cpp
         test_half_gates.cpp
