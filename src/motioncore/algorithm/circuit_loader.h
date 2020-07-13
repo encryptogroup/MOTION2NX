@@ -44,6 +44,11 @@ class CircuitLoader {
   const ENCRYPTO::AlgorithmDescription& load_relu_circuit(std::size_t bit_size);
   const ENCRYPTO::AlgorithmDescription& load_gt_circuit(std::size_t bit_size);
   const ENCRYPTO::AlgorithmDescription& load_gtmux_circuit(std::size_t bit_size);
+  const ENCRYPTO::AlgorithmDescription& load_tree_circuit(const std::string& algo_name,
+                                                          std::size_t bit_size,
+                                                          std::size_t num_inputs);
+  const ENCRYPTO::AlgorithmDescription& load_maxpool_circuit(std::size_t bit_size,
+                                                             std::size_t num_inputs);
 
  private:
   std::vector<std::filesystem::path> circuit_search_path_;
