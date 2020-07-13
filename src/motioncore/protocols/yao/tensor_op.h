@@ -26,6 +26,7 @@
 #include "protocols/beavy/tensor.h"
 #include "protocols/gmw/tensor.h"
 #include "tensor.h"
+#include "tensor/tensor_op.h"
 #include "utility/bit_vector.h"
 #include "utility/reusable_future.h"
 
@@ -276,6 +277,48 @@ class YaoTensorReluEvaluator : public NewGate {
   const YaoTensorP output_;
   ENCRYPTO::ReusableFiberFuture<ENCRYPTO::block128_vector> garbled_tables_future_;
   const ENCRYPTO::AlgorithmDescription& relu_algo_;
+};
+
+class YaoTensorMaxPoolGarbler : public NewGate {
+ public:
+  YaoTensorMaxPoolGarbler(std::size_t gate_id, YaoProvider&, tensor::MaxPoolOp,
+                          const YaoTensorCP input);
+  bool need_setup() const noexcept override { return true; }
+  bool need_online() const noexcept override { return false; }
+  void evaluate_setup() override;
+  void evaluate_online() override {}
+  YaoTensorCP get_output_tensor() const noexcept { return output_; }
+
+ private:
+  YaoProvider& yao_provider_;
+  const tensor::MaxPoolOp maxpool_op_;
+  const std::size_t bit_size_;
+  const std::size_t data_size_;
+  const YaoTensorCP input_;
+  const YaoTensorP output_;
+  ENCRYPTO::block128_vector garbled_tables_;
+  const ENCRYPTO::AlgorithmDescription& maxpool_algo_;
+};
+
+class YaoTensorMaxPoolEvaluator : public NewGate {
+ public:
+  YaoTensorMaxPoolEvaluator(std::size_t gate_id, YaoProvider&, tensor::MaxPoolOp,
+                            const YaoTensorCP input);
+  bool need_setup() const noexcept override { return false; }
+  bool need_online() const noexcept override { return true; }
+  void evaluate_setup() override {}
+  void evaluate_online() override;
+  YaoTensorCP get_output_tensor() const noexcept { return output_; }
+
+ private:
+  YaoProvider& yao_provider_;
+  const tensor::MaxPoolOp maxpool_op_;
+  const std::size_t bit_size_;
+  const std::size_t data_size_;
+  const YaoTensorCP input_;
+  const YaoTensorP output_;
+  ENCRYPTO::ReusableFiberFuture<ENCRYPTO::block128_vector> garbled_tables_future_;
+  const ENCRYPTO::AlgorithmDescription& maxpool_algo_;
 };
 
 }  // namespace MOTION::proto::yao

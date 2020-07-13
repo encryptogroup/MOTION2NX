@@ -27,6 +27,7 @@
 #include "crypto/sharing_randomness_generator.h"
 #include "tensor_op.h"
 // #include "utility/bit_transpose.h"
+#include "tools.h"
 #include "utility/logger.h"
 #include "yao_provider.h"
 
@@ -983,6 +984,99 @@ void YaoTensorReluEvaluator::evaluate_online() {
     if (logger) {
       logger->LogTrace(
           fmt::format("Gate {}: YaoTensorReluEvaluator::evaluate_online end", gate_id_));
+    }
+  }
+}
+
+// MaxPool
+
+YaoTensorMaxPoolGarbler::YaoTensorMaxPoolGarbler(std::size_t gate_id, YaoProvider& yao_provider,
+                                                 tensor::MaxPoolOp maxpool_op,
+                                                 const YaoTensorCP input)
+    : NewGate(gate_id),
+      yao_provider_(yao_provider),
+      maxpool_op_(maxpool_op),
+      bit_size_(input->get_bit_size()),
+      data_size_(input->get_dimensions().get_data_size()),
+      input_(input),
+      output_(std::make_shared<YaoTensor>(maxpool_op_.get_output_tensor_dims(), bit_size_)),
+      maxpool_algo_(yao_provider_.get_circuit_loader().load_maxpool_circuit(
+          bit_size_, maxpool_op_.compute_kernel_size())) {
+  assert(maxpool_op_.verify());
+  output_->get_keys().resize(data_size_ * bit_size_);
+}
+
+void YaoTensorMaxPoolGarbler::evaluate_setup() {
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = yao_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(
+          fmt::format("Gate {}: YaoTensorMaxPoolGarbler::evaluate_setup start", gate_id_));
+    }
+  }
+
+  // garble MaxPool circuit
+  ENCRYPTO::block128_vector in_keys;
+  ENCRYPTO::block128_vector out_keys;
+  maxpool_rearrange_keys_in(in_keys, input_->get_keys(), bit_size_, maxpool_op_);
+  yao_provider_.create_garbled_circuit(gate_id_, maxpool_op_.compute_output_size(), maxpool_algo_,
+                                       in_keys, {}, garbled_tables_, out_keys);
+  yao_provider_.send_blocks_message(gate_id_, std::move(garbled_tables_));
+  maxpool_rearrange_keys_out(output_->get_keys(), out_keys, bit_size_, maxpool_op_);
+
+  output_->set_setup_ready();
+
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = yao_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(
+          fmt::format("Gate {}: YaoTensorMaxPoolGarbler::evaluate_setup end", gate_id_));
+    }
+  }
+}
+
+YaoTensorMaxPoolEvaluator::YaoTensorMaxPoolEvaluator(std::size_t gate_id, YaoProvider& yao_provider,
+                                                     tensor::MaxPoolOp maxpool_op,
+                                                     const YaoTensorCP input)
+    : NewGate(gate_id),
+      yao_provider_(yao_provider),
+      maxpool_op_(maxpool_op),
+      bit_size_(input->get_bit_size()),
+      data_size_(input->get_dimensions().get_data_size()),
+      input_(input),
+      output_(std::make_shared<YaoTensor>(maxpool_op_.get_output_tensor_dims(), bit_size_)),
+      maxpool_algo_(yao_provider_.get_circuit_loader().load_maxpool_circuit(
+          bit_size_, maxpool_op_.compute_kernel_size())) {
+  const std::size_t num_and_gates =
+      (2 * bit_size_) * (maxpool_op_.compute_kernel_size() - 1) * maxpool_op_.compute_output_size();
+  garbled_tables_future_ = yao_provider_.register_for_blocks_message(gate_id, 2 * num_and_gates);
+  output_->get_keys().resize(bit_size_);
+}
+
+void YaoTensorMaxPoolEvaluator::evaluate_online() {
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = yao_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(
+          fmt::format("Gate {}: YaoTensorMaxPoolEvaluator::evaluate_online start", gate_id_));
+    }
+  }
+
+  // evaluate MaxPool circuit
+  const auto garbled_tables = garbled_tables_future_.get();
+  ENCRYPTO::block128_vector in_keys;
+  ENCRYPTO::block128_vector out_keys;
+  maxpool_rearrange_keys_in(in_keys, input_->get_keys(), bit_size_, maxpool_op_);
+  yao_provider_.evaluate_garbled_circuit(gate_id_, maxpool_op_.compute_output_size(), maxpool_algo_,
+                                         in_keys, {}, garbled_tables, out_keys);
+  maxpool_rearrange_keys_out(output_->get_keys(), out_keys, bit_size_, maxpool_op_);
+  output_->set_online_ready();
+
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = yao_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(
+          fmt::format("Gate {}: YaoTensorMaxPoolEvaluator::evaluate_online end", gate_id_));
     }
   }
 }

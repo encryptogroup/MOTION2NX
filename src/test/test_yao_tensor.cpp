@@ -352,6 +352,148 @@ TYPED_TEST(YaoArithmeticGMWTensorTest, ReLU) {
   }
 }
 
+TYPED_TEST(YaoArithmeticGMWTensorTest, MaxPoolSimple) {
+  const MOTION::tensor::TensorDimensions dims = {
+      .batch_size_ = 1, .num_channels_ = 1, .height_ = 2, .width_ = 2};
+  const MOTION::tensor::TensorDimensions out_dims = {
+      .batch_size_ = 1, .num_channels_ = 1, .height_ = 1, .width_ = 1};
+  const MOTION::tensor::MaxPoolOp maxpool_op = {.input_shape_ = {1, 2, 2},
+                                                .output_shape_ = {1, 1, 1},
+                                                .kernel_shape_ = {2, 2},
+                                                .strides_ = {1, 1}};
+  ASSERT_TRUE(maxpool_op.verify());
+  const std::vector<TypeParam> input = {13, 42, 47, 37};
+
+  auto [input_promise, tensor_in_0] = this->make_arithmetic_T_tensor_input_my(0, dims);
+  auto tensor_in_1 = this->make_arithmetic_T_tensor_input_other(1, dims);
+
+  auto tensor_0 = this->yao_providers_[0]->make_convert_from_arithmetic_gmw_tensor(tensor_in_0);
+  auto tensor_1 = this->yao_providers_[1]->make_convert_from_arithmetic_gmw_tensor(tensor_in_1);
+  auto output_tensor_0 =
+      this->yao_providers_[0]->make_boolean_tensor_maxpool_op(maxpool_op, tensor_0);
+  auto output_tensor_1 =
+      this->yao_providers_[1]->make_boolean_tensor_maxpool_op(maxpool_op, tensor_1);
+
+  ASSERT_EQ(output_tensor_0->get_dimensions(), out_dims);
+  ASSERT_EQ(output_tensor_1->get_dimensions(), out_dims);
+
+  this->run_setup();
+  this->run_gates_setup();
+  input_promise.set_value(input);
+  this->run_gates_online();
+
+  const auto yao_tensor_0 = std::dynamic_pointer_cast<const YaoTensor>(output_tensor_0);
+  const auto yao_tensor_1 = std::dynamic_pointer_cast<const YaoTensor>(output_tensor_1);
+  ASSERT_NE(yao_tensor_0, nullptr);
+  ASSERT_NE(yao_tensor_1, nullptr);
+  yao_tensor_0->wait_setup();
+  yao_tensor_1->wait_online();
+
+  const auto& R = this->yao_providers_[0]->get_global_offset();
+  const auto& zero_keys = yao_tensor_0->get_keys();
+  const auto& evaluator_keys = yao_tensor_1->get_keys();
+  constexpr auto bit_size = ENCRYPTO::bit_size_v<TypeParam>;
+  const auto data_size = maxpool_op.compute_output_size();
+  ASSERT_EQ(zero_keys.size(), data_size * bit_size);
+  ASSERT_EQ(evaluator_keys.size(), data_size * bit_size);
+  const TypeParam value = 47;
+  for (std::size_t bit_j = 0; bit_j < ENCRYPTO::bit_size_v<TypeParam> - 1; ++bit_j) {
+    if (value & (TypeParam(1) << bit_j)) {
+      EXPECT_EQ(evaluator_keys.at(bit_j), zero_keys.at(bit_j) ^ R);
+    } else {
+      EXPECT_EQ(evaluator_keys.at(bit_j), zero_keys.at(bit_j));
+    }
+  }
+}
+
+TYPED_TEST(YaoArithmeticGMWTensorTest, MaxPool) {
+  const MOTION::tensor::TensorDimensions dims = {
+      .batch_size_ = 1, .num_channels_ = 1, .height_ = 4, .width_ = 4};
+  const MOTION::tensor::TensorDimensions out_dims = {
+      .batch_size_ = 1, .num_channels_ = 1, .height_ = 3, .width_ = 2};
+  const MOTION::tensor::MaxPoolOp maxpool_op = {.input_shape_ = {1, 4, 4},
+                                                .output_shape_ = {1, 3, 2},
+                                                .kernel_shape_ = {2, 2},
+                                                .strides_ = {1, 2}};
+  ASSERT_TRUE(maxpool_op.verify());
+
+  // clang-format off
+  // const std::vector<TypeParam> input = {
+  //   629, 499, 147, 593,
+  //   335, 313, 191, 159,
+  //   829, 569, 975, 846,
+  //   758, 466, 868, 403};
+  // const std::vector<TypeParam> expected_output = {
+  //   629, 593,
+  //   829, 975,
+  //   829, 975,
+  // };
+  const std::vector<TypeParam> input = {
+     9752516871661491360u,  4662446014583943733u, 11447746383552160793u,  6355249606212339500u,
+    18175355885135292618u,  7196435132770689189u,  2104876926157817893u, 14012399909055774597u,
+    18122604083447938486u,  2509168573361965776u, 17592664428622712039u,  2487988269217325321u,
+     7153114465142520673u, 16795418668493668102u, 11793396511977302258u,  1400963290576875662u};
+  const std::vector<TypeParam> expected_output = {
+    7196435132770689189u, 6355249606212339500u,
+    7196435132770689189u, 2487988269217325321u,
+    7153114465142520673u, 2487988269217325321u,
+  };
+  // clang-format on
+
+  auto [input_promise, tensor_in_0] = this->make_arithmetic_T_tensor_input_my(0, dims);
+  auto tensor_in_1 = this->make_arithmetic_T_tensor_input_other(1, dims);
+
+  auto tensor_0 = this->yao_providers_[0]->make_convert_from_arithmetic_gmw_tensor(tensor_in_0);
+  auto tensor_1 = this->yao_providers_[1]->make_convert_from_arithmetic_gmw_tensor(tensor_in_1);
+  auto output_tensor_0 =
+      this->yao_providers_[0]->make_boolean_tensor_maxpool_op(maxpool_op, tensor_0);
+  auto output_tensor_1 =
+      this->yao_providers_[1]->make_boolean_tensor_maxpool_op(maxpool_op, tensor_1);
+  auto gmw_output_tensor_0 =
+      this->yao_providers_[0]->make_convert_to_arithmetic_gmw_tensor(output_tensor_0);
+  auto gmw_output_tensor_1 =
+      this->yao_providers_[1]->make_convert_to_arithmetic_gmw_tensor(output_tensor_1);
+  this->gmw_providers_[0]->make_arithmetic_tensor_output_other(gmw_output_tensor_0);
+  auto output_future = this->make_arithmetic_T_tensor_output_my(1, gmw_output_tensor_1);
+
+  ASSERT_EQ(output_tensor_0->get_dimensions(), out_dims);
+  ASSERT_EQ(output_tensor_1->get_dimensions(), out_dims);
+
+  this->run_setup();
+  this->run_gates_setup();
+  input_promise.set_value(input);
+  this->run_gates_online();
+
+  const auto yao_tensor_0 = std::dynamic_pointer_cast<const YaoTensor>(output_tensor_0);
+  const auto yao_tensor_1 = std::dynamic_pointer_cast<const YaoTensor>(output_tensor_1);
+  ASSERT_NE(yao_tensor_0, nullptr);
+  ASSERT_NE(yao_tensor_1, nullptr);
+  yao_tensor_0->wait_setup();
+  yao_tensor_1->wait_online();
+
+  const auto& R = this->yao_providers_[0]->get_global_offset();
+  const auto& zero_keys = yao_tensor_0->get_keys();
+  const auto& evaluator_keys = yao_tensor_1->get_keys();
+  constexpr auto bit_size = ENCRYPTO::bit_size_v<TypeParam>;
+  const auto data_size = maxpool_op.compute_output_size();
+  ASSERT_EQ(zero_keys.size(), data_size * bit_size);
+  ASSERT_EQ(evaluator_keys.size(), data_size * bit_size);
+  for (std::size_t int_i = 0; int_i < data_size; ++int_i) {
+    const auto value = expected_output.at(int_i);
+    for (std::size_t bit_j = 0; bit_j < ENCRYPTO::bit_size_v<TypeParam> - 1; ++bit_j) {
+      auto idx = bit_j * data_size + int_i;
+      if (value & (TypeParam(1) << bit_j)) {
+        EXPECT_EQ(evaluator_keys.at(idx), zero_keys.at(idx) ^ R);
+      } else {
+        EXPECT_EQ(evaluator_keys.at(idx), zero_keys.at(idx));
+      }
+    }
+  }
+
+  const auto output = output_future.get();
+  EXPECT_EQ(output, expected_output);
+}
+
 template <typename T>
 class YaoArithmeticBEAVYTensorTest : public YaoTensorTest {
  public:

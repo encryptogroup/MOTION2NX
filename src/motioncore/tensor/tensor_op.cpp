@@ -220,6 +220,61 @@ TensorDimensions flatten(const TensorDimensions& dims, std::size_t axis) {
   return {.batch_size_ = 1, .num_channels_ = 1, .height_ = height, .width_ = width};
 }
 
+bool MaxPoolOp::verify() const noexcept {
+  bool result = true;
+  result = result && (output_shape_ == compute_output_shape());
+  result = result && strides_[0] > 0 && strides_[1] > 0;
+  result = kernel_shape_[0] <= input_shape_[1] && kernel_shape_[1] <= input_shape_[2];
+  // maybe add more checks here
+  return result;
+}
+
+std::array<std::size_t, 3> MaxPoolOp::compute_output_shape() const noexcept {
+  const auto compute_output_dimension = [](auto input_size, auto kernel_size, auto stride) {
+    assert(stride != 0);
+    return (input_size - kernel_size + stride) / stride;
+  };
+
+  std::array<std::size_t, 3> output_shape;
+  output_shape[0] = input_shape_[0];
+  output_shape[1] =
+      compute_output_dimension(input_shape_[1], kernel_shape_[2], strides_[0]);
+  output_shape[2] =
+      compute_output_dimension(input_shape_[2], kernel_shape_[3], strides_[1]);
+  return output_shape;
+}
+
+std::size_t MaxPoolOp::compute_kernel_size() const noexcept {
+  assert(verify());
+  return kernel_shape_[0] * kernel_shape_[1];
+}
+
+std::size_t MaxPoolOp::compute_input_size() const noexcept {
+  assert(verify());
+  return input_shape_[0] * input_shape_[1] * input_shape_[2];
+}
+
+std::size_t MaxPoolOp::compute_output_size() const noexcept {
+  assert(verify());
+  return output_shape_[0] * output_shape_[1] * output_shape_[2];
+}
+
+TensorDimensions MaxPoolOp::get_input_tensor_dims() const noexcept {
+  assert(verify());
+  return {.batch_size_ = 1,
+          .num_channels_ = input_shape_[0],
+          .height_ = input_shape_[1],
+          .width_ = input_shape_[2]};
+}
+
+TensorDimensions MaxPoolOp::get_output_tensor_dims() const noexcept {
+  assert(verify());
+  return {.batch_size_ = 1,
+          .num_channels_ = output_shape_[0],
+          .height_ = output_shape_[1],
+          .width_ = output_shape_[2]};
+}
+
 }  // namespace MOTION::tensor
 
 namespace std {

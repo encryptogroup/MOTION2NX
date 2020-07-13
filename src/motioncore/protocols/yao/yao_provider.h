@@ -30,6 +30,7 @@
 #include "base/gate_factory.h"
 #include "protocols/common/comm_mixin.h"
 #include "tensor/tensor.h"
+#include "tensor/tensor_op.h"
 #include "utility/bit_vector.h"
 #include "utility/block.h"
 #include "utility/reusable_future.h"
@@ -183,6 +184,7 @@ class YaoProvider : public GateFactory, public ENCRYPTO::enable_wait_setup, publ
   tensor::TensorCP basic_make_convert_to_arithmetic_beavy_tensor(const tensor::TensorCP in_a);
   tensor::TensorCP make_convert_to_arithmetic_beavy_tensor(const tensor::TensorCP in_a);
   tensor::TensorCP make_boolean_tensor_relu_op(const tensor::TensorCP in_a);
+  tensor::TensorCP make_boolean_tensor_maxpool_op(const tensor::MaxPoolOp&, const tensor::TensorCP);
 
  private:
   Communication::CommunicationLayer& communication_layer_;

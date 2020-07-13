@@ -65,6 +65,7 @@ add_library(motion
         protocols/yao/conversion.cpp
         protocols/yao/gate.cpp
         protocols/yao/tensor_op.cpp
+        protocols/yao/tools.cpp
         protocols/yao/yao_provider.cpp
         secure_type/secure_unsigned_integer.cpp
         share/bmr_share.cpp
