@@ -36,10 +36,10 @@
 #include "base/two_party_tensor_backend.h"
 #include "communication/communication_layer.h"
 #include "communication/tcp_transport.h"
-#include "protocols/yao/yao_provider.h"
 #include "tensor/tensor.h"
 #include "tensor/tensor_op.h"
 #include "tensor/tensor_op_factory.h"
+#include "utility/helpers.h"
 #include "utility/logger.h"
 #include "utility/typedefs.h"
 
@@ -61,18 +61,24 @@ std::optional<Options> parse_program_options(int argc, char* argv[]) {
   desc.add_options()
     ("help,h", po::bool_switch(&help)->default_value(false),"produce help message")
     ("config-file", po::value<std::string>(), "config file containing options")
-    ("my-id", po::value<std::size_t>(), "my party id")
-    ("party", po::value<std::vector<std::string>>()->multitoken(), "(party id, IP, port), e.g., --party 1,127.0.0.1,7777")
-    ("protocol", po::value<std::string>(), "2PC protocol (GMW or BEAVY)")
+    ("my-id", po::value<std::size_t>()->required(), "my party id")
+    ("party", po::value<std::vector<std::string>>()->multitoken(),
+     "(party id, IP, port), e.g., --party 1,127.0.0.1,7777")
+    ("protocol", po::value<std::string>()->required(), "2PC protocol (GMW or BEAVY)")
     ("repetitions", po::value<std::size_t>()->default_value(1), "number of repetitions")
     ("relu", po::bool_switch(&options.relu)->default_value(false), "use ReLU instead of squaring as activation function");
   // clang-format on
 
   po::variables_map vm;
   po::store(po::parse_command_line(argc, argv, desc), vm);
-  po::notify(vm);
-
   if (help) {
+    std::cerr << desc << "\n";
+    return std::nullopt;
+  }
+  try {
+    po::notify(vm);
+  } catch (std::exception& e) {
+    std::cerr << e.what() << "\n\n";
     std::cerr << desc << "\n";
     return std::nullopt;
   }
