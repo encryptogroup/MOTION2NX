@@ -24,9 +24,9 @@
 
 #include <memory>
 #include <unordered_map>
+#include <vector>
 
-#include "circuit_builder.h"
-#include "gate_factory.h"
+#include "tensor/network_builder.h"
 
 namespace ENCRYPTO::ObliviousTransfer {
 class OTProviderManager;
@@ -37,7 +37,6 @@ namespace MOTION {
 class ArithmeticProviderManager;
 class BaseOTProvider;
 class CircuitLoader;
-class GateFactory;
 class GateRegister;
 class LinAlgTripleProvider;
 class Logger;
@@ -75,7 +74,7 @@ namespace tensor {
 class TensorOpFactory;
 }
 
-class TwoPartyTensorBackend : public CircuitBuilder {
+class TwoPartyTensorBackend : public tensor::NetworkBuilder {
  public:
   TwoPartyTensorBackend(Communication::CommunicationLayer&, std::shared_ptr<Logger>);
   virtual ~TwoPartyTensorBackend();
@@ -83,8 +82,8 @@ class TwoPartyTensorBackend : public CircuitBuilder {
   virtual void run_preprocessing();
   void run();
 
-  GateFactory& get_gate_factory(MPCProtocol proto) override;
-  tensor::TensorOpFactory& get_tensor_op_factory(MPCProtocol proto);
+  tensor::TensorOpFactory& get_tensor_op_factory(MPCProtocol) override;
+  tensor::TensorCP convert(MPCProtocol, const tensor::TensorCP) override;
 
  protected:
   Communication::CommunicationLayer& comm_layer_;
@@ -93,7 +92,8 @@ class TwoPartyTensorBackend : public CircuitBuilder {
   std::unique_ptr<GateRegister> gate_register_;
   std::unique_ptr<TensorOpExecutor> gate_executor_;
   std::unique_ptr<CircuitLoader> circuit_loader_;
-  std::unordered_map<MPCProtocol, std::reference_wrapper<GateFactory>> gate_factories_;
+  std::unordered_map<MPCProtocol, std::reference_wrapper<tensor::TensorOpFactory>>
+      tensor_op_factories_;
   std::vector<Statistics::RunTimeStats> run_time_stats_;
 
   std::unique_ptr<Crypto::MotionBaseProvider> motion_base_provider_;

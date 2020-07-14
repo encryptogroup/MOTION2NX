@@ -86,11 +86,11 @@ TwoPartyTensorBackend::TwoPartyTensorBackend(Communication::CommunicationLayer& 
           comm_layer_, *gate_register_, *circuit_loader_, *motion_base_provider_,
           ot_manager_->get_provider(1 - my_id_), logger_)) {
   gmw_provider_->set_linalg_triple_provider(linalg_triple_provider_);
-  gate_factories_.emplace(MPCProtocol::ArithmeticBEAVY, *beavy_provider_);
-  gate_factories_.emplace(MPCProtocol::BooleanBEAVY, *beavy_provider_);
-  gate_factories_.emplace(MPCProtocol::ArithmeticGMW, *gmw_provider_);
-  gate_factories_.emplace(MPCProtocol::BooleanGMW, *gmw_provider_);
-  gate_factories_.emplace(MPCProtocol::Yao, *yao_provider_);
+  tensor_op_factories_.emplace(MPCProtocol::ArithmeticBEAVY, *beavy_provider_);
+  tensor_op_factories_.emplace(MPCProtocol::BooleanBEAVY, *beavy_provider_);
+  tensor_op_factories_.emplace(MPCProtocol::ArithmeticGMW, *gmw_provider_);
+  tensor_op_factories_.emplace(MPCProtocol::BooleanGMW, *gmw_provider_);
+  tensor_op_factories_.emplace(MPCProtocol::Yao, *yao_provider_);
   comm_layer_.start();
 }
 
@@ -121,23 +121,31 @@ void TwoPartyTensorBackend::run() {
   std::cout << run_time_stats_.back().print_human_readable();
 }
 
-GateFactory& TwoPartyTensorBackend::get_gate_factory(MPCProtocol proto) {
+tensor::TensorOpFactory& TwoPartyTensorBackend::get_tensor_op_factory(MPCProtocol proto) {
   try {
-    return gate_factories_.at(proto);
+    return tensor_op_factories_.at(proto);
   } catch (std::out_of_range& e) {
     throw std::logic_error(
-        fmt::format("TwoPartyTensorBackend::get_gate_factory: no GateFactory for protocol {} available",
+        fmt::format("TwoPartyTensorBackend::get_tensor_op_factory: no TensorOpFactory for protocol "
+                    "{} available",
                     ToString(proto)));
   }
 }
 
-tensor::TensorOpFactory& TwoPartyTensorBackend::get_tensor_op_factory(MPCProtocol proto) {
+tensor::TensorCP TwoPartyTensorBackend::convert(MPCProtocol proto_to, const tensor::TensorCP in) {
+  auto proto_from = in->get_protocol();
+  auto& tof_to = get_tensor_op_factory(proto_to);
+  auto& tof_from = get_tensor_op_factory(proto_from);
   try {
-    return dynamic_cast<tensor::TensorOpFactory&>(get_gate_factory(proto));
-  } catch (std::logic_error& e) {
-    throw std::logic_error(fmt::format(
-        "TwoPartyTensorBackend::get_tensor_op_factory: no TensorOpFactory for protocol {} available",
-        ToString(proto)));
+    return tof_to.make_tensor_conversion(proto_to, in);
+  } catch (std::runtime_error&) {
+  }
+  try {
+    return tof_from.make_tensor_conversion(proto_to, in);
+  } catch (std::runtime_error&) {
+    throw std::runtime_error(
+        fmt::format("don't know how to convert tensors from protocol {} to protocol {}",
+                    ToString(proto_from), ToString(proto_to)));
   }
 }
 
