@@ -143,9 +143,8 @@ std::unique_ptr<MOTION::Communication::CommunicationLayer> setup_communication(
 
 ENCRYPTO::ReusableFiberFuture<std::vector<std::uint64_t>> build_cryptonets(
     const Options& options, MOTION::TwoPartyTensorBackend& backend) {
-  auto& tof = backend.get_tensor_op_factory(options.protocol);
-  auto& yao_provider = dynamic_cast<MOTION::proto::yao::YaoProvider&>(
-      backend.get_gate_factory(MOTION::MPCProtocol::Yao));
+  auto& arithmetic_tof = backend.get_tensor_op_factory(options.protocol);
+  auto& boolean_tof = backend.get_tensor_op_factory(MOTION::MPCProtocol::Yao);
 
   const MOTION::tensor::TensorDimensions input_dims{
       .batch_size_ = 1, .num_channels_ = 1, .height_ = 28, .width_ = 28};
@@ -172,64 +171,61 @@ ENCRYPTO::ReusableFiberFuture<std::vector<std::uint64_t>> build_cryptonets(
   MOTION::tensor::TensorCP squashed_weights_tensor;
   MOTION::tensor::TensorCP fully_connected_weights_tensor;
 
+  MOTION::MPCProtocol arithmetic_protocol = options.protocol;
+  MOTION::MPCProtocol boolean_protocol = MOTION::MPCProtocol::Yao;
+
   std::function<MOTION::tensor::TensorCP(const MOTION::tensor::TensorCP&)> make_activation;
   if (!options.relu) {
-    make_activation = [&tof](const auto& input) { return tof.make_tensor_sqr_op(input); };
-  } else if (options.protocol == MOTION::MPCProtocol::ArithmeticGMW) {
-    make_activation = [&yao_provider](const auto& input) {
-      const auto yao_tensor = yao_provider.make_convert_from_arithmetic_gmw_tensor(input);
-      const auto relu_tensor = yao_provider.make_tensor_relu_op(yao_tensor);
-      return yao_provider.make_convert_to_arithmetic_gmw_tensor(relu_tensor);
-    };
-  } else if (options.protocol == MOTION::MPCProtocol::ArithmeticBEAVY) {
-    make_activation = [&yao_provider](const auto& input) {
-      const auto yao_tensor = yao_provider.make_convert_from_arithmetic_beavy_tensor(input);
-      const auto relu_tensor = yao_provider.make_tensor_relu_op(yao_tensor);
-      return yao_provider.make_convert_to_arithmetic_beavy_tensor(relu_tensor);
-    };
+    make_activation = [&](const auto& input) { return arithmetic_tof.make_tensor_sqr_op(input); };
   } else {
-    throw std::logic_error("something went wrong ...");
+    make_activation = [&](const auto& input) {
+      const auto boolean_tensor = boolean_tof.make_tensor_conversion(boolean_protocol, input);
+      const auto relu_tensor = boolean_tof.make_tensor_relu_op(boolean_tensor);
+      return boolean_tof.make_tensor_conversion(arithmetic_protocol, relu_tensor);
+    };
   }
 
   if (options.my_id == 0) {
-    input_tensor = tof.make_arithmetic_64_tensor_input_other(input_dims);
-    auto ret1 = tof.make_arithmetic_64_tensor_input_my(conv_weights_dims);
+    input_tensor = arithmetic_tof.make_arithmetic_64_tensor_input_other(input_dims);
+    auto ret1 = arithmetic_tof.make_arithmetic_64_tensor_input_my(conv_weights_dims);
     conv_weights_tensor = ret1.second;
     ret1.first.set_value(
         MOTION::Helpers::RandomVector<std::uint64_t>(conv_weights_dims.get_data_size()));
-    auto ret2 = tof.make_arithmetic_64_tensor_input_my(squashed_weights_dims);
+    auto ret2 = arithmetic_tof.make_arithmetic_64_tensor_input_my(squashed_weights_dims);
     squashed_weights_tensor = ret2.second;
     ret2.first.set_value(
         MOTION::Helpers::RandomVector<std::uint64_t>(squashed_weights_dims.get_data_size()));
-    auto ret3 = tof.make_arithmetic_64_tensor_input_my(fully_connected_weights_dims);
+    auto ret3 = arithmetic_tof.make_arithmetic_64_tensor_input_my(fully_connected_weights_dims);
     fully_connected_weights_tensor = ret3.second;
     ret3.first.set_value(
         MOTION::Helpers::RandomVector<std::uint64_t>(fully_connected_weights_dims.get_data_size()));
   } else {
-    auto ret = tof.make_arithmetic_64_tensor_input_my(input_dims);
+    auto ret = arithmetic_tof.make_arithmetic_64_tensor_input_my(input_dims);
     input_tensor = ret.second;
     ret.first.set_value(MOTION::Helpers::RandomVector<std::uint64_t>(input_dims.get_data_size()));
 
-    conv_weights_tensor = tof.make_arithmetic_64_tensor_input_other(conv_weights_dims);
-    squashed_weights_tensor = tof.make_arithmetic_64_tensor_input_other(squashed_weights_dims);
+    conv_weights_tensor = arithmetic_tof.make_arithmetic_64_tensor_input_other(conv_weights_dims);
+    squashed_weights_tensor =
+        arithmetic_tof.make_arithmetic_64_tensor_input_other(squashed_weights_dims);
     fully_connected_weights_tensor =
-        tof.make_arithmetic_64_tensor_input_other(fully_connected_weights_dims);
+        arithmetic_tof.make_arithmetic_64_tensor_input_other(fully_connected_weights_dims);
   }
 
-  auto conv_output = tof.make_tensor_conv2d_op(conv_op, input_tensor, conv_weights_tensor);
+  auto conv_output =
+      arithmetic_tof.make_tensor_conv2d_op(conv_op, input_tensor, conv_weights_tensor);
   auto act_1_output = make_activation(conv_output);
-  auto flatten_output = tof.make_tensor_flatten_op(act_1_output, 0);
+  auto flatten_output = arithmetic_tof.make_tensor_flatten_op(act_1_output, 0);
   auto squashed_output =
-      tof.make_tensor_gemm_op(gemm_op_1, flatten_output, squashed_weights_tensor);
+      arithmetic_tof.make_tensor_gemm_op(gemm_op_1, flatten_output, squashed_weights_tensor);
   auto act_2_output = make_activation(squashed_output);
   auto fully_connected_output =
-      tof.make_tensor_gemm_op(gemm_op_2, act_2_output, fully_connected_weights_tensor);
+      arithmetic_tof.make_tensor_gemm_op(gemm_op_2, act_2_output, fully_connected_weights_tensor);
 
   ENCRYPTO::ReusableFiberFuture<std::vector<std::uint64_t>> output_future;
   if (options.my_id == 0) {
-    tof.make_arithmetic_tensor_output_other(fully_connected_output);
+    arithmetic_tof.make_arithmetic_tensor_output_other(fully_connected_output);
   } else {
-    output_future = tof.make_arithmetic_64_tensor_output_my(fully_connected_output);
+    output_future = arithmetic_tof.make_arithmetic_64_tensor_output_my(fully_connected_output);
   }
   return output_future;
 }
