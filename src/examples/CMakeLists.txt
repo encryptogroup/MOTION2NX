@@ -6,3 +6,7 @@ add_subdirectory(cryptonets)
 add_subdirectory(evaluate_circuit_from_file)
 add_subdirectory(example_template)
 add_subdirectory(sha256)
+
+if (MOTION_BUILD_ONNX_ADAPTER)
+  add_subdirectory(onnx2motion)
+endif (MOTION_BUILD_ONNX_ADAPTER)
