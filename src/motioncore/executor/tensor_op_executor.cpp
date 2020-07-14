@@ -48,20 +48,14 @@ void TensorOpExecutor::evaluate_setup_online(Statistics::RunTimeStats &stats) {
         "Start evaluating the circuit gates sequentially (online after all finished setup)");
   }
 
-  // create a pool with std::thread::hardware_concurrency() no. of threads
-  // to execute fibers
-  ENCRYPTO::FiberThreadPool fpool(0, 2 * register_.get_num_gates());
-
   // ------------------------------ setup phase ------------------------------
   stats.record_start<Statistics::RunTimeStats::StatID::gates_setup>();
 
   // evaluate the setup phase of all the gates
   for (auto &gate : register_.get_gates()) {
     if (gate->need_setup()) {
-      fpool.post([this, &gate] {
-        gate->evaluate_setup();
-        register_.increment_gate_setup_counter();
-      });
+      gate->evaluate_setup();
+      register_.increment_gate_setup_counter();
     }
   }
   register_.wait_setup();
@@ -79,10 +73,8 @@ void TensorOpExecutor::evaluate_setup_online(Statistics::RunTimeStats &stats) {
   // evaluate the online phase of all the gates
   for (auto &gate : register_.get_gates()) {
     if (gate->need_online()) {
-      fpool.post([this, &gate] {
-        gate->evaluate_online();
-        register_.increment_gate_online_counter();
-      });
+      gate->evaluate_online();
+      register_.increment_gate_online_counter();
     }
   }
   register_.wait_online();
@@ -95,8 +87,6 @@ void TensorOpExecutor::evaluate_setup_online(Statistics::RunTimeStats &stats) {
     logger_->LogInfo(
         "Finished with the online phase of the circuit gates");
   }
-
-  fpool.join();
 
   stats.record_end<Statistics::RunTimeStats::StatID::evaluate>();
 }
