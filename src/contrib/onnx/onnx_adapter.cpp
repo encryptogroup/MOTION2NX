@@ -28,14 +28,14 @@
 #include <onnx/onnx_pb.h>
 #include <stdexcept>
 
+#include "tensor/network_builder.h"
 #include "tensor/tensor_op_factory.h"
 
 namespace MOTION::onnx {
 
-OnnxAdapter::OnnxAdapter(tensor::TensorOpFactory& tensor_op_factory,
-                         MPCProtocol arithmetic_protocol, MPCProtocol boolean_protocol,
-                         bool is_model_provider)
-    : tensor_op_factory_(tensor_op_factory),
+OnnxAdapter::OnnxAdapter(tensor::NetworkBuilder& network_builder, MPCProtocol arithmetic_protocol,
+                         MPCProtocol boolean_protocol, bool is_model_provider)
+    : network_builder_(network_builder),
       arithmetic_protocol_(arithmetic_protocol),
       boolean_protocol_(boolean_protocol),
       is_model_provider_(is_model_provider) {}
@@ -72,11 +72,12 @@ void OnnxAdapter::visit_initializer(const ::onnx::TensorProto& tensor) {
 
   tensor::TensorDimensions tensor_dims = to_tensor_dims(tensor.dims());
   tensor::TensorCP tensor_share;
+  auto& tensor_op_factory = network_builder_.get_tensor_op_factory(arithmetic_protocol_);
   if (is_model_provider_) {
-    auto result = tensor_op_factory_.make_arithmetic_64_tensor_input_my(tensor_dims);
+    auto result = tensor_op_factory.make_arithmetic_64_tensor_input_my(tensor_dims);
     tensor_share = std::move(result.second);
   } else {
-    tensor_share = tensor_op_factory_.make_arithmetic_64_tensor_input_other(tensor_dims);
+    tensor_share = tensor_op_factory.make_arithmetic_64_tensor_input_other(tensor_dims);
   }
   arithmetic_tensor_map_.insert({tensor.name(), std::move(tensor_share)});
   initializer_set_.insert(tensor.name());
@@ -134,10 +135,11 @@ void OnnxAdapter::visit_input(const ::onnx::ValueInfoProto& value_info) {
 
   tensor::TensorDimensions tensor_dims = to_tensor_dims(tensor_shape.dim());
   tensor::TensorCP tensor_share;
+  auto& tensor_op_factory = network_builder_.get_tensor_op_factory(arithmetic_protocol_);
   if (is_model_provider_) {
-    tensor_share = tensor_op_factory_.make_arithmetic_64_tensor_input_other(tensor_dims);
+    tensor_share = tensor_op_factory.make_arithmetic_64_tensor_input_other(tensor_dims);
   } else {
-    auto result = tensor_op_factory_.make_arithmetic_64_tensor_input_my(tensor_dims);
+    auto result = tensor_op_factory.make_arithmetic_64_tensor_input_my(tensor_dims);
     tensor_share = std::move(result.second);
   }
   arithmetic_tensor_map_[value_info.name()] = std::move(tensor_share);
@@ -146,12 +148,240 @@ void OnnxAdapter::visit_input(const ::onnx::ValueInfoProto& value_info) {
 void OnnxAdapter::visit_output(const ::onnx::ValueInfoProto& value_info) {
   const auto& name = value_info.name();
   auto tensor_share = get_as_arithmetic_tensor(name);
+  auto& tensor_op_factory = network_builder_.get_tensor_op_factory(arithmetic_protocol_);
   if (is_model_provider_) {
-    tensor_op_factory_.make_arithmetic_tensor_output_other(tensor_share);
+    tensor_op_factory.make_arithmetic_tensor_output_other(tensor_share);
   } else {
-    auto future = tensor_op_factory_.make_arithmetic_64_tensor_output_my(tensor_share);
+    auto future = tensor_op_factory.make_arithmetic_64_tensor_output_my(tensor_share);
     output_futures_[name] = std::move(future);
   }
+}
+
+void OnnxAdapter::visit_gemm(const ::onnx::NodeProto& node) {
+  assert(node.op_type() == "Gemm");
+  assert(node.input_size() == 2);  // XXX: ignore bias for now
+  assert(node.output_size() == 1);
+  const auto& input_a_name = node.input(0);
+  const auto& input_b_name = node.input(1);
+  const auto& output_name = node.output(0);
+
+  std::unordered_map<std::string, std::reference_wrapper<const ::onnx::AttributeProto>>
+      attribute_map;
+  for (const auto& attr : node.attribute()) {
+    attribute_map.emplace(attr.name(), std::cref(attr));
+  }
+  assert(attribute_map.count("alpha") == 0);
+  assert(attribute_map.count("beta") == 0);
+  assert(attribute_map.count("transA") == 0);
+  assert(attribute_map.count("transB") == 0);
+
+  auto& tensor_op_factory = network_builder_.get_tensor_op_factory(arithmetic_protocol_);
+  const auto input_a_tensor = get_as_arithmetic_tensor(input_a_name);
+  const auto input_b_tensor = get_as_arithmetic_tensor(input_b_name);
+  tensor::GemmOp gemm_op;
+  {
+    const auto& dims_a = input_a_tensor->get_dimensions();
+    gemm_op.input_A_shape_[0] = dims_a.height_;
+    gemm_op.input_A_shape_[1] = dims_a.width_;
+    const auto& dims_b = input_b_tensor->get_dimensions();
+    gemm_op.input_B_shape_[0] = dims_b.height_;
+    gemm_op.input_B_shape_[1] = dims_b.width_;
+  }
+  gemm_op.output_shape_ = gemm_op.compute_output_shape();
+  assert(gemm_op.verify());
+  const auto output_tensor =
+      tensor_op_factory.make_tensor_gemm_op(gemm_op, input_a_tensor, input_b_tensor);
+  arithmetic_tensor_map_[output_name] = output_tensor;
+}
+
+void OnnxAdapter::visit_conv(const ::onnx::NodeProto& node) {
+  assert(node.op_type() == "Conv");
+  assert(node.input_size() == 2);  // XXX: ignore bias for now
+  assert(node.output_size() == 1);
+  const auto& input_name = node.input(0);
+  const auto& kernel_name = node.input(1);
+  const auto& output_name = node.output(0);
+
+  std::unordered_map<std::string, std::reference_wrapper<const ::onnx::AttributeProto>>
+      attribute_map;
+  for (const auto& attr : node.attribute()) {
+    attribute_map.emplace(attr.name(), std::cref(attr));
+  }
+  assert(attribute_map.count("auto_pad") == 0);
+  assert(attribute_map.count("group") == 0);
+  assert(attribute_map.count("pads") == 1);
+
+  auto& tensor_op_factory = network_builder_.get_tensor_op_factory(arithmetic_protocol_);
+  const auto input_tensor = get_as_arithmetic_tensor(input_name);
+  const auto kernel_tensor = get_as_arithmetic_tensor(input_name);
+  tensor::Conv2DOp conv_op;
+  if (attribute_map.count("dilations") == 1) {
+    auto it = attribute_map.find("dilations");
+    assert(it != std::end(attribute_map));
+    const auto& dilations_attr = it->second.get();
+    assert(dilations_attr.name() == "dilations");
+    assert(dilations_attr.has_type() && dilations_attr.type() == ::onnx::AttributeProto::INTS);
+    assert(dilations_attr.ints_size() == 2);
+    conv_op.dilations_[0] = dilations_attr.ints(0);
+    conv_op.dilations_[1] = dilations_attr.ints(1);
+  } else {
+    conv_op.dilations_[0] = 1;
+    conv_op.dilations_[1] = 1;
+  }
+  if (attribute_map.count("kernel_shape") == 1) {
+    auto it = attribute_map.find("kernel_shape");
+    assert(it != std::end(attribute_map));
+    const auto& kernel_shape_attr = it->second.get();
+    assert(kernel_shape_attr.name() == "kernel_shape");
+    assert(kernel_shape_attr.has_type() &&
+           kernel_shape_attr.type() == ::onnx::AttributeProto::INTS);
+    assert(kernel_shape_attr.ints_size() == 4);
+    conv_op.kernel_shape_[0] = kernel_shape_attr.ints(0);
+    conv_op.kernel_shape_[1] = kernel_shape_attr.ints(1);
+    conv_op.kernel_shape_[2] = kernel_shape_attr.ints(2);
+    conv_op.kernel_shape_[3] = kernel_shape_attr.ints(3);
+  }
+  assert(attribute_map.count("pads") == 1);
+  {
+    auto it = attribute_map.find("pads");
+    assert(it != std::end(attribute_map));
+    const auto& pads_attr = it->second.get();
+    assert(pads_attr.name() == "pads");
+    assert(pads_attr.has_type() && pads_attr.type() == ::onnx::AttributeProto::INTS);
+    assert(pads_attr.ints_size() == 4);
+    conv_op.pads_[0] = pads_attr.ints(0);
+    conv_op.pads_[1] = pads_attr.ints(1);
+    conv_op.pads_[2] = pads_attr.ints(2);
+    conv_op.pads_[3] = pads_attr.ints(3);
+  }
+  if (attribute_map.count("strides") == 1) {
+    auto it = attribute_map.find("strides");
+    assert(it != std::end(attribute_map));
+    const auto& strides_attr = it->second.get();
+    assert(strides_attr.name() == "strides");
+    assert(strides_attr.has_type() && strides_attr.type() == ::onnx::AttributeProto::INTS);
+    assert(strides_attr.ints_size() == 2);
+    conv_op.strides_[0] = strides_attr.ints(0);
+    conv_op.strides_[1] = strides_attr.ints(1);
+  } else {
+    conv_op.strides_[0] = 1;
+    conv_op.strides_[1] = 1;
+  }
+  {
+    const auto& input_dims = input_tensor->get_dimensions();
+    conv_op.input_shape_[0] = input_dims.num_channels_;
+    conv_op.input_shape_[1] = input_dims.height_;
+    conv_op.input_shape_[2] = input_dims.width_;
+    conv_op.output_shape_ = conv_op.compute_output_shape();
+    assert(conv_op.verify());
+  }
+  const auto output_tensor =
+      tensor_op_factory.make_tensor_conv2d_op(conv_op, input_tensor, kernel_tensor);
+  arithmetic_tensor_map_[output_name] = output_tensor;
+}
+
+void OnnxAdapter::visit_mul(const ::onnx::NodeProto& node) {
+  assert(node.op_type() == "Mul");
+  assert(node.input_size() == 2);
+  assert(node.output_size() == 1);
+  assert(node.input(0) == node.input(1));  // XXX: assume squaring for now
+  const auto& input_name = node.input(0);
+  const auto& output_name = node.output(0);
+
+  auto& tensor_op_factory = network_builder_.get_tensor_op_factory(arithmetic_protocol_);
+  const auto input_tensor = get_as_arithmetic_tensor(input_name);
+  const auto output_tensor = tensor_op_factory.make_tensor_sqr_op(input_tensor);
+  arithmetic_tensor_map_[output_name] = output_tensor;
+}
+
+void OnnxAdapter::visit_relu(const ::onnx::NodeProto& node) {
+  assert(node.op_type() == "Relu");
+  assert(node.input_size() == 1);
+  assert(node.output_size() == 1);
+  const auto& input_name = node.input(0);
+  const auto& output_name = node.output(0);
+
+  auto& tensor_op_factory = network_builder_.get_tensor_op_factory(boolean_protocol_);
+  const auto input_tensor = get_as_boolean_tensor(input_name);
+  const auto output_tensor = tensor_op_factory.make_tensor_relu_op(input_tensor);
+  boolean_tensor_map_[output_name] = output_tensor;
+}
+
+void OnnxAdapter::visit_maxpool(const ::onnx::NodeProto& node) {
+  assert(node.op_type() == "MaxPool");
+  assert(node.input_size() == 1);
+  assert(node.output_size() == 1);
+  const auto& input_name = node.input(0);
+  const auto& output_name = node.output(0);
+
+  std::unordered_map<std::string, std::reference_wrapper<const ::onnx::AttributeProto>>
+      attribute_map;
+  for (const auto& attr : node.attribute()) {
+    attribute_map.emplace(attr.name(), std::cref(attr));
+  }
+  assert(attribute_map.count("auto_pad") == 0);
+  assert(attribute_map.count("ceil_mode") == 0);
+  assert(attribute_map.count("dilations") == 0);
+  assert(attribute_map.count("kernel_shape") == 1);
+  assert(attribute_map.count("pads") == 0);
+
+  auto& tensor_op_factory = network_builder_.get_tensor_op_factory(boolean_protocol_);
+  const auto input_tensor = get_as_boolean_tensor(input_name);
+  tensor::MaxPoolOp maxpool_op;
+  {
+    auto it = attribute_map.find("kernel_shape");
+    assert(it != std::end(attribute_map));
+    const auto& kernel_shape_attr = it->second.get();
+    assert(kernel_shape_attr.name() == "kernel_shape");
+    assert(kernel_shape_attr.has_type() &&
+           kernel_shape_attr.type() == ::onnx::AttributeProto::INTS);
+    assert(kernel_shape_attr.ints_size() == 2);
+    maxpool_op.kernel_shape_[0] = kernel_shape_attr.ints(0);
+    maxpool_op.kernel_shape_[1] = kernel_shape_attr.ints(1);
+  }
+  if (attribute_map.count("strides") == 1) {
+    auto it = attribute_map.find("strides");
+    assert(it != std::end(attribute_map));
+    const auto& strides_attr = it->second.get();
+    assert(strides_attr.name() == "strides");
+    assert(strides_attr.has_type() && strides_attr.type() == ::onnx::AttributeProto::INTS);
+    assert(strides_attr.ints_size() == 2);
+    maxpool_op.strides_[0] = strides_attr.ints(0);
+    maxpool_op.strides_[1] = strides_attr.ints(1);
+  } else {
+    maxpool_op.strides_[0] = 1;
+    maxpool_op.strides_[1] = 1;
+  }
+  {
+    const auto& input_dims = input_tensor->get_dimensions();
+    maxpool_op.input_shape_[0] = input_dims.num_channels_;
+    maxpool_op.input_shape_[1] = input_dims.height_;
+    maxpool_op.input_shape_[2] = input_dims.width_;
+    maxpool_op.output_shape_ = maxpool_op.compute_output_shape();
+    assert(maxpool_op.verify());
+  }
+  const auto output_tensor = tensor_op_factory.make_tensor_maxpool_op(maxpool_op, input_tensor);
+  boolean_tensor_map_[output_name] = output_tensor;
+}
+
+void OnnxAdapter::visit_flatten(const ::onnx::NodeProto& node) {
+  assert(node.op_type() == "Flatten");
+  assert(node.attribute_size() == 1);
+  assert(node.input_size() == 1);
+  assert(node.output_size() == 1);
+  const auto& input_name = node.input(0);
+  const auto& output_name = node.output(0);
+
+  const auto& axis_attr = node.attribute(0);
+  assert(axis_attr.name() == "axis");
+  assert(axis_attr.has_type() && axis_attr.type() == ::onnx::AttributeProto::INT);
+  assert(axis_attr.has_i() && axis_attr.i() >= 0);
+  auto axis = static_cast<std::size_t>(axis_attr.i());
+
+  auto& tensor_op_factory = network_builder_.get_tensor_op_factory(arithmetic_protocol_);
+  const auto input_tensor = get_as_arithmetic_tensor(input_name);
+  const auto output_tensor = tensor_op_factory.make_tensor_flatten_op(input_tensor, axis);
+  arithmetic_tensor_map_[output_name] = output_tensor;
 }
 
 tensor::TensorCP OnnxAdapter::get_as_arithmetic_tensor(const std::string& name) {
@@ -161,7 +391,9 @@ tensor::TensorCP OnnxAdapter::get_as_arithmetic_tensor(const std::string& name) 
   }
   it = boolean_tensor_map_.find(name);
   if (it != std::end(boolean_tensor_map_)) {
-    // TODO: convert boolean -> arithmetic
+    auto tensor = network_builder_.convert(arithmetic_protocol_, it->second);
+    arithmetic_tensor_map_[name] = tensor;
+    return tensor;
   }
   throw std::runtime_error(fmt::format("cannot find tensor of name: {}", name));
 }
@@ -173,7 +405,9 @@ tensor::TensorCP OnnxAdapter::get_as_boolean_tensor(const std::string& name) {
   }
   it = arithmetic_tensor_map_.find(name);
   if (it != std::end(arithmetic_tensor_map_)) {
-    // TODO: convert arithmetic -> boolean
+    auto tensor = network_builder_.convert(boolean_protocol_, it->second);
+    boolean_tensor_map_[name] = tensor;
+    return tensor;
   }
   throw std::runtime_error(fmt::format("cannot find tensor of name: {}", name));
 }
