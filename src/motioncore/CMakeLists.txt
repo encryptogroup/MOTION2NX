@@ -76,6 +76,7 @@ add_library(motion
         statistics/analysis.cpp
         statistics/run_time_stats.cpp
         tensor/tensor_op.cpp
+        tensor/tensor_op_factory.cpp
         utility/bit_matrix.cpp
         utility/bit_vector.cpp
         utility/block.cpp

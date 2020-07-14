@@ -26,6 +26,7 @@
 #include <memory>
 #include <vector>
 
+#include "tensor_op.h"
 #include "utility/reusable_future.h"
 
 namespace MOTION::tensor {
@@ -48,26 +49,29 @@ class TensorOpFactory {
 
   // arithmetic inputs
   virtual std::pair<ENCRYPTO::ReusableFiberPromise<IntegerValues<std::uint64_t>>, TensorCP>
-  make_arithmetic_64_tensor_input_my(const TensorDimensions&) = 0;
-
-  virtual TensorCP make_arithmetic_64_tensor_input_other(const TensorDimensions&) = 0;
+  make_arithmetic_64_tensor_input_my(const TensorDimensions&);
+  virtual TensorCP make_arithmetic_64_tensor_input_other(const TensorDimensions&);
 
   // arithmetic outputs
   virtual ENCRYPTO::ReusableFiberFuture<IntegerValues<std::uint64_t>>
-  make_arithmetic_64_tensor_output_my(const TensorCP&) = 0;
+  make_arithmetic_64_tensor_output_my(const TensorCP&);
+  virtual void make_arithmetic_tensor_output_other(const TensorCP&);
 
-  virtual void make_arithmetic_tensor_output_other(const TensorCP&) = 0;
+  // conversions
+  virtual tensor::TensorCP make_tensor_conversion(MPCProtocol, const tensor::TensorCP input);
 
-  virtual tensor::TensorCP make_tensor_flatten_op(const tensor::TensorCP input, std::size_t axis) = 0;
-
-  // arithmetic operations
-  virtual tensor::TensorCP make_arithmetic_tensor_conv2d_op(const tensor::Conv2DOp& conv_op,
-                                                            const tensor::TensorCP input,
-                                                            const tensor::TensorCP kernel) = 0;
-  virtual tensor::TensorCP make_arithmetic_tensor_gemm_op(const tensor::GemmOp& conv_op,
-                                                          const tensor::TensorCP input_A,
-                                                          const tensor::TensorCP input_B) = 0;
-  virtual tensor::TensorCP make_arithmetic_tensor_sqr_op(const tensor::TensorCP input) = 0;
+  // operations
+  virtual tensor::TensorCP make_tensor_flatten_op(const tensor::TensorCP input, std::size_t axis);
+  virtual tensor::TensorCP make_tensor_conv2d_op(const tensor::Conv2DOp& conv_op,
+                                                 const tensor::TensorCP input,
+                                                 const tensor::TensorCP kernel);
+  virtual tensor::TensorCP make_tensor_gemm_op(const tensor::GemmOp& gemm_op,
+                                               const tensor::TensorCP input_A,
+                                               const tensor::TensorCP input_B);
+  virtual tensor::TensorCP make_tensor_sqr_op(const tensor::TensorCP input);
+  virtual tensor::TensorCP make_tensor_relu_op(const tensor::TensorCP input);
+  virtual tensor::TensorCP make_tensor_maxpool_op(const tensor::MaxPoolOp& maxpool_op,
+                                                  const tensor::TensorCP input);
 };
 
 }  // namespace MOTION::tensor
