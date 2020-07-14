@@ -298,10 +298,10 @@ TYPED_TEST(ArithmeticGMWTensorTest, Convolution) {
   ASSERT_EQ(tensor_kernel_0->get_dimensions(), kernel_dims);
   ASSERT_EQ(tensor_kernel_1->get_dimensions(), kernel_dims);
 
-  auto tensor_output_0 = this->gmw_providers_[0]->make_arithmetic_tensor_conv2d_op(
-      conv_op, tensor_input_0, tensor_kernel_0);
-  auto tensor_output_1 = this->gmw_providers_[1]->make_arithmetic_tensor_conv2d_op(
-      conv_op, tensor_input_1, tensor_kernel_1);
+  auto tensor_output_0 =
+      this->gmw_providers_[0]->make_tensor_conv2d_op(conv_op, tensor_input_0, tensor_kernel_0);
+  auto tensor_output_1 =
+      this->gmw_providers_[1]->make_tensor_conv2d_op(conv_op, tensor_input_1, tensor_kernel_1);
 
   ASSERT_EQ(tensor_output_0->get_dimensions(), output_dims);
   ASSERT_EQ(tensor_output_1->get_dimensions(), output_dims);
@@ -351,10 +351,10 @@ TYPED_TEST(ArithmeticGMWTensorTest, Gemm) {
   ASSERT_EQ(tensor_input_B_0->get_dimensions(), input_B_dims);
   ASSERT_EQ(tensor_input_B_1->get_dimensions(), input_B_dims);
 
-  auto tensor_output_0 = this->gmw_providers_[0]->make_arithmetic_tensor_gemm_op(
-      gemm_op, tensor_input_A_0, tensor_input_B_0);
-  auto tensor_output_1 = this->gmw_providers_[1]->make_arithmetic_tensor_gemm_op(
-      gemm_op, tensor_input_A_1, tensor_input_B_1);
+  auto tensor_output_0 =
+      this->gmw_providers_[0]->make_tensor_gemm_op(gemm_op, tensor_input_A_0, tensor_input_B_0);
+  auto tensor_output_1 =
+      this->gmw_providers_[1]->make_tensor_gemm_op(gemm_op, tensor_input_A_1, tensor_input_B_1);
 
   ASSERT_EQ(tensor_output_0->get_dimensions(), output_dims);
   ASSERT_EQ(tensor_output_1->get_dimensions(), output_dims);
@@ -392,8 +392,8 @@ TYPED_TEST(ArithmeticGMWTensorTest, Sqr) {
   auto [input_promise, tensor_in_0] = this->make_arithmetic_T_tensor_input_my(0, dims);
   auto tensor_in_1 = this->make_arithmetic_T_tensor_input_other(1, dims);
 
-  auto tensor_out_0 = this->gmw_providers_[0]->make_arithmetic_tensor_sqr_op(tensor_in_0);
-  auto tensor_out_1 = this->gmw_providers_[1]->make_arithmetic_tensor_sqr_op(tensor_in_1);
+  auto tensor_out_0 = this->gmw_providers_[0]->make_tensor_sqr_op(tensor_in_0);
+  auto tensor_out_1 = this->gmw_providers_[1]->make_tensor_sqr_op(tensor_in_1);
 
   ASSERT_EQ(tensor_out_0->get_dimensions(), dims);
   ASSERT_EQ(tensor_out_1->get_dimensions(), dims);

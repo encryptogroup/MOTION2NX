@@ -535,7 +535,7 @@ void BEAVYProvider::make_arithmetic_tensor_output_other(const tensor::TensorCP& 
 }
 
 tensor::TensorCP BEAVYProvider::make_tensor_flatten_op(const tensor::TensorCP input,
-                                                     std::size_t axis) {
+                                                       std::size_t axis) {
   if (axis > 4) {
     throw std::invalid_argument("invalid axis argument > 4");
   }
@@ -561,9 +561,9 @@ tensor::TensorCP BEAVYProvider::make_tensor_flatten_op(const tensor::TensorCP in
   return output;
 }
 
-tensor::TensorCP BEAVYProvider::make_arithmetic_tensor_conv2d_op(const tensor::Conv2DOp& conv_op,
-                                                                 const tensor::TensorCP input,
-                                                                 const tensor::TensorCP kernel) {
+tensor::TensorCP BEAVYProvider::make_tensor_conv2d_op(const tensor::Conv2DOp& conv_op,
+                                                      const tensor::TensorCP input,
+                                                      const tensor::TensorCP kernel) {
   if (!conv_op.verify()) {
     throw std::invalid_argument("invalid Conv2dOp");
   }
@@ -599,9 +599,9 @@ tensor::TensorCP BEAVYProvider::make_arithmetic_tensor_conv2d_op(const tensor::C
   return output;
 }
 
-tensor::TensorCP BEAVYProvider::make_arithmetic_tensor_gemm_op(const tensor::GemmOp& gemm_op,
-                                                               const tensor::TensorCP input_A,
-                                                               const tensor::TensorCP input_B) {
+tensor::TensorCP BEAVYProvider::make_tensor_gemm_op(const tensor::GemmOp& gemm_op,
+                                                    const tensor::TensorCP input_A,
+                                                    const tensor::TensorCP input_B) {
   if (!gemm_op.verify()) {
     throw std::invalid_argument("invalid GemmOp");
   }
@@ -637,7 +637,7 @@ tensor::TensorCP BEAVYProvider::make_arithmetic_tensor_gemm_op(const tensor::Gem
   return output;
 }
 
-tensor::TensorCP BEAVYProvider::make_arithmetic_tensor_sqr_op(const tensor::TensorCP input) {
+tensor::TensorCP BEAVYProvider::make_tensor_sqr_op(const tensor::TensorCP input) {
   auto bit_size = input->get_bit_size();
   std::unique_ptr<NewGate> gate;
   auto gate_id = gate_register_.get_next_gate_id();

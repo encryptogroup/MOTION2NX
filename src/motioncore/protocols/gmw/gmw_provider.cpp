@@ -636,9 +636,9 @@ tensor::TensorCP GMWProvider::make_tensor_flatten_op(const tensor::TensorCP inpu
   return output;
 }
 
-tensor::TensorCP GMWProvider::make_arithmetic_tensor_conv2d_op(const tensor::Conv2DOp& conv_op,
-                                                               const tensor::TensorCP input,
-                                                               const tensor::TensorCP kernel) {
+tensor::TensorCP GMWProvider::make_tensor_conv2d_op(const tensor::Conv2DOp& conv_op,
+                                                    const tensor::TensorCP input,
+                                                    const tensor::TensorCP kernel) {
   if (!conv_op.verify()) {
     throw std::invalid_argument("invalid Conv2dOp");
   }
@@ -674,9 +674,9 @@ tensor::TensorCP GMWProvider::make_arithmetic_tensor_conv2d_op(const tensor::Con
   return output;
 }
 
-tensor::TensorCP GMWProvider::make_arithmetic_tensor_gemm_op(const tensor::GemmOp& gemm_op,
-                                                             const tensor::TensorCP input_A,
-                                                             const tensor::TensorCP input_B) {
+tensor::TensorCP GMWProvider::make_tensor_gemm_op(const tensor::GemmOp& gemm_op,
+                                                  const tensor::TensorCP input_A,
+                                                  const tensor::TensorCP input_B) {
   if (!gemm_op.verify()) {
     throw std::invalid_argument("invalid GemmOp");
   }
@@ -712,7 +712,7 @@ tensor::TensorCP GMWProvider::make_arithmetic_tensor_gemm_op(const tensor::GemmO
   return output;
 }
 
-tensor::TensorCP GMWProvider::make_arithmetic_tensor_sqr_op(const tensor::TensorCP input) {
+tensor::TensorCP GMWProvider::make_tensor_sqr_op(const tensor::TensorCP input) {
   auto bit_size = input->get_bit_size();
   std::unique_ptr<NewGate> gate;
   auto gate_id = gate_register_.get_next_gate_id();
