@@ -20,13 +20,14 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-#define FMT_HEADER_ONLY 1
-
 #include "onnx_adapter.h"
+
+#include <fstream>
+#include <stdexcept>
+#include <utility>
 
 #include <fmt/format.h>
 #include <onnx/onnx_pb.h>
-#include <stdexcept>
 
 #include "tensor/network_builder.h"
 #include "tensor/tensor_op_factory.h"
@@ -39,6 +40,15 @@ OnnxAdapter::OnnxAdapter(tensor::NetworkBuilder& network_builder, MPCProtocol ar
       arithmetic_protocol_(arithmetic_protocol),
       boolean_protocol_(boolean_protocol),
       is_model_provider_(is_model_provider) {}
+
+void OnnxAdapter::load_model(const std::string& path) {
+  ::onnx::ModelProto model;
+  {
+    std::ifstream in(path, std::ios_base::binary);
+    model.ParseFromIstream(&in);
+  }
+  visit_model(model);
+}
 
 void OnnxAdapter::visit_initializer(const ::onnx::TensorProto& tensor) {
   if (tensor.dims_size() > 4) {
@@ -76,6 +86,7 @@ void OnnxAdapter::visit_initializer(const ::onnx::TensorProto& tensor) {
   if (is_model_provider_) {
     auto result = tensor_op_factory.make_arithmetic_64_tensor_input_my(tensor_dims);
     tensor_share = std::move(result.second);
+    input_promises_.emplace(tensor.name(), std::make_pair(tensor_dims, std::move(result.first)));
   } else {
     tensor_share = tensor_op_factory.make_arithmetic_64_tensor_input_other(tensor_dims);
   }
@@ -141,6 +152,8 @@ void OnnxAdapter::visit_input(const ::onnx::ValueInfoProto& value_info) {
   } else {
     auto result = tensor_op_factory.make_arithmetic_64_tensor_input_my(tensor_dims);
     tensor_share = std::move(result.second);
+    input_promises_.emplace(value_info.name(),
+                            std::make_pair(tensor_dims, std::move(result.first)));
   }
   arithmetic_tensor_map_[value_info.name()] = std::move(tensor_share);
 }
@@ -153,7 +166,7 @@ void OnnxAdapter::visit_output(const ::onnx::ValueInfoProto& value_info) {
     tensor_op_factory.make_arithmetic_tensor_output_other(tensor_share);
   } else {
     auto future = tensor_op_factory.make_arithmetic_64_tensor_output_my(tensor_share);
-    output_futures_[name] = std::move(future);
+    output_futures_[name] = std::make_pair(tensor_share->get_dimensions(), std::move(future));
   }
 }
 
@@ -213,7 +226,7 @@ void OnnxAdapter::visit_conv(const ::onnx::NodeProto& node) {
 
   auto& tensor_op_factory = network_builder_.get_tensor_op_factory(arithmetic_protocol_);
   const auto input_tensor = get_as_arithmetic_tensor(input_name);
-  const auto kernel_tensor = get_as_arithmetic_tensor(input_name);
+  const auto kernel_tensor = get_as_arithmetic_tensor(kernel_name);
   tensor::Conv2DOp conv_op;
   if (attribute_map.count("dilations") == 1) {
     auto it = attribute_map.find("dilations");

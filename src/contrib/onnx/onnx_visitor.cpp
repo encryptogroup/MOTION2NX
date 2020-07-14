@@ -35,24 +35,28 @@ void OnnxVisitor::visit_graph(const ::onnx::GraphProto& graph) {
   for (const auto& input : graph.input()) {
     visit_input(input);
   }
-  for (const auto& output : graph.output()) {
-    visit_output(output);
-  }
   for (const auto& node : graph.node()) {
     visit_node(node);
+  }
+  for (const auto& output : graph.output()) {
+    visit_output(output);
   }
 }
 
 void OnnxVisitor::visit_node(const ::onnx::NodeProto& node) {
   const auto& op_type = node.op_type();
-  if (op_type == "Gemm") {
-    visit_gemm(node);
-  } else if (op_type == "Conv") {
+  if (op_type == "Conv") {
     visit_conv(node);
-  } else if (op_type == "Relu") {
-    visit_relu(node);
+  } else if (op_type == "Flatten") {
+    visit_flatten(node);
+  } else if (op_type == "Gemm") {
+    visit_gemm(node);
+  } else if (op_type == "Mul") {
+    visit_mul(node);
   } else if (op_type == "MaxPool") {
     visit_maxpool(node);
+  } else if (op_type == "Relu") {
+    visit_relu(node);
   } else {
     // TODO: warn unsupported node
   }

@@ -42,6 +42,7 @@ class OnnxAdapter : public OnnxVisitor {
  public:
   OnnxAdapter(tensor::NetworkBuilder& network_builder, MPCProtocol arithmetic_protocol,
               MPCProtocol boolean_protocol, bool is_model_provider);
+  void load_model(const std::string& path);
   void visit_initializer(const ::onnx::TensorProto&) override;
   void visit_input(const ::onnx::ValueInfoProto&) override;
   void visit_output(const ::onnx::ValueInfoProto&) override;
@@ -54,6 +55,9 @@ class OnnxAdapter : public OnnxVisitor {
   tensor::TensorCP get_as_arithmetic_tensor(const std::string&);
   tensor::TensorCP get_as_boolean_tensor(const std::string&);
 
+  auto& get_input_promises() noexcept { return input_promises_; }
+  auto& get_output_futures() noexcept { return output_futures_; }
+
  private:
   tensor::NetworkBuilder& network_builder_;
   MPCProtocol arithmetic_protocol_;
@@ -63,9 +67,13 @@ class OnnxAdapter : public OnnxVisitor {
   std::unordered_set<std::string> initializer_set_;
   std::unordered_map<std::string, tensor::TensorCP> arithmetic_tensor_map_;
   std::unordered_map<std::string, tensor::TensorCP> boolean_tensor_map_;
-  std::unordered_map<std::string, ENCRYPTO::ReusableFiberFuture<std::vector<std::uint64_t>>>
+  std::unordered_map<std::string,
+                     std::pair<tensor::TensorDimensions,
+                               ENCRYPTO::ReusableFiberPromise<std::vector<std::uint64_t>>>>
       input_promises_;
-  std::unordered_map<std::string, ENCRYPTO::ReusableFiberFuture<std::vector<std::uint64_t>>>
+  std::unordered_map<std::string,
+                     std::pair<tensor::TensorDimensions,
+                               ENCRYPTO::ReusableFiberFuture<std::vector<std::uint64_t>>>>
       output_futures_;
 };
 
