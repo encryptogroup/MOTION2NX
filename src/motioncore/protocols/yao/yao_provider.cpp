@@ -865,7 +865,27 @@ tensor::TensorCP YaoProvider::make_convert_to_arithmetic_beavy_tensor(const tens
   }
 }
 
-tensor::TensorCP YaoProvider::make_boolean_tensor_relu_op(const tensor::TensorCP in) {
+tensor::TensorCP YaoProvider::make_tensor_conversion(MPCProtocol proto_to,
+                                                     const tensor::TensorCP in) {
+  auto proto_from = in->get_protocol();
+  if (proto_from == MPCProtocol::Yao) {
+    if (proto_to == MPCProtocol::ArithmeticBEAVY) {
+      return make_convert_to_arithmetic_beavy_tensor(in);
+    } else if (proto_to == MPCProtocol::ArithmeticGMW) {
+      return make_convert_to_arithmetic_gmw_tensor(in);
+    }
+  } else if (proto_to == MPCProtocol::Yao) {
+    if (proto_from == MPCProtocol::ArithmeticBEAVY) {
+      return make_convert_from_arithmetic_beavy_tensor(in);
+    } else if (proto_from == MPCProtocol::ArithmeticGMW) {
+      return make_convert_from_arithmetic_gmw_tensor(in);
+    }
+  }
+  throw std::logic_error(fmt::format(
+      "YaoProvider does not support tensor conversions from {} to {}", proto_from, proto_to));
+}
+
+tensor::TensorCP YaoProvider::make_tensor_relu_op(const tensor::TensorCP in) {
   const auto input_tensor = std::dynamic_pointer_cast<const YaoTensor>(in);
   assert(input_tensor != nullptr);
   auto gate_id = gate_register_.get_next_gate_id();
@@ -882,8 +902,8 @@ tensor::TensorCP YaoProvider::make_boolean_tensor_relu_op(const tensor::TensorCP
   return output;
 }
 
-tensor::TensorCP YaoProvider::make_boolean_tensor_maxpool_op(const tensor::MaxPoolOp& maxpool_op,
-                                                             const tensor::TensorCP in) {
+tensor::TensorCP YaoProvider::make_tensor_maxpool_op(const tensor::MaxPoolOp& maxpool_op,
+                                                     const tensor::TensorCP in) {
   const auto input_tensor = std::dynamic_pointer_cast<const YaoTensor>(in);
   assert(input_tensor != nullptr);
   auto gate_id = gate_register_.get_next_gate_id();

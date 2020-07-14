@@ -307,8 +307,8 @@ TYPED_TEST(YaoArithmeticGMWTensorTest, ReLU) {
 
   auto tensor_0 = this->yao_providers_[0]->make_convert_from_arithmetic_gmw_tensor(tensor_in_0);
   auto tensor_1 = this->yao_providers_[1]->make_convert_from_arithmetic_gmw_tensor(tensor_in_1);
-  auto output_tensor_0 = this->yao_providers_[0]->make_boolean_tensor_relu_op(tensor_0);
-  auto output_tensor_1 = this->yao_providers_[1]->make_boolean_tensor_relu_op(tensor_1);
+  auto output_tensor_0 = this->yao_providers_[0]->make_tensor_relu_op(tensor_0);
+  auto output_tensor_1 = this->yao_providers_[1]->make_tensor_relu_op(tensor_1);
 
   this->run_setup();
   this->run_gates_setup();
@@ -370,9 +370,9 @@ TYPED_TEST(YaoArithmeticGMWTensorTest, MaxPoolSimple) {
   auto tensor_0 = this->yao_providers_[0]->make_convert_from_arithmetic_gmw_tensor(tensor_in_0);
   auto tensor_1 = this->yao_providers_[1]->make_convert_from_arithmetic_gmw_tensor(tensor_in_1);
   auto output_tensor_0 =
-      this->yao_providers_[0]->make_boolean_tensor_maxpool_op(maxpool_op, tensor_0);
+      this->yao_providers_[0]->make_tensor_maxpool_op(maxpool_op, tensor_0);
   auto output_tensor_1 =
-      this->yao_providers_[1]->make_boolean_tensor_maxpool_op(maxpool_op, tensor_1);
+      this->yao_providers_[1]->make_tensor_maxpool_op(maxpool_op, tensor_1);
 
   ASSERT_EQ(output_tensor_0->get_dimensions(), out_dims);
   ASSERT_EQ(output_tensor_1->get_dimensions(), out_dims);
@@ -446,9 +446,9 @@ TYPED_TEST(YaoArithmeticGMWTensorTest, MaxPool) {
   auto tensor_0 = this->yao_providers_[0]->make_convert_from_arithmetic_gmw_tensor(tensor_in_0);
   auto tensor_1 = this->yao_providers_[1]->make_convert_from_arithmetic_gmw_tensor(tensor_in_1);
   auto output_tensor_0 =
-      this->yao_providers_[0]->make_boolean_tensor_maxpool_op(maxpool_op, tensor_0);
+      this->yao_providers_[0]->make_tensor_maxpool_op(maxpool_op, tensor_0);
   auto output_tensor_1 =
-      this->yao_providers_[1]->make_boolean_tensor_maxpool_op(maxpool_op, tensor_1);
+      this->yao_providers_[1]->make_tensor_maxpool_op(maxpool_op, tensor_1);
   auto gmw_output_tensor_0 =
       this->yao_providers_[0]->make_convert_to_arithmetic_gmw_tensor(output_tensor_0);
   auto gmw_output_tensor_1 =

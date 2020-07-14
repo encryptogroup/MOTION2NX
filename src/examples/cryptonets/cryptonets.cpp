@@ -174,19 +174,17 @@ ENCRYPTO::ReusableFiberFuture<std::vector<std::uint64_t>> build_cryptonets(
 
   std::function<MOTION::tensor::TensorCP(const MOTION::tensor::TensorCP&)> make_activation;
   if (!options.relu) {
-    make_activation = [&tof](const auto& input) {
-      return tof.make_arithmetic_tensor_sqr_op(input);
-    };
+    make_activation = [&tof](const auto& input) { return tof.make_tensor_sqr_op(input); };
   } else if (options.protocol == MOTION::MPCProtocol::ArithmeticGMW) {
     make_activation = [&yao_provider](const auto& input) {
       const auto yao_tensor = yao_provider.make_convert_from_arithmetic_gmw_tensor(input);
-      const auto relu_tensor = yao_provider.make_boolean_tensor_relu_op(yao_tensor);
+      const auto relu_tensor = yao_provider.make_tensor_relu_op(yao_tensor);
       return yao_provider.make_convert_to_arithmetic_gmw_tensor(relu_tensor);
     };
   } else if (options.protocol == MOTION::MPCProtocol::ArithmeticBEAVY) {
     make_activation = [&yao_provider](const auto& input) {
       const auto yao_tensor = yao_provider.make_convert_from_arithmetic_beavy_tensor(input);
-      const auto relu_tensor = yao_provider.make_boolean_tensor_relu_op(yao_tensor);
+      const auto relu_tensor = yao_provider.make_tensor_relu_op(yao_tensor);
       return yao_provider.make_convert_to_arithmetic_beavy_tensor(relu_tensor);
     };
   } else {
@@ -218,15 +216,14 @@ ENCRYPTO::ReusableFiberFuture<std::vector<std::uint64_t>> build_cryptonets(
         tof.make_arithmetic_64_tensor_input_other(fully_connected_weights_dims);
   }
 
-  auto conv_output =
-      tof.make_arithmetic_tensor_conv2d_op(conv_op, input_tensor, conv_weights_tensor);
+  auto conv_output = tof.make_tensor_conv2d_op(conv_op, input_tensor, conv_weights_tensor);
   auto act_1_output = make_activation(conv_output);
   auto flatten_output = tof.make_tensor_flatten_op(act_1_output, 0);
   auto squashed_output =
-      tof.make_arithmetic_tensor_gemm_op(gemm_op_1, flatten_output, squashed_weights_tensor);
+      tof.make_tensor_gemm_op(gemm_op_1, flatten_output, squashed_weights_tensor);
   auto act_2_output = make_activation(squashed_output);
   auto fully_connected_output =
-      tof.make_arithmetic_tensor_gemm_op(gemm_op_2, act_2_output, fully_connected_weights_tensor);
+      tof.make_tensor_gemm_op(gemm_op_2, act_2_output, fully_connected_weights_tensor);
 
   ENCRYPTO::ReusableFiberFuture<std::vector<std::uint64_t>> output_future;
   if (options.my_id == 0) {

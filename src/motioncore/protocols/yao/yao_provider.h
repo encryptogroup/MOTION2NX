@@ -30,7 +30,7 @@
 #include "base/gate_factory.h"
 #include "protocols/common/comm_mixin.h"
 #include "tensor/tensor.h"
-#include "tensor/tensor_op.h"
+#include "tensor/tensor_op_factory.h"
 #include "utility/bit_vector.h"
 #include "utility/block.h"
 #include "utility/reusable_future.h"
@@ -74,7 +74,10 @@ using YaoWireVector = std::vector<std::shared_ptr<YaoWire>>;
 
 struct YaoMessageHandler;
 
-class YaoProvider : public GateFactory, public ENCRYPTO::enable_wait_setup, public CommMixin {
+class YaoProvider : public GateFactory,
+                    public ENCRYPTO::enable_wait_setup,
+                    public CommMixin,
+                    public tensor::TensorOpFactory {
  public:
   enum class Role { garbler, evaluator };
   struct my_input_t {};
@@ -172,19 +175,21 @@ class YaoProvider : public GateFactory, public ENCRYPTO::enable_wait_setup, publ
  public:
   // tensor stuff
   template <typename T>
-  tensor::TensorCP basic_make_convert_from_arithmetic_gmw_tensor(const tensor::TensorCP in_a);
-  tensor::TensorCP make_convert_from_arithmetic_gmw_tensor(const tensor::TensorCP in_a);
+  tensor::TensorCP basic_make_convert_from_arithmetic_gmw_tensor(const tensor::TensorCP);
+  tensor::TensorCP make_convert_from_arithmetic_gmw_tensor(const tensor::TensorCP);
   template <typename T>
-  tensor::TensorCP basic_make_convert_from_arithmetic_beavy_tensor(const tensor::TensorCP in_a);
-  tensor::TensorCP make_convert_from_arithmetic_beavy_tensor(const tensor::TensorCP in_a);
+  tensor::TensorCP basic_make_convert_from_arithmetic_beavy_tensor(const tensor::TensorCP);
+  tensor::TensorCP make_convert_from_arithmetic_beavy_tensor(const tensor::TensorCP);
   template <typename T>
-  tensor::TensorCP basic_make_convert_to_arithmetic_gmw_tensor(const tensor::TensorCP in_a);
-  tensor::TensorCP make_convert_to_arithmetic_gmw_tensor(const tensor::TensorCP in_a);
+  tensor::TensorCP basic_make_convert_to_arithmetic_gmw_tensor(const tensor::TensorCP);
+  tensor::TensorCP make_convert_to_arithmetic_gmw_tensor(const tensor::TensorCP);
   template <typename T>
-  tensor::TensorCP basic_make_convert_to_arithmetic_beavy_tensor(const tensor::TensorCP in_a);
-  tensor::TensorCP make_convert_to_arithmetic_beavy_tensor(const tensor::TensorCP in_a);
-  tensor::TensorCP make_boolean_tensor_relu_op(const tensor::TensorCP in_a);
-  tensor::TensorCP make_boolean_tensor_maxpool_op(const tensor::MaxPoolOp&, const tensor::TensorCP);
+  tensor::TensorCP basic_make_convert_to_arithmetic_beavy_tensor(const tensor::TensorCP);
+  tensor::TensorCP make_convert_to_arithmetic_beavy_tensor(const tensor::TensorCP);
+  tensor::TensorCP make_tensor_conversion(MPCProtocol, const tensor::TensorCP) override;
+  tensor::TensorCP make_tensor_relu_op(const tensor::TensorCP) override;
+  tensor::TensorCP make_tensor_maxpool_op(const tensor::MaxPoolOp&,
+                                          const tensor::TensorCP) override;
 
  private:
   Communication::CommunicationLayer& communication_layer_;
