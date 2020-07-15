@@ -133,4 +133,14 @@ class LinAlgTriplesFromAP : public LinAlgTripleProvider {
   std::unordered_map<tensor::Conv2DOp, conv_value_type<__uint128_t>> conv2d_handles_128_;
 };
 
+// Generator of fake triples which just consists of random data.
+class FakeLinAlgTripleProvider : public LinAlgTripleProvider {
+ public:
+  void setup() override;
+
+ protected:
+  void registration_hook(const tensor::GemmOp&, std::size_t bit_size) override;
+  void registration_hook(const tensor::Conv2DOp&, std::size_t bit_size) override;
+};
+
 }  // namespace MOTION

@@ -376,4 +376,53 @@ void LinAlgTriplesFromAP::registration_hook(const tensor::Conv2DOp& conv_op, std
   }
 }
 
+// ---------- FakeLinAlgTripleProvider ----------
+
+void FakeLinAlgTripleProvider::setup() {
+  const auto run_setup_gemm = [](const auto& count_map, auto& triple_map) {
+    for (const auto& [gemm_op, count] : count_map) {
+      auto& triple_vec = triple_map.at(gemm_op);
+      triple_vec.reserve(count);
+      for (std::size_t i = 0; i < count; ++i) {
+        auto& triple = triple_vec.emplace_back();
+        using T = typename decltype(triple.a_)::value_type;
+        triple.a_ = Helpers::RandomVector<T>(gemm_op.compute_input_A_size());
+        triple.b_ = Helpers::RandomVector<T>(gemm_op.compute_input_B_size());
+        triple.c_ = Helpers::RandomVector<T>(gemm_op.compute_output_size());
+      }
+    }
+  };
+  const auto run_setup_conv = [](const auto& count_map, auto& triple_map) {
+    for (const auto& [conv_op, count] : count_map) {
+      auto& triple_vec = triple_map.at(conv_op);
+      triple_vec.reserve(count);
+      for (std::size_t i = 0; i < count; ++i) {
+        auto& triple = triple_vec.emplace_back();
+        using T = typename decltype(triple.a_)::value_type;
+        triple.a_ = Helpers::RandomVector<T>(conv_op.compute_input_size());
+        triple.b_ = Helpers::RandomVector<T>(conv_op.compute_kernel_size());
+        triple.c_ = Helpers::RandomVector<T>(conv_op.compute_output_size());
+      }
+    }
+  };
+
+  run_setup_gemm(gemm_counts_8_, gemm_triples_8_);
+  run_setup_gemm(gemm_counts_16_, gemm_triples_16_);
+  run_setup_gemm(gemm_counts_32_, gemm_triples_32_);
+  run_setup_gemm(gemm_counts_64_, gemm_triples_64_);
+  run_setup_gemm(gemm_counts_128_, gemm_triples_128_);
+
+  run_setup_conv(conv2d_counts_8_, conv2d_triples_8_);
+  run_setup_conv(conv2d_counts_16_, conv2d_triples_16_);
+  run_setup_conv(conv2d_counts_32_, conv2d_triples_32_);
+  run_setup_conv(conv2d_counts_64_, conv2d_triples_64_);
+  run_setup_conv(conv2d_counts_128_, conv2d_triples_128_);
+
+  set_setup_ready();
+}
+
+void FakeLinAlgTripleProvider::registration_hook(const tensor::GemmOp&, std::size_t) {}
+
+void FakeLinAlgTripleProvider::registration_hook(const tensor::Conv2DOp&, std::size_t) {}
+
 }  // namespace MOTION
