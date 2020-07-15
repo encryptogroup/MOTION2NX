@@ -516,12 +516,8 @@ void ArithmeticBEAVYTensorGemm<T>::evaluate_setup() {
   mm_lhs_side_->set_input(delta_a_share);
   mm_rhs_side_->set_input(delta_b_share);
 
-  const auto dim_l = gemm_op_.input_A_shape_[0];
-  const auto dim_m = gemm_op_.input_A_shape_[1];
-  const auto dim_n = gemm_op_.input_B_shape_[1];
-
   // [Delta_y]_i = [delta_a]_i * [delta_b]_i
-  matrix_multiply(dim_l, dim_m, dim_n, delta_a_share.data(), delta_b_share.data(),
+  matrix_multiply(gemm_op_, delta_a_share.data(), delta_b_share.data(),
                   Delta_y_share_.data());
   // [Delta_y]_i += [delta_y]_i
   std::transform(std::begin(Delta_y_share_), std::end(Delta_y_share_), std::begin(delta_y_share),
@@ -570,23 +566,19 @@ void ArithmeticBEAVYTensorGemm<T>::evaluate_online() {
 
   // after setup phase, `Delta_y_share_` contains [delta_y]_i + [delta_ab]_i
 
-  const auto dim_l = gemm_op_.input_A_shape_[0];
-  const auto dim_m = gemm_op_.input_A_shape_[1];
-  const auto dim_n = gemm_op_.input_B_shape_[1];
-
   // [Delta_y]_i -= Delta_a * [delta_b]_i
-  matrix_multiply(dim_l, dim_m, dim_n, Delta_a.data(), delta_b_share.data(), tmp.data());
+  matrix_multiply(gemm_op_, Delta_a.data(), delta_b_share.data(), tmp.data());
   std::transform(std::begin(Delta_y_share_), std::end(Delta_y_share_), std::begin(tmp),
                  std::begin(Delta_y_share_), std::minus{});
 
   // [Delta_y]_i -= Delta_b * [delta_a]_i
-  matrix_multiply(dim_l, dim_m, dim_n, delta_a_share.data(), Delta_b.data(), tmp.data());
+  matrix_multiply(gemm_op_, delta_a_share.data(), Delta_b.data(), tmp.data());
   std::transform(std::begin(Delta_y_share_), std::end(Delta_y_share_), std::begin(tmp),
                  std::begin(Delta_y_share_), std::minus{});
 
   // [Delta_y]_i += Delta_ab (== Delta_a * Delta_b)
   if (beavy_provider_.is_my_job(gate_id_)) {
-    matrix_multiply(dim_l, dim_m, dim_n, Delta_a.data(), Delta_b.data(), tmp.data());
+    matrix_multiply(gemm_op_, Delta_a.data(), Delta_b.data(), tmp.data());
     std::transform(std::begin(Delta_y_share_), std::end(Delta_y_share_), std::begin(tmp),
                    std::begin(Delta_y_share_), std::plus{});
   }

@@ -383,20 +383,17 @@ void ArithmeticGMWTensorGemm<T>::evaluate_online() {
   std::vector<T> result(std::move(triple.c_));
   std::vector<T> tmp(result.size());
 
-  const auto dim_l = gemm_op_.input_A_shape_[0];
-  const auto dim_m = gemm_op_.input_A_shape_[1];
-  const auto dim_n = gemm_op_.input_B_shape_[1];
   // ... - d * e ...
   if (gmw_provider_.is_my_job(gate_id_)) {
-    matrix_multiply(dim_l, dim_m, dim_n, de.data(), de.data() + input_A_size, tmp.data());
+    matrix_multiply(gemm_op_, de.data(), de.data() + input_A_size, tmp.data());
     std::transform(std::begin(result), std::end(result), std::begin(tmp), std::begin(result),
                    std::minus{});
   }
   // ... + e * x + d * y
-  matrix_multiply(dim_l, dim_m, dim_n, input_A_buffer.data(), de.data() + input_A_size, tmp.data());
+  matrix_multiply(gemm_op_, input_A_buffer.data(), de.data() + input_A_size, tmp.data());
   std::transform(std::begin(result), std::end(result), std::begin(tmp), std::begin(result),
                  std::plus{});
-  matrix_multiply(dim_l, dim_m, dim_n, de.data(), input_B_buffer.data(), tmp.data());
+  matrix_multiply(gemm_op_, de.data(), input_B_buffer.data(), tmp.data());
   std::transform(std::begin(result), std::end(result), std::begin(tmp), std::begin(result),
                  std::plus{});
   output_->get_share() = std::move(result);
