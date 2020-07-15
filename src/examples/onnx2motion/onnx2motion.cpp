@@ -53,28 +53,31 @@ struct Options {
   MOTION::Communication::tcp_parties_config tcp_config;
   std::string model_path;
   bool no_run = false;
+  bool fake_triples = false;
 };
 
 std::optional<Options> parse_program_options(int argc, char* argv[]) {
   Options options;
   boost::program_options::options_description desc("Allowed options");
-  bool help = false;
   // clang-format off
   desc.add_options()
-    ("help,h", po::bool_switch(&help)->default_value(false),"produce help message")
+    ("help,h", po::bool_switch()->default_value(false),"produce help message")
     ("config-file", po::value<std::string>(), "config file containing options")
     ("my-id", po::value<std::size_t>()->required(), "my party id")
     ("party", po::value<std::vector<std::string>>()->multitoken(),
      "(party id, IP, port), e.g., --party 1,127.0.0.1,7777")
     ("protocol", po::value<std::string>()->required(), "2PC protocol (GMW or BEAVY)")
     ("repetitions", po::value<std::size_t>()->default_value(1), "number of repetitions")
-    ("no-run", po::bool_switch(&options.no_run)->default_value(false),
+    ("no-run", po::bool_switch()->default_value(false),
      "just build the network, but not execute it")
+    ("fake-triples", po::bool_switch()->default_value(false),
+     "use random data instead of generating valid Beaver triples")
     ("model", po::value<std::string>()->required(), "path to a model file in ONNX format");
   // clang-format on
 
   po::variables_map vm;
   po::store(po::parse_command_line(argc, argv, desc), vm);
+  bool help = vm["help"].as<bool>();
   if (help) {
     std::cerr << desc << "\n";
     return std::nullopt;
@@ -95,6 +98,8 @@ std::optional<Options> parse_program_options(int argc, char* argv[]) {
 
   options.my_id = vm["my-id"].as<std::size_t>();
   options.num_repetitions = vm["repetitions"].as<std::size_t>();
+  options.no_run = vm["no-run"].as<bool>();
+  options.fake_triples = vm["fake-triples"].as<bool>();
   if (options.my_id > 1) {
     std::cerr << "my-id must be one of 0 and 1\n";
     return std::nullopt;
@@ -188,7 +193,7 @@ int main(int argc, char* argv[]) {
     auto logger = std::make_shared<MOTION::Logger>(options->my_id,
                                                    boost::log::trivial::severity_level::trace);
     comm_layer->set_logger(logger);
-    MOTION::TwoPartyTensorBackend backend(*comm_layer, logger);
+    MOTION::TwoPartyTensorBackend backend(*comm_layer, logger, options->fake_triples);
     run_model(*options, backend);
     comm_layer->shutdown();
   } catch (std::runtime_error& e) {
