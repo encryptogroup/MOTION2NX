@@ -64,6 +64,10 @@ class TensorOpFactory {
   virtual tensor::TensorCP make_tensor_flatten_op(const tensor::TensorCP input, std::size_t axis);
   virtual tensor::TensorCP make_tensor_conv2d_op(const tensor::Conv2DOp& conv_op,
                                                  const tensor::TensorCP input,
+                                                 const tensor::TensorCP kernel,
+                                                 const tensor::TensorCP bias);
+  virtual tensor::TensorCP make_tensor_conv2d_op(const tensor::Conv2DOp& conv_op,
+                                                 const tensor::TensorCP input,
                                                  const tensor::TensorCP kernel);
   virtual tensor::TensorCP make_tensor_gemm_op(const tensor::GemmOp& gemm_op,
                                                const tensor::TensorCP input_A,

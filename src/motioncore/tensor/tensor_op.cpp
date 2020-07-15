@@ -67,6 +67,11 @@ std::size_t Conv2DOp::compute_kernel_size() const noexcept {
   return kernel_shape_[0] * kernel_shape_[1] * kernel_shape_[2] * kernel_shape_[3];
 }
 
+std::size_t Conv2DOp::compute_bias_size() const noexcept {
+  assert(verify());
+  return kernel_shape_[0];
+}
+
 std::pair<std::size_t, std::size_t> Conv2DOp::compute_input_matrix_shape() const noexcept {
   assert(verify());
   std::size_t num_rows = kernel_shape_[1] * kernel_shape_[2] * kernel_shape_[3];

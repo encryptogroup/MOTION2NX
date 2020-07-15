@@ -62,9 +62,16 @@ tensor::TensorCP TensorOpFactory::make_tensor_flatten_op(const tensor::TensorCP,
 
 tensor::TensorCP TensorOpFactory::make_tensor_conv2d_op(const tensor::Conv2DOp&,
                                                         const tensor::TensorCP,
+                                                        const tensor::TensorCP,
                                                         const tensor::TensorCP) {
   throw std::logic_error(
       fmt::format("{} does not support the Conv2D operation", get_provider_name()));
+}
+
+tensor::TensorCP TensorOpFactory::make_tensor_conv2d_op(const tensor::Conv2DOp& op,
+                                                        const tensor::TensorCP input,
+                                                        const tensor::TensorCP kernel) {
+  return make_tensor_conv2d_op(op, input, kernel, nullptr);
 }
 
 tensor::TensorCP TensorOpFactory::make_tensor_gemm_op(const tensor::GemmOp&, const tensor::TensorCP,

@@ -563,7 +563,8 @@ tensor::TensorCP BEAVYProvider::make_tensor_flatten_op(const tensor::TensorCP in
 
 tensor::TensorCP BEAVYProvider::make_tensor_conv2d_op(const tensor::Conv2DOp& conv_op,
                                                       const tensor::TensorCP input,
-                                                      const tensor::TensorCP kernel) {
+                                                      const tensor::TensorCP kernel,
+                                                      const tensor::TensorCP bias) {
   if (!conv_op.verify()) {
     throw std::invalid_argument("invalid Conv2dOp");
   }
@@ -577,14 +578,28 @@ tensor::TensorCP BEAVYProvider::make_tensor_conv2d_op(const tensor::Conv2DOp& co
   if (bit_size != kernel->get_bit_size()) {
     throw std::invalid_argument("bit size mismatch");
   }
+  if (bias != nullptr) {
+    if (bias->get_dimensions().get_data_size() != conv_op.compute_bias_size()) {
+      throw std::invalid_argument("invalid bias size");
+    }
+    if (bit_size != bias->get_bit_size()) {
+      throw std::invalid_argument("bit size mismatch");
+    }
+  }
   std::unique_ptr<NewGate> gate;
   auto gate_id = gate_register_.get_next_gate_id();
   tensor::TensorCP output;
-  const auto make_op = [this, input, conv_op, kernel, gate_id, &output](auto dummy_arg) {
+  const auto make_op = [this, input, conv_op, kernel, bias, gate_id, &output](auto dummy_arg) {
     using T = decltype(dummy_arg);
+    auto input_ptr = std::dynamic_pointer_cast<const ArithmeticBEAVYTensor<T>>(input);
+    auto kernel_ptr = std::dynamic_pointer_cast<const ArithmeticBEAVYTensor<T>>(kernel);
+    std::shared_ptr<const ArithmeticBEAVYTensor<T>> bias_ptr = nullptr;
+    if (bias != nullptr) {
+      bias_ptr = std::dynamic_pointer_cast<const ArithmeticBEAVYTensor<T>>(bias);
+      assert(bias_ptr);
+    }
     auto tensor_op = std::make_unique<ArithmeticBEAVYTensorConv2D<T>>(
-        gate_id, *this, conv_op, std::dynamic_pointer_cast<const ArithmeticBEAVYTensor<T>>(input),
-        std::dynamic_pointer_cast<const ArithmeticBEAVYTensor<T>>(kernel), nullptr);
+        gate_id, *this, conv_op, input_ptr, kernel_ptr, bias_ptr);
     output = tensor_op->get_output_tensor();
     return tensor_op;
   };

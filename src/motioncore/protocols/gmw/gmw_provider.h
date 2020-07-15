@@ -148,7 +148,8 @@ class GMWProvider : public GateFactory,
 
   // other gates
   template <typename T>
-  ENCRYPTO::ReusableFiberFuture<IntegerValues<T>> make_arithmetic_output_share_gate(const WireVector&);
+  ENCRYPTO::ReusableFiberFuture<IntegerValues<T>> make_arithmetic_output_share_gate(
+      const WireVector&);
 
   // implementation of TensorOpFactory
   std::pair<ENCRYPTO::ReusableFiberPromise<IntegerValues<std::uint64_t>>, tensor::TensorCP>
@@ -166,7 +167,9 @@ class GMWProvider : public GateFactory,
   tensor::TensorCP make_tensor_flatten_op(const tensor::TensorCP input, std::size_t axis) override;
   tensor::TensorCP make_tensor_conv2d_op(const tensor::Conv2DOp& conv_op,
                                          const tensor::TensorCP input,
-                                         const tensor::TensorCP kernel) override;
+                                         const tensor::TensorCP kernel,
+                                         const tensor::TensorCP bias) override;
+  using tensor::TensorOpFactory::make_tensor_conv2d_op;
   tensor::TensorCP make_tensor_gemm_op(const tensor::GemmOp& conv_op,
                                        const tensor::TensorCP input_A,
                                        const tensor::TensorCP input_B) override;
@@ -179,8 +182,8 @@ class GMWProvider : public GateFactory,
   template <typename T>
   WireVector basic_make_arithmetic_input_gate_other(std::size_t input_owner, std::size_t num_simd);
   template <typename T>
-  ENCRYPTO::ReusableFiberFuture<IntegerValues<T>>
-  basic_make_arithmetic_output_gate_my(std::size_t output_owner, const WireVector& in);
+  ENCRYPTO::ReusableFiberFuture<IntegerValues<T>> basic_make_arithmetic_output_gate_my(
+      std::size_t output_owner, const WireVector& in);
   WireVector make_inv_gate(const WireVector& in_a);
   WireVector make_xor_gate(const WireVector& in_a, const WireVector& in_b);
   WireVector make_and_gate(const WireVector& in_a, const WireVector& in_b);

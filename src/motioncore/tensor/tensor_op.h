@@ -49,6 +49,7 @@ struct Conv2DOp {
   std::size_t compute_output_size() const noexcept;
   std::size_t compute_input_size() const noexcept;
   std::size_t compute_kernel_size() const noexcept;
+  std::size_t compute_bias_size() const noexcept;
   std::pair<std::size_t, std::size_t> compute_input_matrix_shape() const noexcept;
   std::pair<std::size_t, std::size_t> compute_kernel_matrix_shape() const noexcept;
   std::pair<std::size_t, std::size_t> compute_output_matrix_shape() const noexcept;

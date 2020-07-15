@@ -154,10 +154,11 @@ class BEAVYProvider : public GateFactory,
   void make_arithmetic_tensor_output_other(const tensor::TensorCP&) override;
 
   tensor::TensorCP make_tensor_flatten_op(const tensor::TensorCP input, std::size_t axis) override;
-
   tensor::TensorCP make_tensor_conv2d_op(const tensor::Conv2DOp& conv_op,
                                          const tensor::TensorCP input,
-                                         const tensor::TensorCP kernel) override;
+                                         const tensor::TensorCP kernel,
+                                         const tensor::TensorCP bias) override;
+  using tensor::TensorOpFactory::make_tensor_conv2d_op;
   tensor::TensorCP make_tensor_gemm_op(const tensor::GemmOp& conv_op,
                                        const tensor::TensorCP input_A,
                                        const tensor::TensorCP input_B) override;
