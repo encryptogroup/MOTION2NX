@@ -411,11 +411,20 @@ void OnnxAdapter::visit_flatten(const ::onnx::NodeProto& node) {
   const auto& input_name = node.input(0);
   const auto& output_name = node.output(0);
 
-  const auto& axis_attr = node.attribute(0);
-  assert(axis_attr.name() == "axis");
-  assert(axis_attr.has_type() && axis_attr.type() == ::onnx::AttributeProto::INT);
-  assert(axis_attr.has_i() && axis_attr.i() >= 0);
-  auto axis = static_cast<std::size_t>(axis_attr.i());
+  std::unordered_map<std::string, std::reference_wrapper<const ::onnx::AttributeProto>>
+      attribute_map;
+  for (const auto& attr : node.attribute()) {
+    attribute_map.emplace(attr.name(), std::cref(attr));
+  }
+
+  std::size_t axis = 1;
+  if (attribute_map.count("axis") == 1) {
+    const auto& axis_attr = node.attribute(0);
+    assert(axis_attr.name() == "axis");
+    assert(axis_attr.has_type() && axis_attr.type() == ::onnx::AttributeProto::INT);
+    assert(axis_attr.has_i() && axis_attr.i() >= 0);
+    axis = static_cast<std::size_t>(axis_attr.i());
+  }
 
   auto& tensor_op_factory = network_builder_.get_tensor_op_factory(arithmetic_protocol_);
   const auto input_tensor = get_as_arithmetic_tensor(input_name);
