@@ -50,7 +50,7 @@
 namespace MOTION {
 
 TwoPartyTensorBackend::TwoPartyTensorBackend(Communication::CommunicationLayer& comm_layer,
-                                             std::shared_ptr<Logger> logger)
+                                             std::shared_ptr<Logger> logger, bool fake_triples)
     : comm_layer_(comm_layer),
       my_id_(comm_layer_.get_my_id()),
       logger_(logger),
@@ -67,8 +67,12 @@ TwoPartyTensorBackend::TwoPartyTensorBackend(Communication::CommunicationLayer& 
           logger_)),
       arithmetic_manager_(
           std::make_unique<ArithmeticProviderManager>(comm_layer_, *ot_manager_, logger_)),
-      linalg_triple_provider_(std::make_shared<LinAlgTriplesFromAP>(
-          arithmetic_manager_->get_provider(1 - my_id_), logger_)),
+      linalg_triple_provider_(
+          fake_triples ? (std::dynamic_pointer_cast<LinAlgTripleProvider>(
+                             std::make_shared<FakeLinAlgTripleProvider>()))
+                       : (std::dynamic_pointer_cast<LinAlgTripleProvider>(
+                             std::make_shared<LinAlgTriplesFromAP>(
+                                 arithmetic_manager_->get_provider(1 - my_id_), logger_)))),
       mt_provider_(std::make_unique<MTProviderFromOTs>(my_id_, comm_layer_.get_num_parties(),
                                                        *arithmetic_manager_, *ot_manager_,
                                                        run_time_stats_.back(), logger_)),
