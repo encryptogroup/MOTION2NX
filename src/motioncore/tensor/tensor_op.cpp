@@ -132,9 +132,15 @@ bool Conv2DOp::operator==(const Conv2DOp& other) const noexcept {
 
 bool GemmOp::verify() const noexcept {
   bool result = true;
-  result = result && (input_A_shape_[1] == input_B_shape_[0]);
-  result = result && (input_A_shape_[0] == output_shape_[0]);
-  result = result && (input_B_shape_[1] == output_shape_[1]);
+  std::size_t m = input_A_shape_[0];
+  std::size_t k = input_A_shape_[1];
+  if (transA_) {
+    std::swap(m, k);
+  }
+  std::size_t n = input_B_shape_[transB_ ? 0 : 1];
+  result = result && (k == input_B_shape_[transB_ ? 1 : 0]);
+  result = result && (m == output_shape_[0]);
+  result = result && (n == output_shape_[1]);
   // maybe add more checks here
   return result;
 }

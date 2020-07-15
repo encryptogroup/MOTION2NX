@@ -65,6 +65,11 @@ struct GemmOp {
   std::array<std::size_t, 2> input_B_shape_;
   std::array<std::size_t, 2> output_shape_;
 
+  float alpha_ = 1.0f;
+  float beta_ = 1.0f;
+  bool transA_ = false;
+  bool transB_ = false;
+
   bool verify() const noexcept;
   std::array<std::size_t, 2> compute_output_shape() const noexcept;
   std::size_t compute_output_size() const noexcept;
