@@ -209,7 +209,7 @@ void OnnxAdapter::visit_gemm(const ::onnx::NodeProto& node) {
 
 void OnnxAdapter::visit_conv(const ::onnx::NodeProto& node) {
   assert(node.op_type() == "Conv");
-  assert(node.input_size() == 2);  // XXX: ignore bias for now
+  assert(node.input_size() == 2 || node.input_size() == 3);
   assert(node.output_size() == 1);
   const auto& input_name = node.input(0);
   const auto& kernel_name = node.input(1);
@@ -221,12 +221,16 @@ void OnnxAdapter::visit_conv(const ::onnx::NodeProto& node) {
     attribute_map.emplace(attr.name(), std::cref(attr));
   }
   assert(attribute_map.count("auto_pad") == 0);
-  assert(attribute_map.count("group") == 0);
   assert(attribute_map.count("pads") == 1);
 
   auto& tensor_op_factory = network_builder_.get_tensor_op_factory(arithmetic_protocol_);
   const auto input_tensor = get_as_arithmetic_tensor(input_name);
   const auto kernel_tensor = get_as_arithmetic_tensor(kernel_name);
+  tensor::TensorCP bias_tensor = nullptr;
+  if (node.input_size() == 3) {
+    const auto& bias_name = node.input(2);
+    bias_tensor = get_as_arithmetic_tensor(bias_name);
+  }
   tensor::Conv2DOp conv_op;
   if (attribute_map.count("dilations") == 1) {
     auto it = attribute_map.find("dilations");
@@ -241,6 +245,19 @@ void OnnxAdapter::visit_conv(const ::onnx::NodeProto& node) {
     conv_op.dilations_[0] = 1;
     conv_op.dilations_[1] = 1;
   }
+  if (attribute_map.count("group") == 1) {
+    auto it = attribute_map.find("group");
+    assert(it != std::end(attribute_map));
+    const auto& group_attr = it->second.get();
+    assert(group_attr.name() == "group");
+    assert(group_attr.has_type() && group_attr.type() == ::onnx::AttributeProto::INT);
+    assert(group_attr.i() == 1);
+  }
+  {
+    const auto& kernel_dims = kernel_tensor->get_dimensions();
+    conv_op.kernel_shape_ = {kernel_dims.batch_size_, kernel_dims.num_channels_,
+                             kernel_dims.height_, kernel_dims.width_};
+  }
   if (attribute_map.count("kernel_shape") == 1) {
     auto it = attribute_map.find("kernel_shape");
     assert(it != std::end(attribute_map));
@@ -248,11 +265,9 @@ void OnnxAdapter::visit_conv(const ::onnx::NodeProto& node) {
     assert(kernel_shape_attr.name() == "kernel_shape");
     assert(kernel_shape_attr.has_type() &&
            kernel_shape_attr.type() == ::onnx::AttributeProto::INTS);
-    assert(kernel_shape_attr.ints_size() == 4);
-    conv_op.kernel_shape_[0] = kernel_shape_attr.ints(0);
-    conv_op.kernel_shape_[1] = kernel_shape_attr.ints(1);
-    conv_op.kernel_shape_[2] = kernel_shape_attr.ints(2);
-    conv_op.kernel_shape_[3] = kernel_shape_attr.ints(3);
+    assert(kernel_shape_attr.ints_size() == 2);
+    assert(conv_op.kernel_shape_[2] == kernel_shape_attr.ints(0));
+    assert(conv_op.kernel_shape_[3] == kernel_shape_attr.ints(1));
   }
   assert(attribute_map.count("pads") == 1);
   {
