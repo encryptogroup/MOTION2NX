@@ -51,6 +51,25 @@ std::vector<T> matrix_multiply(std::size_t dim_l, std::size_t dim_m, std::size_t
   return output;
 }
 
+template <typename T>
+void matrix_multiply(const tensor::GemmOp& gemm_op, const T* A, const T* B, T* output) {
+  using MatrixType = Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>;
+  assert(gemm_op.verify());
+  Eigen::Map<MatrixType> matrix_output(output, gemm_op.output_shape_[0], gemm_op.output_shape_[1]);
+  Eigen::Map<const MatrixType> matrix_A(A, gemm_op.input_A_shape_[0], gemm_op.input_A_shape_[1]);
+  Eigen::Map<const MatrixType> matrix_B(B, gemm_op.output_shape_[0], gemm_op.output_shape_[1]);
+
+  if (gemm_op.transA_ && gemm_op.transB_) {
+    matrix_output = matrix_A.transpose() * matrix_B.transpose();
+  } else if (gemm_op.transA_) {
+    matrix_output = matrix_A.transpose() * matrix_B;
+  } else if (gemm_op.transB_) {
+    matrix_output = matrix_A * matrix_B.transpose();
+  } else {
+    matrix_output = matrix_A * matrix_B;
+  }
+}
+
 template void matrix_multiply(std::size_t, std::size_t, std::size_t, const std::uint8_t*,
                               const std::uint8_t*, std::uint8_t*);
 template void matrix_multiply(std::size_t, std::size_t, std::size_t, const std::uint16_t*,
@@ -74,6 +93,16 @@ template std::vector<std::uint64_t> matrix_multiply(std::size_t, std::size_t, st
 template std::vector<__uint128_t> matrix_multiply(std::size_t, std::size_t, std::size_t,
                                                   const std::vector<__uint128_t>&,
                                                   const std::vector<__uint128_t>&);
+template void matrix_multiply(const tensor::GemmOp&, const std::uint8_t*, const std::uint8_t*,
+                              std::uint8_t*);
+template void matrix_multiply(const tensor::GemmOp&, const std::uint16_t*, const std::uint16_t*,
+                              std::uint16_t*);
+template void matrix_multiply(const tensor::GemmOp&, const std::uint32_t*, const std::uint32_t*,
+                              std::uint32_t*);
+template void matrix_multiply(const tensor::GemmOp&, const std::uint64_t*, const std::uint64_t*,
+                              std::uint64_t*);
+template void matrix_multiply(const tensor::GemmOp&, const __uint128_t*, const __uint128_t*,
+                              __uint128_t*);
 
 template <typename T>
 void convolution(const tensor::Conv2DOp& conv_op, const T* input_buffer, const T* kernel_buffer,
