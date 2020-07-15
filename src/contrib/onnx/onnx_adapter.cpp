@@ -405,7 +405,6 @@ void OnnxAdapter::visit_maxpool(const ::onnx::NodeProto& node) {
 
 void OnnxAdapter::visit_flatten(const ::onnx::NodeProto& node) {
   assert(node.op_type() == "Flatten");
-  assert(node.attribute_size() == 1);
   assert(node.input_size() == 1);
   assert(node.output_size() == 1);
   const auto& input_name = node.input(0);
