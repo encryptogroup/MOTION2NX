@@ -351,7 +351,6 @@ void OnnxAdapter::visit_maxpool(const ::onnx::NodeProto& node) {
   assert(attribute_map.count("ceil_mode") == 0);
   assert(attribute_map.count("dilations") == 0);
   assert(attribute_map.count("kernel_shape") == 1);
-  assert(attribute_map.count("pads") == 0);
 
   auto& tensor_op_factory = network_builder_.get_tensor_op_factory(boolean_protocol_);
   const auto input_tensor = get_as_boolean_tensor(input_name);
@@ -366,6 +365,18 @@ void OnnxAdapter::visit_maxpool(const ::onnx::NodeProto& node) {
     assert(kernel_shape_attr.ints_size() == 2);
     maxpool_op.kernel_shape_[0] = kernel_shape_attr.ints(0);
     maxpool_op.kernel_shape_[1] = kernel_shape_attr.ints(1);
+  }
+  if (attribute_map.count("pads") == 1) {
+    auto it = attribute_map.find("pads");
+    assert(it != std::end(attribute_map));
+    const auto& pads_attr = it->second.get();
+    assert(pads_attr.name() == "pads");
+    assert(pads_attr.has_type() && pads_attr.type() == ::onnx::AttributeProto::INTS);
+    assert(pads_attr.ints_size() == 4);
+    assert(pads_attr.ints(0) == 0);
+    assert(pads_attr.ints(1) == 0);
+    assert(pads_attr.ints(2) == 0);
+    assert(pads_attr.ints(3) == 0);
   }
   if (attribute_map.count("strides") == 1) {
     auto it = attribute_map.find("strides");
