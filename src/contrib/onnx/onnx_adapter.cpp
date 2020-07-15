@@ -232,7 +232,7 @@ void OnnxAdapter::visit_gemm(const ::onnx::NodeProto& node) {
     const auto& transB_attr = it->second.get();
     assert(transB_attr.name() == "transB");
     assert(transB_attr.has_type() && transB_attr.type() == ::onnx::AttributeProto::INT);
-    gemm_op.transB = (transB_attr.i() != 0);
+    gemm_op.transB_ = (transB_attr.i() != 0);
   }
   {
     const auto& dims_a = input_a_tensor->get_dimensions();
