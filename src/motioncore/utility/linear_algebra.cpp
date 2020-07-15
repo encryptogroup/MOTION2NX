@@ -57,7 +57,7 @@ void matrix_multiply(const tensor::GemmOp& gemm_op, const T* A, const T* B, T* o
   assert(gemm_op.verify());
   Eigen::Map<MatrixType> matrix_output(output, gemm_op.output_shape_[0], gemm_op.output_shape_[1]);
   Eigen::Map<const MatrixType> matrix_A(A, gemm_op.input_A_shape_[0], gemm_op.input_A_shape_[1]);
-  Eigen::Map<const MatrixType> matrix_B(B, gemm_op.output_shape_[0], gemm_op.output_shape_[1]);
+  Eigen::Map<const MatrixType> matrix_B(B, gemm_op.input_B_shape_[0], gemm_op.input_B_shape_[1]);
 
   if (gemm_op.transA_ && gemm_op.transB_) {
     matrix_output = matrix_A.transpose() * matrix_B.transpose();
