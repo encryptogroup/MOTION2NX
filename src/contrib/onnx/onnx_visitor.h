@@ -43,6 +43,7 @@ class OnnxVisitor {
 
   virtual void visit_node(const ::onnx::NodeProto&);
   virtual void visit_conv(const ::onnx::NodeProto&) = 0;
+  virtual void visit_dropout(const ::onnx::NodeProto&) = 0;
   virtual void visit_flatten(const ::onnx::NodeProto&) = 0;
   virtual void visit_gemm(const ::onnx::NodeProto&) = 0;
   virtual void visit_maxpool(const ::onnx::NodeProto&) = 0;

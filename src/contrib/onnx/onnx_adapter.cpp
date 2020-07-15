@@ -473,6 +473,21 @@ void OnnxAdapter::visit_flatten(const ::onnx::NodeProto& node) {
   arithmetic_tensor_map_[output_name] = output_tensor;
 }
 
+void OnnxAdapter::visit_dropout(const ::onnx::NodeProto& node) {
+  assert(node.op_type() == "Dropout");
+  assert(node.input_size() >= 1);
+  assert(node.output_size() >= 1);
+  const auto& input_name = node.input(0);
+  const auto& output_name = node.output(0);
+
+  if (arithmetic_tensor_map_.count(input_name) == 1) {
+    arithmetic_tensor_map_[output_name] = arithmetic_tensor_map_[input_name];
+  }
+  if (boolean_tensor_map_.count(input_name) == 1) {
+    boolean_tensor_map_[output_name] = boolean_tensor_map_[input_name];
+  }
+}
+
 tensor::TensorCP OnnxAdapter::get_as_arithmetic_tensor(const std::string& name) {
   auto it = arithmetic_tensor_map_.find(name);
   if (it != std::end(arithmetic_tensor_map_)) {

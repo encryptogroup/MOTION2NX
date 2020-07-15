@@ -46,12 +46,13 @@ class OnnxAdapter : public OnnxVisitor {
   void visit_initializer(const ::onnx::TensorProto&) override;
   void visit_input(const ::onnx::ValueInfoProto&) override;
   void visit_output(const ::onnx::ValueInfoProto&) override;
-  void visit_gemm(const ::onnx::NodeProto&) override;
   void visit_conv(const ::onnx::NodeProto&) override;
+  void visit_dropout(const ::onnx::NodeProto&) override;
+  void visit_flatten(const ::onnx::NodeProto&) override;
+  void visit_gemm(const ::onnx::NodeProto&) override;
+  void visit_maxpool(const ::onnx::NodeProto&) override;
   void visit_mul(const ::onnx::NodeProto&) override;
   void visit_relu(const ::onnx::NodeProto&) override;
-  void visit_maxpool(const ::onnx::NodeProto&) override;
-  void visit_flatten(const ::onnx::NodeProto&) override;
   tensor::TensorCP get_as_arithmetic_tensor(const std::string&);
   tensor::TensorCP get_as_boolean_tensor(const std::string&);
 
