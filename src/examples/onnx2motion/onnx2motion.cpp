@@ -52,12 +52,13 @@ struct Options {
   std::size_t my_id;
   MOTION::Communication::tcp_parties_config tcp_config;
   std::string model_path;
+  bool no_run = false;
 };
 
 std::optional<Options> parse_program_options(int argc, char* argv[]) {
   Options options;
   boost::program_options::options_description desc("Allowed options");
-  bool help;
+  bool help = false;
   // clang-format off
   desc.add_options()
     ("help,h", po::bool_switch(&help)->default_value(false),"produce help message")
@@ -67,6 +68,8 @@ std::optional<Options> parse_program_options(int argc, char* argv[]) {
      "(party id, IP, port), e.g., --party 1,127.0.0.1,7777")
     ("protocol", po::value<std::string>()->required(), "2PC protocol (GMW or BEAVY)")
     ("repetitions", po::value<std::size_t>()->default_value(1), "number of repetitions")
+    ("no-run", po::bool_switch(&options.no_run)->default_value(false),
+     "just build the network, but not execute it")
     ("model", po::value<std::string>()->required(), "path to a model file in ONNX format");
   // clang-format on
 
@@ -79,7 +82,7 @@ std::optional<Options> parse_program_options(int argc, char* argv[]) {
   try {
     po::notify(vm);
   } catch (std::exception& e) {
-    std::cerr << e.what() << "\n\n";
+    std::cerr << "error:" << e.what() << "\n\n";
     std::cerr << desc << "\n";
     return std::nullopt;
   }
@@ -154,6 +157,10 @@ void run_model(const Options& options, MOTION::TwoPartyTensorBackend& backend) {
   MOTION::onnx::OnnxAdapter onnx_adapter(backend, options.protocol, MOTION::MPCProtocol::Yao,
                                          options.my_id == 0);
   onnx_adapter.load_model(options.model_path);
+
+  if (options.no_run) {
+    return;
+  }
 
   for (auto& pair : onnx_adapter.get_input_promises()) {
     auto& [tensor_dims, promise] = pair.second;
