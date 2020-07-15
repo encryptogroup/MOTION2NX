@@ -138,12 +138,12 @@ tensor::TensorCP TwoPartyTensorBackend::convert(MPCProtocol proto_to, const tens
   auto& tof_from = get_tensor_op_factory(proto_from);
   try {
     return tof_to.make_tensor_conversion(proto_to, in);
-  } catch (std::runtime_error&) {
+  } catch (std::exception&) {
   }
   try {
     return tof_from.make_tensor_conversion(proto_to, in);
-  } catch (std::runtime_error&) {
-    throw std::runtime_error(
+  } catch (std::exception&) {
+    throw std::logic_error(
         fmt::format("don't know how to convert tensors from protocol {} to protocol {}",
                     ToString(proto_from), ToString(proto_to)));
   }
