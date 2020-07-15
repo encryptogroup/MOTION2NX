@@ -146,7 +146,7 @@ bool GemmOp::verify() const noexcept {
 }
 
 std::array<std::size_t, 2> GemmOp::compute_output_shape() const noexcept {
-  return {input_A_shape_[0], input_B_shape_[1]};
+  return {input_A_shape_[transA_ ? 1 : 0], input_B_shape_[transB_ ? 0 : 1]};
 }
 
 std::size_t GemmOp::compute_output_size() const noexcept {
