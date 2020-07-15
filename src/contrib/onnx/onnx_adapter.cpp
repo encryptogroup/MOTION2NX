@@ -172,26 +172,68 @@ void OnnxAdapter::visit_output(const ::onnx::ValueInfoProto& value_info) {
 
 void OnnxAdapter::visit_gemm(const ::onnx::NodeProto& node) {
   assert(node.op_type() == "Gemm");
-  assert(node.input_size() == 2);  // XXX: ignore bias for now
+  assert(node.input_size() == 2 || node.input_size() == 3);
   assert(node.output_size() == 1);
   const auto& input_a_name = node.input(0);
   const auto& input_b_name = node.input(1);
   const auto& output_name = node.output(0);
+
+  auto& tensor_op_factory = network_builder_.get_tensor_op_factory(arithmetic_protocol_);
+  const auto input_a_tensor = get_as_arithmetic_tensor(input_a_name);
+  const auto input_b_tensor = get_as_arithmetic_tensor(input_b_name);
+  tensor::TensorCP input_c_tensor = nullptr;
+  if (node.input_size() == 3) {
+    const auto& input_c_name = node.input(2);
+    input_c_tensor = get_as_arithmetic_tensor(input_c_name);
+  }
 
   std::unordered_map<std::string, std::reference_wrapper<const ::onnx::AttributeProto>>
       attribute_map;
   for (const auto& attr : node.attribute()) {
     attribute_map.emplace(attr.name(), std::cref(attr));
   }
-  assert(attribute_map.count("alpha") == 0);
-  assert(attribute_map.count("beta") == 0);
-  assert(attribute_map.count("transA") == 0);
-  assert(attribute_map.count("transB") == 0);
 
-  auto& tensor_op_factory = network_builder_.get_tensor_op_factory(arithmetic_protocol_);
-  const auto input_a_tensor = get_as_arithmetic_tensor(input_a_name);
-  const auto input_b_tensor = get_as_arithmetic_tensor(input_b_name);
   tensor::GemmOp gemm_op;
+  if (attribute_map.count("alpha") == 1) {
+    auto it = attribute_map.find("alpha");
+    assert(it != std::end(attribute_map));
+    const auto& alpha_attr = it->second.get();
+    assert(alpha_attr.name() == "alpha");
+    assert(alpha_attr.has_type() && alpha_attr.type() == ::onnx::AttributeProto::FLOAT);
+    gemm_op.alpha_ = alpha_attr.f();
+  }
+  if (attribute_map.count("beta") == 1) {
+    auto it = attribute_map.find("beta");
+    assert(it != std::end(attribute_map));
+    const auto& beta_attr = it->second.get();
+    assert(beta_attr.name() == "beta");
+    assert(beta_attr.has_type() && beta_attr.type() == ::onnx::AttributeProto::FLOAT);
+    gemm_op.beta_ = beta_attr.f();
+  }
+  if (attribute_map.count("transB") == 1) {
+    auto it = attribute_map.find("transB");
+    assert(it != std::end(attribute_map));
+    const auto& transB_attr = it->second.get();
+    assert(transB_attr.name() == "transB");
+    assert(transB_attr.has_type() && transB_attr.type() == ::onnx::AttributeProto::INT);
+    gemm_op.transB_ = (transB_attr.i() != 0);
+  }
+  if (attribute_map.count("transA") == 1) {
+    auto it = attribute_map.find("transA");
+    assert(it != std::end(attribute_map));
+    const auto& transA_attr = it->second.get();
+    assert(transA_attr.name() == "transA");
+    assert(transA_attr.has_type() && transA_attr.type() == ::onnx::AttributeProto::INT);
+    gemm_op.transA_ = (transA_attr.i() != 0);
+  }
+  if (attribute_map.count("transB") == 1) {
+    auto it = attribute_map.find("transB");
+    assert(it != std::end(attribute_map));
+    const auto& transB_attr = it->second.get();
+    assert(transB_attr.name() == "transB");
+    assert(transB_attr.has_type() && transB_attr.type() == ::onnx::AttributeProto::INT);
+    gemm_op.transB = (transB_attr.i() != 0);
+  }
   {
     const auto& dims_a = input_a_tensor->get_dimensions();
     gemm_op.input_A_shape_[0] = dims_a.height_;
