@@ -115,3 +115,107 @@ static void BM_evaluate_aes_128_circuit(benchmark::State& state) {
   state.SetBytesProcessed(state.iterations() * 32 * num_ands * num_simd);
 }
 BENCHMARK(BM_evaluate_aes_128_circuit)->Arg(1)->Arg(1 << 10);
+
+static void BM_garble_relu_circuit(benchmark::State& state) {
+  MOTION::Crypto::garbling::HalfGateGarbler garbler;
+  MOTION::CircuitLoader circuit_loader;
+  const std::size_t bit_size = 64;
+  const auto& algo = circuit_loader.load_relu_circuit(bit_size);
+  const std::size_t num_ands = bit_size - 1;
+  const std::size_t num_simd = state.range(0);
+  const auto offset = garbler.get_offset();
+  auto key_as = ENCRYPTO::block128_vector::make_random(bit_size * num_simd);
+  ENCRYPTO::block128_vector key_bs;
+  ENCRYPTO::block128_vector key_cs(bit_size * num_simd);
+  ENCRYPTO::block128_vector garbled_tables(2 * num_ands * num_simd);
+  const std::size_t index = 42;
+
+  for (auto _ : state) {
+    garbler.garble_circuit(key_cs, garbled_tables, index, key_as, key_bs, num_simd, algo);
+  }
+  state.counters["#AND"] =
+      benchmark::Counter(state.iterations() * num_simd * num_ands, benchmark::Counter::kIsRate);
+  state.counters["#ReLU"] =
+      benchmark::Counter(state.iterations() * num_simd, benchmark::Counter::kIsRate);
+  state.SetBytesProcessed(state.iterations() * 32 * num_ands * num_simd);
+}
+BENCHMARK(BM_garble_relu_circuit)->Arg(1)->Arg(1 << 10);
+
+static void BM_evaluate_relu_circuit(benchmark::State& state) {
+  MOTION::Crypto::garbling::HalfGateGarbler garbler;
+  MOTION::Crypto::garbling::HalfGateEvaluator evaluator(garbler.get_public_data());
+  MOTION::CircuitLoader circuit_loader;
+  const std::size_t bit_size = 64;
+  const auto& algo = circuit_loader.load_relu_circuit(bit_size);
+  const std::size_t num_ands = bit_size - 1;
+  const std::size_t num_simd = state.range(0);
+  const auto offset = garbler.get_offset();
+  auto key_as = ENCRYPTO::block128_vector::make_random(bit_size * num_simd);
+  ENCRYPTO::block128_vector key_bs;
+  ENCRYPTO::block128_vector key_cs(bit_size * num_simd);
+  ENCRYPTO::block128_vector garbled_tables(2 * num_ands * num_simd);
+  const std::size_t index = 42;
+  garbler.garble_circuit(key_cs, garbled_tables, index, key_as, key_bs, num_simd, algo);
+
+  for (auto _ : state) {
+    evaluator.evaluate_circuit(key_cs, garbled_tables, index, key_as, key_bs, num_simd, algo);
+  }
+  state.counters["#AND"] =
+      benchmark::Counter(state.iterations() * num_simd * num_ands, benchmark::Counter::kIsRate);
+  state.counters["#ReLU"] =
+      benchmark::Counter(state.iterations() * num_simd, benchmark::Counter::kIsRate);
+  state.SetBytesProcessed(state.iterations() * 32 * num_ands * num_simd);
+}
+BENCHMARK(BM_evaluate_relu_circuit)->Arg(1)->Arg(1 << 10);
+
+static void BM_garble_max4_circuit(benchmark::State& state) {
+  MOTION::Crypto::garbling::HalfGateGarbler garbler;
+  MOTION::CircuitLoader circuit_loader;
+  const std::size_t bit_size = 64;
+  const auto& algo = circuit_loader.load_maxpool_circuit(bit_size, 4);
+  const std::size_t num_ands = (2 * bit_size) * (4 - 1);
+  const std::size_t num_simd = state.range(0);
+  const auto offset = garbler.get_offset();
+  auto key_as = ENCRYPTO::block128_vector::make_random(4 * bit_size * num_simd);
+  ENCRYPTO::block128_vector key_bs;
+  ENCRYPTO::block128_vector key_cs(bit_size * num_simd);
+  ENCRYPTO::block128_vector garbled_tables(2 * num_ands * num_simd);
+  const std::size_t index = 42;
+
+  for (auto _ : state) {
+    garbler.garble_circuit(key_cs, garbled_tables, index, key_as, key_bs, num_simd, algo);
+  }
+  state.counters["#AND"] =
+      benchmark::Counter(state.iterations() * num_simd * num_ands, benchmark::Counter::kIsRate);
+  state.counters["#Max4"] =
+      benchmark::Counter(state.iterations() * num_simd, benchmark::Counter::kIsRate);
+  state.SetBytesProcessed(state.iterations() * 32 * num_ands * num_simd);
+}
+BENCHMARK(BM_garble_max4_circuit)->Arg(1)->Arg(1 << 10);
+
+static void BM_evaluate_max4_circuit(benchmark::State& state) {
+  MOTION::Crypto::garbling::HalfGateGarbler garbler;
+  MOTION::Crypto::garbling::HalfGateEvaluator evaluator(garbler.get_public_data());
+  MOTION::CircuitLoader circuit_loader;
+  const std::size_t bit_size = 64;
+  const auto& algo = circuit_loader.load_maxpool_circuit(bit_size, 4);
+  const std::size_t num_ands = (2 * bit_size) * (4 - 1);
+  const std::size_t num_simd = state.range(0);
+  const auto offset = garbler.get_offset();
+  auto key_as = ENCRYPTO::block128_vector::make_random(4 * bit_size * num_simd);
+  ENCRYPTO::block128_vector key_bs;
+  ENCRYPTO::block128_vector key_cs(bit_size * num_simd);
+  ENCRYPTO::block128_vector garbled_tables(2 * num_ands * num_simd);
+  const std::size_t index = 42;
+  garbler.garble_circuit(key_cs, garbled_tables, index, key_as, key_bs, num_simd, algo);
+
+  for (auto _ : state) {
+    evaluator.evaluate_circuit(key_cs, garbled_tables, index, key_as, key_bs, num_simd, algo);
+  }
+  state.counters["#AND"] =
+      benchmark::Counter(state.iterations() * num_simd * num_ands, benchmark::Counter::kIsRate);
+  state.counters["#Max4"] =
+      benchmark::Counter(state.iterations() * num_simd, benchmark::Counter::kIsRate);
+  state.SetBytesProcessed(state.iterations() * 32 * num_ands * num_simd);
+}
+BENCHMARK(BM_evaluate_max4_circuit)->Arg(1)->Arg(1 << 10);
