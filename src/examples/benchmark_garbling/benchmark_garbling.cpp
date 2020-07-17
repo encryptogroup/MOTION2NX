@@ -83,7 +83,7 @@ static void BM_garble_aes_128_circuit(benchmark::State& state) {
   }
   state.counters["#AND"] =
       benchmark::Counter(state.iterations() * num_simd * num_ands, benchmark::Counter::kIsRate);
-  state.counters["#AES"] =
+  state.counters["#Circuits"] =
       benchmark::Counter(state.iterations() * num_simd, benchmark::Counter::kIsRate);
   state.SetBytesProcessed(state.iterations() * 32 * num_ands * num_simd);
 }
@@ -110,7 +110,7 @@ static void BM_evaluate_aes_128_circuit(benchmark::State& state) {
   }
   state.counters["#AND"] =
       benchmark::Counter(state.iterations() * num_simd * num_ands, benchmark::Counter::kIsRate);
-  state.counters["#AES"] =
+  state.counters["#Circuits"] =
       benchmark::Counter(state.iterations() * num_simd, benchmark::Counter::kIsRate);
   state.SetBytesProcessed(state.iterations() * 32 * num_ands * num_simd);
 }
@@ -135,7 +135,7 @@ static void BM_garble_sha_256_circuit(benchmark::State& state) {
   }
   state.counters["#AND"] =
       benchmark::Counter(state.iterations() * num_simd * num_ands, benchmark::Counter::kIsRate);
-  state.counters["#SHA"] =
+  state.counters["#Circuits"] =
       benchmark::Counter(state.iterations() * num_simd, benchmark::Counter::kIsRate);
   state.SetBytesProcessed(state.iterations() * 32 * num_ands * num_simd);
 }
@@ -162,7 +162,7 @@ static void BM_evaluate_sha_256_circuit(benchmark::State& state) {
   }
   state.counters["#AND"] =
       benchmark::Counter(state.iterations() * num_simd * num_ands, benchmark::Counter::kIsRate);
-  state.counters["#SHA"] =
+  state.counters["#Circuits"] =
       benchmark::Counter(state.iterations() * num_simd, benchmark::Counter::kIsRate);
   state.SetBytesProcessed(state.iterations() * 32 * num_ands * num_simd);
 }
@@ -187,7 +187,7 @@ static void BM_garble_relu_circuit(benchmark::State& state) {
   }
   state.counters["#AND"] =
       benchmark::Counter(state.iterations() * num_simd * num_ands, benchmark::Counter::kIsRate);
-  state.counters["#ReLU"] =
+  state.counters["#Circuits"] =
       benchmark::Counter(state.iterations() * num_simd, benchmark::Counter::kIsRate);
   state.SetBytesProcessed(state.iterations() * 32 * num_ands * num_simd);
 }
@@ -214,7 +214,7 @@ static void BM_evaluate_relu_circuit(benchmark::State& state) {
   }
   state.counters["#AND"] =
       benchmark::Counter(state.iterations() * num_simd * num_ands, benchmark::Counter::kIsRate);
-  state.counters["#ReLU"] =
+  state.counters["#Circuits"] =
       benchmark::Counter(state.iterations() * num_simd, benchmark::Counter::kIsRate);
   state.SetBytesProcessed(state.iterations() * 32 * num_ands * num_simd);
 }
@@ -239,7 +239,7 @@ static void BM_garble_max4_circuit(benchmark::State& state) {
   }
   state.counters["#AND"] =
       benchmark::Counter(state.iterations() * num_simd * num_ands, benchmark::Counter::kIsRate);
-  state.counters["#Max4"] =
+  state.counters["#Circuits"] =
       benchmark::Counter(state.iterations() * num_simd, benchmark::Counter::kIsRate);
   state.SetBytesProcessed(state.iterations() * 32 * num_ands * num_simd);
 }
@@ -266,7 +266,7 @@ static void BM_evaluate_max4_circuit(benchmark::State& state) {
   }
   state.counters["#AND"] =
       benchmark::Counter(state.iterations() * num_simd * num_ands, benchmark::Counter::kIsRate);
-  state.counters["#Max4"] =
+  state.counters["#Circuits"] =
       benchmark::Counter(state.iterations() * num_simd, benchmark::Counter::kIsRate);
   state.SetBytesProcessed(state.iterations() * 32 * num_ands * num_simd);
 }
