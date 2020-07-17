@@ -41,7 +41,7 @@ static void BM_garble_and(benchmark::State& state) {
       benchmark::Counter(state.iterations() * num_ands, benchmark::Counter::kIsRate);
   state.SetBytesProcessed(state.iterations() * 32 * num_ands);
 }
-BENCHMARK(BM_garble_and)->Arg(1)->Arg(1 << 10)->Arg(1 << 20);
+BENCHMARK(BM_garble_and)->RangeMultiplier(1 << 5)->Range(1, 1 << 20);
 
 static void BM_evaluate_and(benchmark::State& state) {
   MOTION::Crypto::garbling::HalfGateGarbler garbler;
@@ -62,7 +62,7 @@ static void BM_evaluate_and(benchmark::State& state) {
       benchmark::Counter(state.iterations() * num_ands, benchmark::Counter::kIsRate);
   state.SetBytesProcessed(state.iterations() * 32 * num_ands);
 }
-BENCHMARK(BM_evaluate_and)->Arg(1)->Arg(1 << 10)->Arg(1 << 20);
+BENCHMARK(BM_evaluate_and)->RangeMultiplier(1 << 5)->Range(1, 1 << 20);
 
 static void BM_garble_aes_128_circuit(benchmark::State& state) {
   MOTION::Crypto::garbling::HalfGateGarbler garbler;
@@ -87,7 +87,7 @@ static void BM_garble_aes_128_circuit(benchmark::State& state) {
       benchmark::Counter(state.iterations() * num_simd, benchmark::Counter::kIsRate);
   state.SetBytesProcessed(state.iterations() * 32 * num_ands * num_simd);
 }
-BENCHMARK(BM_garble_aes_128_circuit)->Arg(1)->Arg(1 << 10);
+BENCHMARK(BM_garble_aes_128_circuit)->RangeMultiplier(1 << 2)->Range(1, 1 << 10);
 
 static void BM_evaluate_aes_128_circuit(benchmark::State& state) {
   MOTION::Crypto::garbling::HalfGateGarbler garbler;
@@ -114,7 +114,7 @@ static void BM_evaluate_aes_128_circuit(benchmark::State& state) {
       benchmark::Counter(state.iterations() * num_simd, benchmark::Counter::kIsRate);
   state.SetBytesProcessed(state.iterations() * 32 * num_ands * num_simd);
 }
-BENCHMARK(BM_evaluate_aes_128_circuit)->Arg(1)->Arg(1 << 10);
+BENCHMARK(BM_evaluate_aes_128_circuit)->RangeMultiplier(1 << 2)->Range(1, 1 << 10);
 
 static void BM_garble_sha_256_circuit(benchmark::State& state) {
   MOTION::Crypto::garbling::HalfGateGarbler garbler;
@@ -139,7 +139,7 @@ static void BM_garble_sha_256_circuit(benchmark::State& state) {
       benchmark::Counter(state.iterations() * num_simd, benchmark::Counter::kIsRate);
   state.SetBytesProcessed(state.iterations() * 32 * num_ands * num_simd);
 }
-BENCHMARK(BM_garble_sha_256_circuit)->Arg(1)->Arg(1 << 10);
+BENCHMARK(BM_garble_sha_256_circuit)->RangeMultiplier(1 << 2)->Range(1, 1 << 10);
 
 static void BM_evaluate_sha_256_circuit(benchmark::State& state) {
   MOTION::Crypto::garbling::HalfGateGarbler garbler;
@@ -166,7 +166,7 @@ static void BM_evaluate_sha_256_circuit(benchmark::State& state) {
       benchmark::Counter(state.iterations() * num_simd, benchmark::Counter::kIsRate);
   state.SetBytesProcessed(state.iterations() * 32 * num_ands * num_simd);
 }
-BENCHMARK(BM_evaluate_sha_256_circuit)->Arg(1)->Arg(1 << 10);
+BENCHMARK(BM_evaluate_sha_256_circuit)->RangeMultiplier(1 << 2)->Range(1, 1 << 10);
 
 static void BM_garble_relu_circuit(benchmark::State& state) {
   MOTION::Crypto::garbling::HalfGateGarbler garbler;
@@ -191,7 +191,7 @@ static void BM_garble_relu_circuit(benchmark::State& state) {
       benchmark::Counter(state.iterations() * num_simd, benchmark::Counter::kIsRate);
   state.SetBytesProcessed(state.iterations() * 32 * num_ands * num_simd);
 }
-BENCHMARK(BM_garble_relu_circuit)->Arg(1)->Arg(1 << 10);
+BENCHMARK(BM_garble_relu_circuit)->RangeMultiplier(1 << 2)->Range(1, 1 << 10);
 
 static void BM_evaluate_relu_circuit(benchmark::State& state) {
   MOTION::Crypto::garbling::HalfGateGarbler garbler;
@@ -218,7 +218,7 @@ static void BM_evaluate_relu_circuit(benchmark::State& state) {
       benchmark::Counter(state.iterations() * num_simd, benchmark::Counter::kIsRate);
   state.SetBytesProcessed(state.iterations() * 32 * num_ands * num_simd);
 }
-BENCHMARK(BM_evaluate_relu_circuit)->Arg(1)->Arg(1 << 10);
+BENCHMARK(BM_evaluate_relu_circuit)->RangeMultiplier(1 << 2)->Range(1, 1 << 10);
 
 static void BM_garble_max4_circuit(benchmark::State& state) {
   MOTION::Crypto::garbling::HalfGateGarbler garbler;
@@ -243,7 +243,7 @@ static void BM_garble_max4_circuit(benchmark::State& state) {
       benchmark::Counter(state.iterations() * num_simd, benchmark::Counter::kIsRate);
   state.SetBytesProcessed(state.iterations() * 32 * num_ands * num_simd);
 }
-BENCHMARK(BM_garble_max4_circuit)->Arg(1)->Arg(1 << 10);
+BENCHMARK(BM_garble_max4_circuit)->RangeMultiplier(1 << 2)->Range(1, 1 << 10);
 
 static void BM_evaluate_max4_circuit(benchmark::State& state) {
   MOTION::Crypto::garbling::HalfGateGarbler garbler;
@@ -270,4 +270,4 @@ static void BM_evaluate_max4_circuit(benchmark::State& state) {
       benchmark::Counter(state.iterations() * num_simd, benchmark::Counter::kIsRate);
   state.SetBytesProcessed(state.iterations() * 32 * num_ands * num_simd);
 }
-BENCHMARK(BM_evaluate_max4_circuit)->Arg(1)->Arg(1 << 10);
+BENCHMARK(BM_evaluate_max4_circuit)->Arg(1)->RangeMultiplier(1 << 2)->Range(1, 1 << 10);
