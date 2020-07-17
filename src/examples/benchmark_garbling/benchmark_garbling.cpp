@@ -116,6 +116,58 @@ static void BM_evaluate_aes_128_circuit(benchmark::State& state) {
 }
 BENCHMARK(BM_evaluate_aes_128_circuit)->Arg(1)->Arg(1 << 10);
 
+static void BM_garble_sha_256_circuit(benchmark::State& state) {
+  MOTION::Crypto::garbling::HalfGateGarbler garbler;
+  MOTION::CircuitLoader circuit_loader;
+  const auto& algo =
+      circuit_loader.load_circuit("sha_256.bristol", MOTION::CircuitFormat::BristolFashion);
+  const std::size_t num_ands = 22573;
+  const std::size_t num_simd = state.range(0);
+  const auto offset = garbler.get_offset();
+  auto key_as = ENCRYPTO::block128_vector::make_random(512 * num_simd);
+  auto key_bs = ENCRYPTO::block128_vector::make_random(256 * num_simd);
+  const std::size_t index = 42;
+  ENCRYPTO::block128_vector key_cs(256 * num_simd);
+  ENCRYPTO::block128_vector garbled_tables(2 * num_ands * num_simd);
+
+  for (auto _ : state) {
+    garbler.garble_circuit(key_cs, garbled_tables, index, key_as, key_bs, num_simd, algo);
+  }
+  state.counters["#AND"] =
+      benchmark::Counter(state.iterations() * num_simd * num_ands, benchmark::Counter::kIsRate);
+  state.counters["#SHA"] =
+      benchmark::Counter(state.iterations() * num_simd, benchmark::Counter::kIsRate);
+  state.SetBytesProcessed(state.iterations() * 32 * num_ands * num_simd);
+}
+BENCHMARK(BM_garble_sha_256_circuit)->Arg(1)->Arg(1 << 10);
+
+static void BM_evaluate_sha_256_circuit(benchmark::State& state) {
+  MOTION::Crypto::garbling::HalfGateGarbler garbler;
+  MOTION::Crypto::garbling::HalfGateEvaluator evaluator(garbler.get_public_data());
+  MOTION::CircuitLoader circuit_loader;
+  const auto& algo =
+      circuit_loader.load_circuit("sha_256.bristol", MOTION::CircuitFormat::BristolFashion);
+  const std::size_t num_ands = 22573;
+  const std::size_t num_simd = state.range(0);
+  const auto offset = garbler.get_offset();
+  auto key_as = ENCRYPTO::block128_vector::make_random(512 * num_simd);
+  auto key_bs = ENCRYPTO::block128_vector::make_random(256 * num_simd);
+  const std::size_t index = 42;
+  ENCRYPTO::block128_vector key_cs(256 * num_simd);
+  ENCRYPTO::block128_vector garbled_tables(2 * num_ands * num_simd);
+  garbler.garble_circuit(key_cs, garbled_tables, index, key_as, key_bs, num_simd, algo);
+
+  for (auto _ : state) {
+    evaluator.evaluate_circuit(key_cs, garbled_tables, index, key_as, key_bs, num_simd, algo);
+  }
+  state.counters["#AND"] =
+      benchmark::Counter(state.iterations() * num_simd * num_ands, benchmark::Counter::kIsRate);
+  state.counters["#SHA"] =
+      benchmark::Counter(state.iterations() * num_simd, benchmark::Counter::kIsRate);
+  state.SetBytesProcessed(state.iterations() * 32 * num_ands * num_simd);
+}
+BENCHMARK(BM_evaluate_sha_256_circuit)->Arg(1)->Arg(1 << 10);
+
 static void BM_garble_relu_circuit(benchmark::State& state) {
   MOTION::Crypto::garbling::HalfGateGarbler garbler;
   MOTION::CircuitLoader circuit_loader;
