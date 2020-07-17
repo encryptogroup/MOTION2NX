@@ -1,6 +1,6 @@
 add_subdirectory(aes128)
-add_subdirectory(benchmark)
 add_subdirectory(benchmark_integers)
+add_subdirectory(benchmark_operations)
 add_subdirectory(benchmark_providers)
 add_subdirectory(cryptonets)
 add_subdirectory(evaluate_circuit_from_file)
