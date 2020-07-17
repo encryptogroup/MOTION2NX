@@ -134,6 +134,15 @@ if (MOTION_BUILD_TESTS)
 endif (MOTION_BUILD_TESTS)
 
 if (MOTION_BUILD_EXE)
+    if (NOT EXISTS "${PROJECT_SOURCE_DIR}/extern/benchmark/CMakeLists.txt")
+        find_package(Git REQUIRED)
+        message("initialize Git submodule: extern/benchmark")
+        execute_process(COMMAND git submodule update --init extern/benchmark
+                WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}")
+    endif ()
+    set(BENCHMARK_ENABLE_TESTING OFF CACHE BOOL "Don't build tests for the benchmark library")
+    set(BENCHMARK_ENABLE_INSTALL OFF CACHE BOOL "Don't install the benchmark library")
+    add_subdirectory(extern/benchmark EXCLUDE_FROM_ALL)
     add_subdirectory(src/examples)
 endif (MOTION_BUILD_EXE)
 
