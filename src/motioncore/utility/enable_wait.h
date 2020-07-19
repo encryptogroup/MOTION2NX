@@ -36,6 +36,10 @@ class enable_wait_online {
     }
     online_cond_.NotifyAll();
   }
+  void reset_online_ready() noexcept {
+    std::scoped_lock lock(online_cond_.GetMutex());
+    online_ready_ = false;
+  }
   void wait_online() const noexcept { online_cond_.Wait(); }
 
  private:
@@ -52,6 +56,10 @@ class enable_wait_setup {
       setup_ready_ = true;
     }
     setup_cond_.NotifyAll();
+  }
+  void reset_setup_ready() noexcept {
+    std::scoped_lock lock(setup_cond_.GetMutex());
+    setup_ready_ = false;
   }
   void wait_setup() const noexcept { setup_cond_.Wait(); }
 
