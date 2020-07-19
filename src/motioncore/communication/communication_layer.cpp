@@ -134,10 +134,24 @@ void CommunicationLayer::CommunicationLayerImpl::send_task(std::size_t party_id)
         // std::shared_ptr<const std::vector<std::uint8_t>>
         transport.send_message(*std::get<1>(message));
       }
-      tmp_queue->pop();
       if (logger_) {
-        logger_->LogDebug(fmt::format("Sent message to party {}", party_id));
+        if constexpr (MOTION_DEBUG) {
+          const std::uint8_t* raw_message = nullptr;
+          if (message.index() == 0) {
+            // std::vector<std::uint8_t>
+            raw_message = std::get<0>(message).data();
+          } else if (message.index() == 1) {
+            raw_message = std::get<1>(message)->data();
+          }
+          auto fb_message = GetMessage(raw_message);
+          auto message_type = fb_message->message_type();
+          logger_->LogDebug(fmt::format("Sent message of type {} to party {}",
+                                        EnumNameMessageType(message_type), party_id));
+        } else {
+          logger_->LogDebug(fmt::format("Sent message to party {}", party_id));
+        }
       }
+      tmp_queue->pop();
     }
   }
 
