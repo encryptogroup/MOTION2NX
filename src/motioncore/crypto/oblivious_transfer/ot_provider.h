@@ -440,6 +440,7 @@ class OTProvider {
   MOTION::OTExtensionData &data_;
   OTProviderReceiver receiver_provider_;
   OTProviderSender sender_provider_;
+  std::shared_ptr<MOTION::Logger> logger_;
 };
 
 class OTProviderFromFile : public OTProvider {

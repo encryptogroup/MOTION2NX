@@ -48,7 +48,8 @@ OTProvider::OTProvider(std::function<void(flatbuffers::FlatBufferBuilder &&)> Se
     : Send_(Send),
       data_(data),
       receiver_provider_(data_.GetReceiverData(), party_id, logger),
-      sender_provider_(data_.GetSenderData(), party_id, logger) {}
+      sender_provider_(data_.GetSenderData(), party_id, logger),
+      logger_(logger) {}
 
 void OTProvider::WaitSetup() const {
   data_.GetReceiverData().setup_finished_cond_->Wait();
@@ -139,6 +140,12 @@ OTProviderFromOTExtension::OTProviderFromOTExtension(
 }
 
 void OTProviderFromOTExtension::SendSetup() {
+  if constexpr (MOTION::MOTION_DEBUG) {
+    if (logger_) {
+      logger_->LogDebug("OTProviderFromOTExtension::SendSetup() start");
+    }
+  }
+
   // security parameter
   constexpr std::size_t kappa = 128;
 
@@ -149,7 +156,14 @@ void OTProviderFromOTExtension::SendSetup() {
   // number of OTs after extension
   // == width of the bit matrix
   const std::size_t bit_size = sender_provider_.GetNumOTs();
-  if (bit_size == 0) return;  // no OTs needed
+  if (bit_size == 0) {
+    if constexpr (MOTION::MOTION_DEBUG) {
+      if (logger_) {
+        logger_->LogDebug("OTProviderFromOTExtension::SendSetup() return, nothing to do");
+      }
+    }
+    return;  // no OTs needed
+  }
   ot_ext_snd.bit_size_ = bit_size;
 
   // XXX: index variable?
@@ -262,16 +276,35 @@ void OTProviderFromOTExtension::SendSetup() {
     ot_ext_snd.setup_finished_ = true;
   }
   ot_ext_snd.setup_finished_cond_->NotifyAll();
-}  // namespace ENCRYPTO::ObliviousTransfer
+
+  if constexpr (MOTION::MOTION_DEBUG) {
+    if (logger_) {
+      logger_->LogDebug("OTProviderFromOTExtension::SendSetup() end");
+    }
+  }
+}
 
 void OTProviderFromOTExtension::ReceiveSetup() {
+  if constexpr (MOTION::MOTION_DEBUG) {
+    if (logger_) {
+      logger_->LogDebug("OTProviderFromOTExtension::ReceiveSetup() start");
+    }
+  }
+
   // some index variables
   std::size_t i = 0, j = 0;
   // security parameter and number of base OTs
   constexpr std::size_t kappa = 128;
   // number of OTs and width of the bit matrix
   const std::size_t bit_size = receiver_provider_.GetNumOTs();
-  if (bit_size == 0) return;  // nothing to do
+  if (bit_size == 0) {
+    if constexpr (MOTION::MOTION_DEBUG) {
+      if (logger_) {
+        logger_->LogDebug("OTProviderFromOTExtension::ReceiveSetup() return, nothing to do");
+      }
+    }
+    return;  // nothing to do
+  }
 
   // rounded up to a multiple of the security parameter
   const auto bit_size_padded = bit_size + kappa - (bit_size % kappa);
@@ -366,6 +399,12 @@ void OTProviderFromOTExtension::ReceiveSetup() {
     ot_ext_rcv.setup_finished_ = true;
   }
   ot_ext_rcv.setup_finished_cond_->NotifyAll();
+
+  if constexpr (MOTION::MOTION_DEBUG) {
+    if (logger_) {
+      logger_->LogDebug("OTProviderFromOTExtension::ReceiveSetup() end");
+    }
+  }
 }
 
 OTVector::OTVector(const std::size_t ot_id, const std::size_t num_ots, const std::size_t bitlen,
