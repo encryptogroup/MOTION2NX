@@ -58,6 +58,7 @@ class OTBackend {
   void sync();
 
   auto get_my_id() const noexcept { return my_id_; }
+  const auto& get_run_time_stats() const noexcept { return run_time_stats_; }
   ArithmeticProvider& get_arithmetic_provider() noexcept;
 
  private:

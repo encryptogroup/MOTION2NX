@@ -23,15 +23,19 @@
 #include "triple_generator.h"
 
 #include <algorithm>
+#include <chrono>
 #include <cstdint>
 #include <iostream>
 #include <memory>
+#include <numeric>
 #include <vector>
 
+#include <fmt/chrono.h>
 #include <fmt/format.h>
 
 #include "crypto/arithmetic_provider.h"
 #include "ot_backend.h"
+#include "statistics/run_time_stats.h"
 #include "utility/helpers.h"
 #include "utility/linear_algebra.h"
 #include "utility/type_traits.hpp"
@@ -49,13 +53,15 @@ void matrix_multiplication_stats(std::size_t m, std::size_t k, std::size_t n) {
   std::cout << fmt::format("- {} scalar x vector multiplications with vectors of size {}\n",
                            num_mults, vector_size);
   std::cout << fmt::format("- {} additively correlated OTs\n", num_ots);
-  std::cout << fmt::format("- buffer size: {:.3f} GiB\n", num_ots * vector_size * sizeof(T) / double(1 << 30));
+  std::cout << fmt::format("- buffer size: {:.3f} GiB\n",
+                           num_ots * vector_size * sizeof(T) / double(1 << 30));
   // row-wise:
   std::cout << fmt::format("row-wise: {}x the following:\n", m);
-  std::cout << fmt::format("- {} scalar x vector multiplications with vectors of size {}\n",
-                           k, vector_size);
+  std::cout << fmt::format("- {} scalar x vector multiplications with vectors of size {}\n", k,
+                           vector_size);
   std::cout << fmt::format("- {} additively correlated OTs\n", bit_size * k);
-  std::cout << fmt::format("- buffer size: {:.3f} GiB\n", bit_size * k * vector_size * sizeof(T) / double(1 << 30));
+  std::cout << fmt::format("- buffer size: {:.3f} GiB\n",
+                           bit_size * k * vector_size * sizeof(T) / double(1 << 30));
 }
 
 template <typename T>
@@ -110,6 +116,17 @@ std::vector<T> matrix_multiplication_rhs(OTBackend& ot_backend, std::size_t m, s
 }
 
 template <typename T>
+void print_matrix(const T* matrix, std::size_t rows, std::size_t cols) {
+  for (std::size_t r = 0; r < rows; ++r) {
+    std::cout << matrix[r * cols];
+    for (std::size_t c = 1; c < cols; ++c) {
+      std::cout << " " << matrix[r * cols + c];
+    }
+    std::cout << "\n";
+  }
+}
+
+template <typename T>
 void generate_matrix_triple(OTBackend& ot_backend, std::size_t m, std::size_t k, std::size_t n) {
   const auto my_id = ot_backend.get_my_id();
   auto input_a = Helpers::RandomVector<T>(m * k);
@@ -132,12 +149,35 @@ void generate_matrix_triple(OTBackend& ot_backend, std::size_t m, std::size_t k,
     tmp = matrix_multiplication_lhs(ot_backend, m, k, n, input_a);
     add_to(tmp, output);
   }
+
+  // std::cout << "Input A\n";
+  // print_matrix(input_a.data(), m, k);
+  // std::cout << "\nInput B\n";
+  // print_matrix(input_b.data(), k, n);
+  // std::cout << "\nOutput\n";
+  // print_matrix(output.data(), m, n);
 }
 
 void generate_triples(OTBackend& ot_backend, std::size_t m, std::size_t k, std::size_t n) {
-  using T = std::uint64_t;;
+  using T = std::uint64_t;
+  ;
+  using clock_type = std::chrono::steady_clock;
   matrix_multiplication_stats<T>(m, k, n);
+  auto start = clock_type::now();
   generate_matrix_triple<T>(ot_backend, m, k, n);
+  auto end = clock_type::now();
+  const auto& stats = ot_backend.get_run_time_stats();
+  const auto total_time = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+  const auto zero_duration = decltype(total_time){};
+  const auto ot_ext_setup_time = std::transform_reduce(
+      std::begin(stats), std::end(stats), zero_duration, std::plus{}, [](const auto& rts) {
+        const auto pair = rts.get(Statistics::RunTimeStats::StatID::ot_extension_setup);
+        return std::chrono::duration_cast<std::chrono::milliseconds>(pair.second - pair.first);
+      });
+  std::cout << "run time:\n";
+  std::cout << fmt::format("- total:              {}\n", total_time);
+  std::cout << fmt::format("- ot extension setup: {} ({:02.2f}%)\n", ot_ext_setup_time,
+                           (double)ot_ext_setup_time.count() / total_time.count());
 }
 
 }  // namespace MOTION
