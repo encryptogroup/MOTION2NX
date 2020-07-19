@@ -139,6 +139,7 @@ struct OTExtensionReceiverData {
   std::unique_ptr<ENCRYPTO::FiberCondition> setup_finished_cond_;
   std::atomic<bool> setup_finished_{false};
 
+  std::atomic<std::size_t> consumed_offset_base_ots_{0};
   // XXX: unused
   std::atomic<std::size_t> consumed_offset_{0};
 };
@@ -183,6 +184,7 @@ struct OTExtensionSenderData {
   std::unique_ptr<ENCRYPTO::FiberCondition> setup_finished_cond_;
   std::atomic<bool> setup_finished_{false};
 
+  std::atomic<std::size_t> consumed_offset_base_ots_{0};
   // XXX: unused
   std::atomic<std::size_t> consumed_offset_{0};
 };

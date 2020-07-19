@@ -486,6 +486,9 @@ class OTProviderManager : public enable_wait_setup {
   OTProvider &get_provider(std::size_t party_id) { return *providers_.at(party_id); }
   void run_setup();
 
+  // reset all data structures for a new round of OTs
+  void clear();
+
  private:
   MOTION::Communication::CommunicationLayer &communication_layer_;
   const MOTION::BaseOTProvider &base_ot_provider_;

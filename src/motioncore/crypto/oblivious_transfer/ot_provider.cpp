@@ -193,6 +193,7 @@ void OTProviderFromOTExtension::SendSetup() {
     auto row(prgs_var_key.Encrypt(byte_size));
     v[i] = AlignedBitVector(std::move(row), bit_size_padded);
   }
+  ot_ext_snd.consumed_offset_base_ots_ += bit_size_padded / kappa;
 
   // receive the vectors u one by one from the receiver
   // and xor them to the expanded keys if the corresponding selection bit is 1
@@ -216,6 +217,9 @@ void OTProviderFromOTExtension::SendSetup() {
   for (i = 0u; i < ptrs.size(); ++i) {
     ptrs[i] = v[i].GetData().data();
   }
+
+  // pad the vector of bitlength with zeros
+  ot_ext_snd.bitlengths_.resize(bit_size_padded, 0);
 
   motion_base_provider_.setup();
   const auto &fixed_key_aes_key = motion_base_provider_.get_aes_fixed_key();
@@ -356,6 +360,7 @@ void OTProviderFromOTExtension::ReceiveSetup() {
     Send_(MOTION::Communication::BuildOTExtensionMessageReceiverMasks(u.GetData().data(),
                                                                       u.GetData().size(), i));
   }
+  ot_ext_rcv.consumed_offset_base_ots_ += bit_size_padded / kappa;
 
   // transpose matrix T
   if (bit_size_padded != bit_size) {
@@ -368,6 +373,9 @@ void OTProviderFromOTExtension::ReceiveSetup() {
   for (j = 0; j < ptrs.size(); ++j) {
     ptrs.at(j) = v.at(j).GetMutableData().data();
   }
+
+  // pad the vector of bitlength with zeros
+  ot_ext_rcv.bitlengths_.resize(bit_size_padded, 0);
 
   motion_base_provider_.setup();
   const auto &fixed_key_aes_key = motion_base_provider_.get_aes_fixed_key();
@@ -1030,11 +1038,6 @@ std::unique_ptr<GOTBitSender> OTProviderSender::RegisterGOTBit(
 }
 
 void OTProviderSender::Clear() {
-  // TODO: move this
-  // data_storage_->GetBaseOTsData()->GetSenderData().consumed_offset_ += total_ots_count_;
-
-  total_ots_count_ = 0;
-
   {
     std::scoped_lock lock(data_.setup_finished_cond_->GetMutex());
     data_.setup_finished_ = false;
@@ -1043,11 +1046,17 @@ void OTProviderSender::Clear() {
     std::scoped_lock lock(data_.corrections_mutex_);
     data_.received_correction_offsets_.clear();
   }
+  {
+    std::scoped_lock lock(data_.u_mutex_);
+    data_.num_received_u_ = 0;
+  }
 }
 
 void OTProviderSender::Reset() {
   Clear();
+  total_ots_count_ = 0;
   // TODO
+  // - clear promise map
 }
 
 std::shared_ptr<OTVectorReceiver> &OTProviderReceiver::GetOTs(std::size_t offset) {
@@ -1226,11 +1235,6 @@ std::unique_ptr<GOTBitReceiver> OTProviderReceiver::RegisterGOTBit(
 }
 
 void OTProviderReceiver::Clear() {
-  // TODO: move this
-  // data_storage_->GetBaseOTsData()->GetReceiverData().consumed_offset_ += total_ots_count_;
-  //
-  total_ots_count_ = 0;
-
   {
     std::scoped_lock lock(data_.setup_finished_cond_->GetMutex());
     data_.setup_finished_ = false;
@@ -1246,7 +1250,12 @@ void OTProviderReceiver::Clear() {
     data_.received_outputs_.clear();
   }
 }
-void OTProviderReceiver::Reset() { Clear(); }
+void OTProviderReceiver::Reset() {
+  Clear();
+  total_ots_count_ = 0;
+  // TODO
+  // - clear promise map
+}
 
 class OTExtensionMessageHandler : public MOTION::Communication::MessageHandler {
  public:
@@ -1365,6 +1374,19 @@ void OTProviderManager::run_setup() {
   if constexpr (MOTION::MOTION_DEBUG) {
     logger_->LogDebug("Finished setup for OTExtensions");
   }
+}
+
+void OTProviderManager::clear() {
+  if constexpr (MOTION::MOTION_DEBUG) {
+    logger_->LogDebug("OTProviderManager::clear()");
+  }
+  for (auto party_i = 0ull; party_i < communication_layer_.get_num_parties(); ++party_i) {
+    if (party_i == communication_layer_.get_my_id()) {
+      continue;
+    }
+    providers_.at(party_i)->Clear();
+  }
+  reset_setup_ready();
 }
 
 }  // namespace ENCRYPTO::ObliviousTransfer
