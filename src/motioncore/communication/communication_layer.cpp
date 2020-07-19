@@ -137,16 +137,25 @@ void CommunicationLayer::CommunicationLayerImpl::send_task(std::size_t party_id)
       if (logger_) {
         if constexpr (MOTION_DEBUG) {
           const std::uint8_t* raw_message = nullptr;
+          std::size_t message_size = 0;
           if (message.index() == 0) {
             // std::vector<std::uint8_t>
             raw_message = std::get<0>(message).data();
+            message_size = std::get<0>(message).size();
           } else if (message.index() == 1) {
             raw_message = std::get<1>(message)->data();
+            message_size = std::get<1>(message)->size();
           }
-          auto fb_message = GetMessage(raw_message);
-          auto message_type = fb_message->message_type();
-          logger_->LogDebug(fmt::format("Sent message of type {} to party {}",
-                                        EnumNameMessageType(message_type), party_id));
+          flatbuffers::Verifier verifier(raw_message, message_size);
+          if (VerifyMessageBuffer(verifier)) {
+            auto fb_message = GetMessage(raw_message);
+            auto message_type = fb_message->message_type();
+            logger_->LogDebug(fmt::format("Sent message of type {} to party {}",
+                                          EnumNameMessageType(message_type), party_id));
+          } else {
+            logger_->LogDebug(
+                fmt::format("Sent message to party {} (could not detect MessageType)", party_id));
+          }
         } else {
           logger_->LogDebug(fmt::format("Sent message to party {}", party_id));
         }
