@@ -245,6 +245,13 @@ class ACOTSender : public BasicOTSender {
   // send the sender's messages
   void SendMessages() const;
 
+  // clear stored data s.t. this handle can be used again
+  void clear() noexcept {
+    correlations_ = {};
+    outputs_ = {};
+    outputs_computed_ = false;
+  }
+
  private:
   // dimension of each sender-input/output
   const std::size_t vector_size_;
@@ -276,6 +283,13 @@ class ACOTReceiver : public BasicOTReceiver {
   std::vector<T> &GetOutputs() {
     assert(outputs_computed_);
     return outputs_;
+  }
+
+  // clear stored data s.t. this handle can be used again
+  void clear() noexcept {
+    outputs_ = {};
+    outputs_computed_ = false;
+    // TODO: maybe clear sender_message_future_ if it still has content
   }
 
  private:

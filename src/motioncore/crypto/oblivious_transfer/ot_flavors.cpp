@@ -329,8 +329,7 @@ ACOTReceiver<T>::ACOTReceiver(const std::size_t ot_id, const std::size_t num_ots
                               const std::size_t vector_size, MOTION::OTExtensionReceiverData &data,
                               const std::function<void(flatbuffers::FlatBufferBuilder &&)> &Send)
     : BasicOTReceiver(ot_id, num_ots, 8 * sizeof(T) * vector_size, ACOT, Send, data),
-      vector_size_(vector_size),
-      outputs_(num_ots * vector_size) {
+      vector_size_(vector_size) {
   constexpr auto int_type_to_msg_type = boost::hana::make_map(
       boost::hana::make_pair(boost::hana::type_c<std::uint8_t>, MOTION::OTMsgType::uint8),
       boost::hana::make_pair(boost::hana::type_c<std::uint16_t>, MOTION::OTMsgType::uint16),
@@ -351,6 +350,9 @@ void ACOTReceiver<T>::ComputeOutputs() {
   if (!corrections_sent_) {
     throw std::runtime_error("Choices in COT must be se(n)t before calling ComputeOutputs()");
   }
+
+  // make space for all the OTs
+  outputs_.resize(num_ots_ * vector_size_);
 
   auto sender_message = sender_message_future_.get();
   assert(sender_message.size() == num_ots_ * vector_size_);
