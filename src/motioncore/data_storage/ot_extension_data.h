@@ -153,8 +153,8 @@ struct OTExtensionSenderData {
   /// receiver's mask that are needed to construct matrix @param V_
   std::array<ENCRYPTO::AlignedBitVector, 128> u_;
 
-  std::array<ENCRYPTO::ReusablePromise<std::size_t>, 128> u_promises_;
-  std::array<ENCRYPTO::ReusableFuture<std::size_t>, 128> u_futures_;
+  std::array<ENCRYPTO::ReusableFiberPromise<std::size_t>, 128> u_promises_;
+  std::array<ENCRYPTO::ReusableFiberFuture<std::size_t>, 128> u_futures_;
   std::mutex u_mutex_;
   std::size_t num_received_u_{0};
   // matrix of the OT extension scheme
