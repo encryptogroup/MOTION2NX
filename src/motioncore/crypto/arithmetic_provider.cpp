@@ -110,6 +110,12 @@ std::vector<T> IntegerMultiplicationSender<T>::get_outputs() {
   return std::move(outputs_);
 }
 
+template <typename T>
+void IntegerMultiplicationSender<T>::clear() noexcept {
+  ot_sender_->clear();
+  outputs_ = {};
+}
+
 // ---------- IntegerMultiplicationReceiver ----------
 
 template <typename T>
@@ -174,6 +180,12 @@ std::vector<T> IntegerMultiplicationReceiver<T>::get_outputs() {
   return std::move(outputs_);
 }
 
+template <typename T>
+void IntegerMultiplicationReceiver<T>::clear() noexcept {
+  ot_receiver_->clear();
+  outputs_ = {};
+}
+
 // ---------- MatrixMultiplicationRHS ----------
 
 template <typename T>
@@ -229,6 +241,13 @@ std::vector<T> MatrixMultiplicationRHS<T>::get_output() {
   return std::move(output_);
 }
 
+template <typename T>
+void MatrixMultiplicationRHS<T>::clear() noexcept {
+  mult_sender_->clear();
+  output_ = {};
+  is_output_ready_ = false;
+}
+
 // ---------- MatrixMultiplicationLHS ----------
 
 template <typename T>
@@ -282,6 +301,13 @@ template <typename T>
 std::vector<T> MatrixMultiplicationLHS<T>::get_output() {
   assert(is_output_ready_);
   return std::move(output_);
+}
+
+template <typename T>
+void MatrixMultiplicationLHS<T>::clear() noexcept {
+  mult_receiver_->clear();
+  output_ = {};
+  is_output_ready_ = false;
 }
 
 // ---------- ConvolutionInputSide ----------
@@ -364,6 +390,13 @@ std::vector<T> ConvolutionInputSide<T>::get_output() {
   return std::move(output_);
 }
 
+template <typename T>
+void ConvolutionInputSide<T>::clear() noexcept {
+  matrix_rhs_->clear();
+  output_ = {};
+  is_output_ready_ = false;
+}
+
 // ---------- ConvolutionKernelSide ----------
 
 template <typename T>
@@ -439,6 +472,13 @@ template <typename T>
 std::vector<T> ConvolutionKernelSide<T>::get_output() {
   assert(is_output_ready_);
   return std::move(output_);
+}
+
+template <typename T>
+void ConvolutionKernelSide<T>::clear() noexcept {
+  matrix_lhs_->clear();
+  output_ = {};
+  is_output_ready_ = false;
 }
 
 // ---------- ArithmeticProvider ----------

@@ -60,12 +60,12 @@ class IntegerMultiplicationSender {
   void set_inputs(const T* inputs);
   void compute_outputs();
   std::vector<T> get_outputs();
+  void clear() noexcept;
 
  private:
   using is_enabled_ = ENCRYPTO::is_unsigned_int_t<T>;
   std::size_t batch_size_;
   std::size_t vector_size_;
-  std::vector<T> inputs_;
   std::vector<T> outputs_;
   std::unique_ptr<ENCRYPTO::ObliviousTransfer::ACOTSender<T>> ot_sender_;
 };
@@ -81,12 +81,12 @@ class IntegerMultiplicationReceiver {
   void set_inputs(const T* inputs);
   void compute_outputs();
   std::vector<T> get_outputs();
+  void clear() noexcept;
 
  private:
   using is_enabled_ = ENCRYPTO::is_unsigned_int_t<T>;
   std::size_t batch_size_;
   std::size_t vector_size_;
-  std::vector<T> inputs_;
   std::vector<T> outputs_;
   std::unique_ptr<ENCRYPTO::ObliviousTransfer::ACOTReceiver<T>> ot_receiver_;
   std::shared_ptr<Logger> logger_;
@@ -102,6 +102,7 @@ class MatrixMultiplicationRHS {
   void set_input(const T* inputs);
   void compute_output();
   std::vector<T> get_output();
+  void clear() noexcept;
 
  private:
   using is_enabled_ = ENCRYPTO::is_unsigned_int_t<T>;
@@ -121,6 +122,7 @@ class MatrixMultiplicationLHS {
   void set_input(const T* inputs);
   void compute_output();
   std::vector<T> get_output();
+  void clear() noexcept;
 
  private:
   using is_enabled_ = ENCRYPTO::is_unsigned_int_t<T>;
@@ -141,6 +143,7 @@ class ConvolutionInputSide {
   void set_input(const T* inputs);
   void compute_output();
   std::vector<T> get_output();
+  void clear() noexcept;
 
  private:
   using is_enabled_ = ENCRYPTO::is_unsigned_int_t<T>;
@@ -160,6 +163,7 @@ class ConvolutionKernelSide {
   void set_input(const T* inputs);
   void compute_output();
   std::vector<T> get_output();
+  void clear() noexcept;
 
  private:
   using is_enabled_ = ENCRYPTO::is_unsigned_int_t<T>;
