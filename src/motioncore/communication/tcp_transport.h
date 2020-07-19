@@ -43,13 +43,14 @@ class TCPTransport : public Transport {
   // Destructor needs to be defined in implementation due to pimpl
   ~TCPTransport();
 
-  void send_message(std::vector<std::uint8_t>&& message);
-  void send_message(const std::vector<std::uint8_t>& message);
+  void send_message(std::vector<std::uint8_t>&& message) override;
+  void send_message(const std::vector<std::uint8_t>& message) override;
+  void send_message(const std::uint8_t* message, std::size_t size) override;
 
-  bool available() const;
-  std::optional<std::vector<std::uint8_t>> receive_message();
-  void shutdown_send();
-  void shutdown();
+  bool available() const override;
+  std::optional<std::vector<std::uint8_t>> receive_message() override;
+  void shutdown_send() override;
+  void shutdown() override;
 
  private:
   bool is_connected_;

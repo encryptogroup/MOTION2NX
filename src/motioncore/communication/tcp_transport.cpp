@@ -87,16 +87,19 @@ static void u32tou8(std::uint32_t v, std::uint8_t* result) {
 }
 
 void TCPTransport::send_message(const std::vector<std::uint8_t>& message) {
-  if (message.size() > std::numeric_limits<std::uint32_t>::max()) {
+  send_message(message.data(), message.size());
+}
+
+void TCPTransport::send_message(const std::uint8_t* message, std::size_t size) {
+  if (size > std::numeric_limits<std::uint32_t>::max()) {
     throw std::runtime_error(fmt::format("Max message size is {} B but tried to send {} B",
-                                         std::numeric_limits<std::uint32_t>::max(),
-                                         message.size()));
+                                         std::numeric_limits<std::uint32_t>::max(), size));
   }
   std::array<std::uint8_t, sizeof(std::uint32_t)> message_size;
-  u32tou8(message.size(), message_size.data());
+  u32tou8(size, message_size.data());
 
   std::array<boost::asio::const_buffer, 2> buffers = {boost::asio::buffer(message_size),
-                                                      boost::asio::buffer(message)};
+                                                      boost::asio::buffer(message, size)};
 
   boost::system::error_code ec;
   std::shared_lock lock(impl_->socket_mutex_);
@@ -104,7 +107,7 @@ void TCPTransport::send_message(const std::vector<std::uint8_t>& message) {
   if (ec) {
     throw std::runtime_error(fmt::format("Error while writing to socket: {}", ec.message()));
   }
-  statistics_.num_bytes_sent += message.size() + sizeof(uint32_t);
+  statistics_.num_bytes_sent += size + sizeof(uint32_t);
   statistics_.num_messages_sent += 1;
 }
 

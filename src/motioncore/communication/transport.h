@@ -50,6 +50,7 @@ class Transport {
   // send a message
   virtual void send_message(std::vector<std::uint8_t>&& message) = 0;
   virtual void send_message(const std::vector<std::uint8_t>& message) = 0;
+  virtual void send_message(const std::uint8_t* message, std::size_t size) = 0;
 
   // check if a new message is available
   virtual bool available() const = 0;

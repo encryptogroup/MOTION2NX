@@ -37,20 +37,21 @@ class DummyTransport : public Transport {
   make_transport_pair();
 
   // send a message
-  void send_message(std::vector<std::uint8_t>&& message);
-  void send_message(const std::vector<std::uint8_t>& message);
+  void send_message(std::vector<std::uint8_t>&& message) override;
+  void send_message(const std::vector<std::uint8_t>& message) override;
+  void send_message(const std::uint8_t* message, std::size_t size) override;
 
   // check if a new message is available
-  bool available() const;
+  bool available() const override;
 
   // receive message, possibly blocking
-  std::optional<std::vector<std::uint8_t>> receive_message();
+  std::optional<std::vector<std::uint8_t>> receive_message() override;
 
   // shutdown the outgoing part of the transport to signal end of communication
-  void shutdown_send();
+  void shutdown_send() override;
 
   // shutdown this transport
-  void shutdown();
+  void shutdown() override;
 
  private:
   using message_queue_t = ENCRYPTO::SynchronizedQueue<std::vector<std::uint8_t>>;

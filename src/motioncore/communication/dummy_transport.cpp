@@ -56,6 +56,10 @@ void DummyTransport::send_message(const std::vector<std::uint8_t>& message) {
   statistics_.num_bytes_sent += message_size;
 }
 
+void DummyTransport::send_message(const std::uint8_t* message, std::size_t size) {
+  send_message(std::vector<std::uint8_t>(message, message + size));
+}
+
 bool DummyTransport::available() const { return !receive_queue_->empty(); }
 
 std::optional<std::vector<std::uint8_t>> DummyTransport::receive_message() {

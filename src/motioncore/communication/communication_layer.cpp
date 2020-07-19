@@ -68,7 +68,8 @@ struct CommunicationLayer::CommunicationLayerImpl {
 
   // message type
   using message_t =
-      std::variant<std::vector<std::uint8_t>, std::shared_ptr<const std::vector<std::uint8_t>>>;
+      std::variant<std::vector<std::uint8_t>, std::shared_ptr<const std::vector<std::uint8_t>>,
+                   flatbuffers::DetachedBuffer>;
 
   std::vector<ENCRYPTO::SynchronizedFiberQueue<message_t>> send_queues_;
   std::vector<std::thread> receive_threads_;
@@ -133,6 +134,10 @@ void CommunicationLayer::CommunicationLayerImpl::send_task(std::size_t party_id)
       } else if (message.index() == 1) {
         // std::shared_ptr<const std::vector<std::uint8_t>>
         transport.send_message(*std::get<1>(message));
+      } else if (message.index() == 2) {
+        // flatbuffers::DetachedBuffer
+        const auto& detached_buffer = std::get<2>(message);
+        transport.send_message(detached_buffer.data(), detached_buffer.size());
       }
       if (logger_) {
         if constexpr (MOTION_DEBUG) {
@@ -145,6 +150,9 @@ void CommunicationLayer::CommunicationLayerImpl::send_task(std::size_t party_id)
           } else if (message.index() == 1) {
             raw_message = std::get<1>(message)->data();
             message_size = std::get<1>(message)->size();
+          } else if (message.index() == 2) {
+            raw_message = std::get<2>(message).data();
+            message_size = std::get<2>(message).size();
           }
           flatbuffers::Verifier verifier(raw_message, message_size);
           if (VerifyMessageBuffer(verifier)) {
@@ -366,9 +374,7 @@ void CommunicationLayer::send_message(std::size_t party_id,
 void CommunicationLayer::send_message(std::size_t party_id,
                                       flatbuffers::FlatBufferBuilder&& message_builder) {
   auto message_detached = message_builder.Release();
-  auto message_buffer = message_detached.data();
-  send_message(party_id,
-               std::vector<std::uint8_t>(message_buffer, message_buffer + message_detached.size()));
+  impl_->send_queues_.at(party_id).enqueue(std::move(message_detached));
 }
 
 void CommunicationLayer::broadcast_message(std::vector<std::uint8_t>&& message) {
