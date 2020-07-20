@@ -285,7 +285,7 @@ void generate_triples(OTBackend& ot_backend, std::size_t m, std::size_t k, std::
   std::cout << "run time:\n";
   std::cout << fmt::format("- total:              {}\n", total_time);
   std::cout << fmt::format("- ot extension setup: {} ({:02.2f}%)\n", ot_ext_setup_time,
-                           (double)ot_ext_setup_time.count() / total_time.count());
+                           (double)ot_ext_setup_time.count() * 100 / total_time.count());
 }
 
 }  // namespace MOTION
