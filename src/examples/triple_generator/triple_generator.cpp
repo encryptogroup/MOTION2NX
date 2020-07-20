@@ -164,13 +164,13 @@ std::vector<T> matrix_multiplication_lhs_par(OTBackend& ot_backend, std::size_t 
 
 template <typename T>
 std::vector<T> matrix_multiplication_rhs_par(OTBackend& ot_backend, std::size_t m, std::size_t k,
-                                         std::size_t n, const std::vector<T>& input_b) {
+                                             std::size_t n, const std::vector<T>& input_b) {
   assert(input_b.size() == k * n);
   auto& arith_provider = ot_backend.get_arithmetic_provider();
   std::vector<T> output(m * n);
   // compute matrix product row-wise
   std::vector<std::unique_ptr<IntegerMultiplicationSender<T>>> mult_sender(k);
-  for (std::size_t col_j = 0; col_j < k; ++ col_j) {
+  for (std::size_t col_j = 0; col_j < k; ++col_j) {
     mult_sender.at(col_j) = arith_provider.register_integer_multiplication_send<T>(1, n);
   }
   for (std::size_t row_i = 0; row_i < m; ++row_i) {
@@ -221,7 +221,65 @@ void print_matrix(const T* matrix, std::size_t rows, std::size_t cols) {
 }
 
 template <typename T>
-void generate_matrix_triple(OTBackend& ot_backend, std::size_t m, std::size_t k, std::size_t n, bool par) {
+void generate_matrix_triple_combined(OTBackend& ot_backend, std::size_t m, std::size_t k,
+                                     std::size_t n, const std::vector<T>& input_a,
+                                     const std::vector<T>& input_b, std::vector<T>& output) {
+  assert(input_a.size() == m * k);
+  assert(input_b.size() == k * n);
+  assert(output.size() == m * n);
+  auto& arith_provider = ot_backend.get_arithmetic_provider();
+  // compute matrix product row-wise
+  std::vector<std::unique_ptr<IntegerMultiplicationReceiver<T>>> mult_receiver(k);
+  std::vector<std::unique_ptr<IntegerMultiplicationSender<T>>> mult_sender(k);
+  for (std::size_t col_j = 0; col_j < k; ++col_j) {
+    mult_receiver.at(col_j) = arith_provider.register_integer_multiplication_receive<T>(1, n);
+    mult_sender.at(col_j) = arith_provider.register_integer_multiplication_send<T>(1, n);
+  }
+  for (std::size_t row_i = 0; row_i < m; ++row_i) {
+    std::cout << fmt::format("computing row {} of {}\n", row_i + 1, m);
+    // run OT setup
+    ot_backend.run_setup();
+    ot_backend.sync();
+    std::vector<std::vector<T>> mult_outputs_s(k);
+    std::vector<std::vector<T>> mult_outputs_r(k);
+    #pragma omp parallel shared(mult_outputs_s, mult_outputs_r)
+    {
+      const auto* input_a_row = input_a.data() + row_i * k;
+      const auto* input_b_row = input_b.data() + row_i * n;
+      auto* output_row = output.data() + row_i * n;
+      #pragma omp for nowait
+      for (std::size_t col_j = 0; col_j < k; ++col_j) {
+        mult_receiver[col_j]->set_inputs({input_a_row[col_j]});
+        mult_sender[col_j]->set_inputs(input_b_row);
+      }
+      #pragma omp for
+      for (std::size_t col_j = 0; col_j < k; ++col_j) {
+        mult_sender[col_j]->compute_outputs();
+        mult_receiver[col_j]->compute_outputs();
+        mult_outputs_s[col_j] = mult_sender[col_j]->get_outputs();
+        mult_outputs_r[col_j] = mult_receiver[col_j]->get_outputs();
+      }
+      #pragma omp for
+      for (std::size_t i = 0; i < n; ++i) {
+        for (std::size_t col_j = 0; col_j < k; ++col_j) {
+          output_row[i] += mult_outputs_s[col_j][i];
+          output_row[i] += mult_outputs_r[col_j][i];
+        }
+      }
+      #pragma omp for
+      for (std::size_t col_j = 0; col_j < k; ++col_j) {
+        mult_receiver[col_j]->clear();
+        mult_sender[col_j]->clear();
+      }
+    }
+    ot_backend.clear();
+    ot_backend.sync();
+  }
+}
+
+template <typename T>
+void generate_matrix_triple(OTBackend& ot_backend, std::size_t m, std::size_t k, std::size_t n,
+                            bool par) {
   const auto my_id = ot_backend.get_my_id();
   auto input_a = Helpers::RandomVector<T>(m * k);
   auto input_b = Helpers::RandomVector<T>(k * n);
@@ -233,17 +291,7 @@ void generate_matrix_triple(OTBackend& ot_backend, std::size_t m, std::size_t k,
   };
 
   if (par) {
-    if (my_id == 0) {
-      auto tmp = matrix_multiplication_lhs_par(ot_backend, m, k, n, input_a);
-      add_to(tmp, output);
-      tmp = matrix_multiplication_rhs_par(ot_backend, m, k, n, input_b);
-      add_to(tmp, output);
-    } else {
-      auto tmp = matrix_multiplication_rhs_par(ot_backend, m, k, n, input_b);
-      add_to(tmp, output);
-      tmp = matrix_multiplication_lhs_par(ot_backend, m, k, n, input_a);
-      add_to(tmp, output);
-    }
+    generate_matrix_triple_combined(ot_backend, m, k, n, input_a, input_b, output);
   } else {
     if (my_id == 0) {
       auto tmp = matrix_multiplication_lhs(ot_backend, m, k, n, input_a);
@@ -266,7 +314,8 @@ void generate_matrix_triple(OTBackend& ot_backend, std::size_t m, std::size_t k,
   // print_matrix(output.data(), m, n);
 }
 
-void generate_triples(OTBackend& ot_backend, std::size_t m, std::size_t k, std::size_t n, bool par) {
+void generate_triples(OTBackend& ot_backend, std::size_t m, std::size_t k, std::size_t n,
+                      bool par) {
   using T = std::uint64_t;
   ;
   using clock_type = std::chrono::steady_clock;
