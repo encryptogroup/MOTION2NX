@@ -229,31 +229,31 @@ void generate_matrix_triple_combined(OTBackend& ot_backend, std::size_t m, std::
   assert(output.size() == m * n);
   auto& arith_provider = ot_backend.get_arithmetic_provider();
   // compute matrix product row-wise
-  std::vector<std::unique_ptr<IntegerMultiplicationReceiver<T>>> mult_receiver(k);
-  std::vector<std::unique_ptr<IntegerMultiplicationSender<T>>> mult_sender(k);
-  for (std::size_t col_j = 0; col_j < k; ++col_j) {
+  std::vector<std::unique_ptr<IntegerMultiplicationReceiver<T>>> mult_receiver(2 * k);
+  std::vector<std::unique_ptr<IntegerMultiplicationSender<T>>> mult_sender(2 * k);
+  for (std::size_t col_j = 0; col_j < 2 * k; ++col_j) {
     mult_receiver.at(col_j) = arith_provider.register_integer_multiplication_receive<T>(1, n);
     mult_sender.at(col_j) = arith_provider.register_integer_multiplication_send<T>(1, n);
   }
-  for (std::size_t row_i = 0; row_i < m; ++row_i) {
+  for (std::size_t row_i = 0; row_i < m; row_i += 2) {
     std::cout << fmt::format("computing row {} of {}\n", row_i + 1, m);
     // run OT setup
     ot_backend.run_setup();
     ot_backend.sync();
-    std::vector<std::vector<T>> mult_outputs_s(k);
-    std::vector<std::vector<T>> mult_outputs_r(k);
+    std::vector<std::vector<T>> mult_outputs_s(2 * k);
+    std::vector<std::vector<T>> mult_outputs_r(2 * k);
     #pragma omp parallel shared(mult_outputs_s, mult_outputs_r)
     {
       const auto* input_a_row = input_a.data() + row_i * k;
       const auto* input_b_row = input_b.data() + row_i * n;
       auto* output_row = output.data() + row_i * n;
       #pragma omp for nowait
-      for (std::size_t col_j = 0; col_j < k; ++col_j) {
+      for (std::size_t col_j = 0; col_j < 2 * k; ++col_j) {
         mult_receiver[col_j]->set_inputs({input_a_row[col_j]});
         mult_sender[col_j]->set_inputs(input_b_row);
       }
       #pragma omp for
-      for (std::size_t col_j = 0; col_j < k; ++col_j) {
+      for (std::size_t col_j = 0; col_j < 2 * k; ++col_j) {
         mult_sender[col_j]->compute_outputs();
         mult_receiver[col_j]->compute_outputs();
         mult_outputs_s[col_j] = mult_sender[col_j]->get_outputs();
@@ -264,10 +264,12 @@ void generate_matrix_triple_combined(OTBackend& ot_backend, std::size_t m, std::
         for (std::size_t col_j = 0; col_j < k; ++col_j) {
           output_row[i] += mult_outputs_s[col_j][i];
           output_row[i] += mult_outputs_r[col_j][i];
+          output_row[n + i] += mult_outputs_s[k + col_j][i];
+          output_row[n + i] += mult_outputs_r[k + col_j][i];
         }
       }
       #pragma omp for
-      for (std::size_t col_j = 0; col_j < k; ++col_j) {
+      for (std::size_t col_j = 0; col_j < 2 * k; ++col_j) {
         mult_receiver[col_j]->clear();
         mult_sender[col_j]->clear();
       }
