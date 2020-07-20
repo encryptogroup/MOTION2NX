@@ -53,6 +53,7 @@ struct Options {
   std::size_t m;
   std::size_t k;
   std::size_t n;
+  bool parallelization;
 };
 
 std::optional<Options> parse_program_options(int argc, char* argv[]) {
@@ -68,6 +69,7 @@ std::optional<Options> parse_program_options(int argc, char* argv[]) {
     ("m,m", po::value<std::size_t>()->required(), "m")
     ("k,k", po::value<std::size_t>()->required(), "k")
     ("n,n", po::value<std::size_t>()->required(), "n")
+    ("parallel", po::bool_switch()->default_value(false),"enable parallelization")
     ;
   // clang-format on
 
@@ -132,6 +134,7 @@ std::optional<Options> parse_program_options(int argc, char* argv[]) {
   options.m = vm["m"].as<std::size_t>();
   options.k = vm["k"].as<std::size_t>();
   options.n = vm["n"].as<std::size_t>();
+  options.parallelization = vm["parallel"].as<bool>();
 
   return options;
 }
@@ -155,7 +158,7 @@ int main(int argc, char* argv[]) {
                                                    boost::log::trivial::severity_level::trace);
     comm_layer->set_logger(logger);
     MOTION::OTBackend backend(*comm_layer, logger);
-    generate_triples(backend, options->m, options->k, options->n);
+    generate_triples(backend, options->m, options->k, options->n, options->parallelization);
     comm_layer->shutdown();
   } catch (std::runtime_error& e) {
     std::cerr << "ERROR OCCURRED: " << e.what() << "\n";
