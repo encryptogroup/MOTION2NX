@@ -70,13 +70,25 @@ void IntegerMultiplicationSender<T>::set_inputs(const T* inputs) {
 
   std::vector<T> ot_inputs(batch_size_ * ENCRYPTO::bit_size_v<T> * vector_size_);
   for (std::size_t input_i = 0; input_i < batch_size_; ++input_i) {
-    for (std::size_t vector_enty_k = 0; vector_enty_k < vector_size_; ++vector_enty_k) {
-      const T value = inputs[input_i * vector_size_ + vector_enty_k];
-      for (std::size_t bit_j = 0; bit_j < bit_size; ++bit_j) {
-        ot_inputs[idx(input_i, vector_enty_k, bit_j)] = value << bit_j;
+    for (std::size_t bit_j = 0; bit_j < bit_size; ++bit_j) {
+      std::copy_n(&inputs[input_i * vector_size_], vector_size_,
+          &ot_inputs[idx(input_i, 0, bit_j)]);
+    }
+    for (std::size_t bit_j = 0; bit_j < bit_size; ++bit_j) {
+      auto* start = &ot_inputs[idx(input_i, 0, bit_j)];
+      for (std::size_t vector_enty_k = 0; vector_enty_k < vector_size_; ++vector_enty_k) {
+        start[vector_enty_k] <<= bit_j;
       }
     }
   }
+  // for (std::size_t input_i = 0; input_i < batch_size_; ++input_i) {
+  //   for (std::size_t vector_enty_k = 0; vector_enty_k < vector_size_; ++vector_enty_k) {
+  //     const T value = inputs[input_i * vector_size_ + vector_enty_k];
+  //     for (std::size_t bit_j = 0; bit_j < bit_size; ++bit_j) {
+  //       ot_inputs[idx(input_i, vector_enty_k, bit_j)] = value << bit_j;
+  //     }
+  //   }
+  // }
   ot_sender_->SetCorrelations(std::move(ot_inputs));
   ot_sender_->SendMessages();
 }
