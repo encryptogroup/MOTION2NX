@@ -498,6 +498,45 @@ TEST_F(YaoTest, YaoFromBooleanGMW) {
   }
 }
 
+TEST_F(YaoTest, YaoToBooleanBEAVY) {
+  std::size_t num_wires = 8;
+  std::size_t num_simd = 10;
+  const auto inputs = generate_inputs(num_wires, num_simd);
+
+  auto [input_promise, wires_g_in] =
+      yao_providers_[garbler_i_]->make_boolean_input_gate_my(garbler_i_, num_wires, num_simd);
+  auto wires_e_in =
+      yao_providers_[evaluator_i_]->make_boolean_input_gate_other(garbler_i_, num_wires, num_simd);
+
+  auto wires_g = yao_providers_[garbler_i_]->convert_to(MOTION::MPCProtocol::BooleanBEAVY, wires_g_in);
+  auto wires_e = yao_providers_[evaluator_i_]->convert_to(MOTION::MPCProtocol::BooleanBEAVY, wires_e_in);
+
+  run_setup();
+  run_gates_setup();
+  input_promise.set_value(inputs);
+  run_gates_online();
+
+  // check wire values
+  for (std::size_t wire_i = 0; wire_i < num_wires; ++wire_i) {
+    const auto& expected_output_bits = inputs.at(wire_i);
+    const auto wire_g =
+        std::dynamic_pointer_cast<MOTION::proto::beavy::BooleanBEAVYWire>(wires_g.at(wire_i));
+    const auto wire_e =
+        std::dynamic_pointer_cast<MOTION::proto::beavy::BooleanBEAVYWire>(wires_e.at(wire_i));
+    wire_g->wait_online();
+    wire_e->wait_online();
+    const auto& sshare_g = wire_g->get_secret_share();
+    const auto& sshare_e = wire_e->get_secret_share();
+    const auto& pshare_g = wire_g->get_public_share();
+    const auto& pshare_e = wire_e->get_public_share();
+    ASSERT_EQ(sshare_g.GetSize(), num_simd);
+    ASSERT_EQ(sshare_e.GetSize(), num_simd);
+    ASSERT_EQ(pshare_g.GetSize(), num_simd);
+    ASSERT_EQ(pshare_g, pshare_e);
+    ASSERT_EQ(expected_output_bits, pshare_g ^ sshare_g ^ sshare_e);
+  }
+}
+
 template <typename T>
 class YaoArithmeticConversionTest : public YaoTest {
   using is_enabled_t_ = ENCRYPTO::is_unsigned_int_t<T>;

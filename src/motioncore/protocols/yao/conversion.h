@@ -163,6 +163,38 @@ class YaoToArithmeticGMWGateEvaluator : public NewGate {
   YaoProvider& yao_provider_;
 };
 
+class YaoToBooleanBEAVYGateGarbler : public NewGate {
+ public:
+  YaoToBooleanBEAVYGateGarbler(std::size_t gate_id, YaoProvider&, YaoWireVector&&);
+  bool need_setup() const noexcept override { return true; }
+  bool need_online() const noexcept override { return true; }
+  void evaluate_setup() override;
+  void evaluate_online() override;
+  beavy::BooleanBEAVYWireVector& get_output_wires() noexcept { return outputs_; };
+
+ private:
+  YaoProvider& yao_provider_;
+  const YaoWireVector inputs_;
+  beavy::BooleanBEAVYWireVector outputs_;
+  ENCRYPTO::ReusableFiberFuture<ENCRYPTO::BitVector<>> public_share_future_;
+};
+
+class YaoToBooleanBEAVYGateEvaluator : public NewGate {
+ public:
+  YaoToBooleanBEAVYGateEvaluator(std::size_t gate_id, YaoProvider&, YaoWireVector&&);
+  bool need_setup() const noexcept override { return true; }
+  bool need_online() const noexcept override { return true; }
+  void evaluate_setup() override;
+  void evaluate_online() override;
+  beavy::BooleanBEAVYWireVector& get_output_wires() noexcept { return outputs_; };
+
+ private:
+  YaoProvider& yao_provider_;
+  const YaoWireVector inputs_;
+  beavy::BooleanBEAVYWireVector outputs_;
+  ENCRYPTO::BitVector<> public_share_;
+};
+
 template <typename T>
 class YaoToArithmeticBEAVYGateGarbler : public NewGate {
  public:

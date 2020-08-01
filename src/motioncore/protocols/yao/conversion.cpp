@@ -254,6 +254,98 @@ template class YaoToArithmeticGMWGateEvaluator<std::uint16_t>;
 template class YaoToArithmeticGMWGateEvaluator<std::uint32_t>;
 template class YaoToArithmeticGMWGateEvaluator<std::uint64_t>;
 
+YaoToBooleanBEAVYGateGarbler::YaoToBooleanBEAVYGateGarbler(std::size_t gate_id,
+                                                           YaoProvider& yao_provider,
+                                                           YaoWireVector&& in)
+    : NewGate(gate_id), yao_provider_(yao_provider), inputs_(std::move(in)) {
+  auto num_wires = inputs_.size();
+  auto num_simd = inputs_[0]->get_num_simd();
+  outputs_.reserve(num_wires);
+  std::generate_n(std::back_inserter(outputs_), num_wires,
+                  [num_simd] { return std::make_shared<beavy::BooleanBEAVYWire>(num_simd); });
+  public_share_future_ = yao_provider_.register_for_bits_message(gate_id, num_wires * num_simd);
+}
+
+void YaoToBooleanBEAVYGateGarbler::evaluate_setup() {
+  const auto num_wires = inputs_.size();
+  const auto num_simd = inputs_[0]->get_num_simd();
+  auto& mbp = yao_provider_.get_motion_base_provider();
+  auto& rng = mbp.get_my_randomness_generator(1);
+  const auto mask = rng.GetBits(gate_id_, num_wires * num_simd);
+  for (std::size_t wire_i = 0; wire_i < num_wires; ++wire_i) {
+    const auto& wire_yao = inputs_[wire_i];
+    auto& wire_beavy = outputs_[wire_i];
+    wire_yao->wait_setup();
+    const auto& keys = wire_yao->get_keys();
+    auto& sshare = wire_beavy->get_secret_share();
+    sshare = mask.Subset(wire_i * num_simd, (wire_i + 1) * num_simd);
+    for (std::size_t simd_j = 0; simd_j < num_simd; ++simd_j) {
+      sshare.Set(bool(*keys[simd_j].data() & std::byte(0x01)), simd_j);
+    }
+    wire_beavy->set_setup_ready();
+  }
+}
+
+void YaoToBooleanBEAVYGateGarbler::evaluate_online() {
+  const auto num_wires = inputs_.size();
+  const auto num_simd = inputs_[0]->get_num_simd();
+  const auto public_share = public_share_future_.get();
+  for (std::size_t wire_i = 0; wire_i < num_wires; ++wire_i) {
+    auto& wire_beavy = outputs_[wire_i];
+    auto& pshare = wire_beavy->get_public_share();
+    pshare = public_share.Subset(wire_i * num_simd, (wire_i + 1) * num_simd);
+    wire_beavy->set_online_ready();
+  }
+}
+
+YaoToBooleanBEAVYGateEvaluator::YaoToBooleanBEAVYGateEvaluator(std::size_t gate_id,
+                                                               YaoProvider& yao_provider,
+                                                               YaoWireVector&& in)
+    : NewGate(gate_id), yao_provider_(yao_provider), inputs_(std::move(in)) {
+  auto num_wires = inputs_.size();
+  auto num_simd = inputs_[0]->get_num_simd();
+  outputs_.reserve(num_wires);
+  std::generate_n(std::back_inserter(outputs_), num_wires,
+                  [num_simd] { return std::make_shared<beavy::BooleanBEAVYWire>(num_simd); });
+}
+
+void YaoToBooleanBEAVYGateEvaluator::evaluate_setup() {
+  const auto num_wires = inputs_.size();
+  const auto num_simd = inputs_[0]->get_num_simd();
+  const auto secret_share = ENCRYPTO::BitVector<>(num_wires * num_simd);
+  for (std::size_t wire_i = 0; wire_i < num_wires; ++wire_i) {
+    auto& wire_beavy = outputs_[wire_i];
+    auto& sshare = wire_beavy->get_secret_share();
+    sshare = secret_share.Subset(wire_i * num_simd, (wire_i + 1) * num_simd);
+    wire_beavy->set_setup_ready();
+  }
+  auto& mbp = yao_provider_.get_motion_base_provider();
+  auto& rng = mbp.get_their_randomness_generator(0);
+  public_share_ = rng.GetBits(gate_id_, num_wires * num_simd);
+  public_share_ ^= secret_share;
+}
+
+void YaoToBooleanBEAVYGateEvaluator::evaluate_online() {
+  auto num_wires = inputs_.size();
+  auto num_simd = inputs_[0]->get_num_simd();
+  assert(public_share_.GetSize() == num_wires * num_simd);
+  for (std::size_t wire_i = 0; wire_i < num_wires; ++wire_i) {
+    const auto& wire_yao = inputs_[wire_i];
+    wire_yao->wait_online();
+    const auto& keys = wire_yao->get_keys();
+    for (std::size_t simd_j = 0; simd_j < num_simd; ++simd_j) {
+      public_share_.Set(bool(*keys[simd_j].data() & std::byte(0x01)), wire_i* num_simd + simd_j);
+    }
+  }
+  yao_provider_.send_bits_message(gate_id_, public_share_);
+  for (std::size_t wire_i = 0; wire_i < num_wires; ++wire_i) {
+    auto& wire_beavy = outputs_[wire_i];
+    wire_beavy->get_public_share() =
+        public_share_.Subset(wire_i * num_simd, (wire_i + 1) * num_simd);
+    wire_beavy->set_online_ready();
+  }
+}
+
 template <typename T>
 YaoToArithmeticBEAVYGateGarbler<T>::YaoToArithmeticBEAVYGateGarbler(std::size_t gate_id,
                                                                     YaoProvider& yao_provider,
