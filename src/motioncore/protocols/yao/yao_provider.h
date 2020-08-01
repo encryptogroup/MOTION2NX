@@ -166,6 +166,7 @@ class YaoProvider : public GateFactory,
   WireVector basic_make_convert_from_arithmetic_gmw_gate(const WireVector& in_a);
   WireVector make_convert_from_arithmetic_gmw_gate(const WireVector& in_a);
   WireVector make_convert_to_boolean_beavy_gate(YaoWireVector&& in_a);
+  YaoWireVector make_convert_from_boolean_beavy_gate(const WireVector& in_a);
   template <typename T>
   WireVector basic_make_convert_to_arithmetic_beavy_gate(YaoWireVector&& in_a);
   WireVector make_convert_to_arithmetic_beavy_gate(YaoWireVector&& in_a);

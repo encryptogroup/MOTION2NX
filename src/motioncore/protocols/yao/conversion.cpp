@@ -346,6 +346,99 @@ void YaoToBooleanBEAVYGateEvaluator::evaluate_online() {
   }
 }
 
+BooleanBEAVYToYaoGateGarbler::BooleanBEAVYToYaoGateGarbler(std::size_t gate_id,
+                                                           YaoProvider& yao_provider,
+                                                           beavy::BooleanBEAVYWireVector&& in)
+    : NewGate(gate_id), yao_provider_(yao_provider), inputs_(std::move(in)) {
+  auto num_wires = inputs_.size();
+  auto num_simd = inputs_[0]->get_num_simd();
+  outputs_.reserve(num_wires);
+  std::generate_n(std::back_inserter(outputs_), num_wires,
+                  [num_simd] { return std::make_shared<YaoWire>(num_simd); });
+  auto& ot_provider = yao_provider.get_ot_provider();
+  ot_sender_ = ot_provider.RegisterSendFixedXCOT128(num_wires * num_simd);
+}
+
+BooleanBEAVYToYaoGateGarbler::~BooleanBEAVYToYaoGateGarbler() = default;
+
+void BooleanBEAVYToYaoGateGarbler::evaluate_setup() {
+  const auto num_wires = inputs_.size();
+  const auto num_simd = inputs_[0]->get_num_simd();
+  const auto& global_offset = yao_provider_.get_global_offset();
+  ot_sender_->SetCorrelation(global_offset);
+  ot_sender_->SendMessages();
+  ot_sender_->ComputeOutputs();
+  auto keys_e = ot_sender_->GetOutputs();
+  keys_g_ = ENCRYPTO::block128_vector::make_random(num_wires * num_simd);
+  keys_e ^= keys_g_;
+  for (std::size_t wire_i = 0; wire_i < num_wires; ++wire_i) {
+    auto& wire_yao = outputs_[wire_i];
+    wire_yao->get_keys() = ENCRYPTO::block128_vector(num_simd, keys_e[wire_i * num_simd].data());
+    wire_yao->set_setup_ready();
+  }
+}
+
+void BooleanBEAVYToYaoGateGarbler::evaluate_online() {
+  const auto num_wires = inputs_.size();
+  const auto num_simd = inputs_[0]->get_num_simd();
+  const auto& global_offset = yao_provider_.get_global_offset();
+  for (std::size_t wire_i = 0; wire_i < num_wires; ++wire_i) {
+    auto& wire_beavy = inputs_[wire_i];
+    wire_beavy->wait_setup();
+    wire_beavy->wait_online();
+    const auto bits = wire_beavy->get_secret_share() ^ wire_beavy->get_public_share();
+    for (std::size_t simd_j = 0; simd_j < num_simd; ++simd_j) {
+      if (bits.Get(simd_j)) {
+        keys_g_[wire_i * num_simd + simd_j] ^= global_offset;
+      }
+    }
+  }
+  yao_provider_.send_blocks_message(gate_id_, std::move(keys_g_));
+}
+
+BooleanBEAVYToYaoGateEvaluator::BooleanBEAVYToYaoGateEvaluator(std::size_t gate_id,
+                                                               YaoProvider& yao_provider,
+                                                               beavy::BooleanBEAVYWireVector&& in)
+    : NewGate(gate_id), inputs_(std::move(in)) {
+  auto num_wires = inputs_.size();
+  auto num_simd = inputs_[0]->get_num_simd();
+  outputs_.reserve(num_wires);
+  std::generate_n(std::back_inserter(outputs_), num_wires,
+                  [num_simd] { return std::make_shared<YaoWire>(num_simd); });
+  garbler_keys_future_ = yao_provider.register_for_blocks_message(gate_id, num_wires * num_simd);
+  auto& ot_provider = yao_provider.get_ot_provider();
+  ot_receiver_ = ot_provider.RegisterReceiveFixedXCOT128(num_wires * num_simd);
+}
+
+BooleanBEAVYToYaoGateEvaluator::~BooleanBEAVYToYaoGateEvaluator() = default;
+
+void BooleanBEAVYToYaoGateEvaluator::evaluate_setup() {
+  const auto num_wires = inputs_.size();
+  const auto num_simd = inputs_[0]->get_num_simd();
+  auto ot_inputs = ENCRYPTO::BitVector<>();
+  ot_inputs.Reserve(Helpers::Convert::BitsToBytes(num_wires * num_simd));
+  for (std::size_t wire_i = 0; wire_i < num_wires; ++wire_i) {
+    auto& wire_beavy = inputs_[wire_i];
+    wire_beavy->wait_setup();
+    ot_inputs.Append(wire_beavy->get_secret_share());
+  }
+  ot_receiver_->SetChoices(std::move(ot_inputs));
+  ot_receiver_->SendCorrections();
+  ot_receiver_->ComputeOutputs();
+}
+
+void BooleanBEAVYToYaoGateEvaluator::evaluate_online() {
+  auto num_wires = inputs_.size();
+  auto num_simd = inputs_[0]->get_num_simd();
+  auto keys = ot_receiver_->GetOutputs();
+  keys ^= garbler_keys_future_.get();
+  for (std::size_t wire_i = 0; wire_i < num_wires; ++wire_i) {
+    auto& wire_yao = outputs_[wire_i];
+    wire_yao->get_keys() = ENCRYPTO::block128_vector(num_simd, keys[wire_i * num_simd].data());
+    wire_yao->set_online_ready();
+  }
+}
+
 template <typename T>
 YaoToArithmeticBEAVYGateGarbler<T>::YaoToArithmeticBEAVYGateGarbler(std::size_t gate_id,
                                                                     YaoProvider& yao_provider,

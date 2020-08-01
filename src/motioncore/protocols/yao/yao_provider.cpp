@@ -586,6 +586,24 @@ WireVector YaoProvider::make_convert_to_boolean_beavy_gate(YaoWireVector &&in_a)
   return cast_wires(std::move(output));
 }
 
+YaoWireVector YaoProvider::make_convert_from_boolean_beavy_gate(const WireVector &in) {
+  auto gate_id = gate_register_.get_next_gate_id();
+  YaoWireVector output;
+  beavy::BooleanBEAVYWireVector input;
+  input.reserve(in.size());
+  std::transform(std::begin(in), std::end(in), std::back_inserter(input),
+                 [](auto &w) { return std::dynamic_pointer_cast<beavy::BooleanBEAVYWire>(w); });
+  if (role_ == Role::garbler) {
+    auto gate = std::make_unique<BooleanBEAVYToYaoGateGarbler>(gate_id, *this, std::move(input));
+    output = gate->get_output_wires();
+    gate_register_.register_gate(std::move(gate));
+  } else {
+    auto gate = std::make_unique<BooleanBEAVYToYaoGateEvaluator>(gate_id, *this, std::move(input));
+    output = gate->get_output_wires();
+    gate_register_.register_gate(std::move(gate));
+  }
+  return output;
+}
 
 template <typename T>
 WireVector YaoProvider::basic_make_convert_to_arithmetic_beavy_gate(YaoWireVector &&in_a) {
@@ -735,6 +753,8 @@ WireVector YaoProvider::convert_from(MPCProtocol proto, const WireVector &in) {
       return make_convert_from_arithmetic_beavy_gate(in);
     case MPCProtocol::ArithmeticGMW:
       return make_convert_from_arithmetic_gmw_gate(in);
+    case MPCProtocol::BooleanBEAVY:
+      return cast_wires(make_convert_from_boolean_beavy_gate(in));
     case MPCProtocol::BooleanGMW:
       return cast_wires(make_convert_from_boolean_gmw_gate(in));
     default:

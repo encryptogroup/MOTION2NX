@@ -34,6 +34,8 @@
 namespace ENCRYPTO::ObliviousTransfer {
 class GOT128Receiver;
 class GOT128Sender;
+class FixedXCOT128Receiver;
+class FixedXCOT128Sender;
 }  // namespace ENCRYPTO::ObliviousTransfer
 
 namespace MOTION::proto {
@@ -193,6 +195,42 @@ class YaoToBooleanBEAVYGateEvaluator : public NewGate {
   const YaoWireVector inputs_;
   beavy::BooleanBEAVYWireVector outputs_;
   ENCRYPTO::BitVector<> public_share_;
+};
+
+class BooleanBEAVYToYaoGateGarbler : public NewGate {
+ public:
+  BooleanBEAVYToYaoGateGarbler(std::size_t gate_id, YaoProvider&, beavy::BooleanBEAVYWireVector&&);
+  ~BooleanBEAVYToYaoGateGarbler();
+  bool need_setup() const noexcept override { return true; }
+  bool need_online() const noexcept override { return true; }
+  void evaluate_setup() override;
+  void evaluate_online() override;
+  YaoWireVector& get_output_wires() noexcept { return outputs_; };
+
+ private:
+  const YaoProvider& yao_provider_;
+  std::unique_ptr<ENCRYPTO::ObliviousTransfer::FixedXCOT128Sender> ot_sender_;
+  ENCRYPTO::block128_vector keys_g_;
+  const beavy::BooleanBEAVYWireVector inputs_;
+  YaoWireVector outputs_;
+};
+
+class BooleanBEAVYToYaoGateEvaluator : public NewGate {
+ public:
+  BooleanBEAVYToYaoGateEvaluator(std::size_t gate_id, YaoProvider&,
+                                 beavy::BooleanBEAVYWireVector&&);
+  ~BooleanBEAVYToYaoGateEvaluator();
+  bool need_setup() const noexcept override { return true; }
+  bool need_online() const noexcept override { return true; }
+  void evaluate_setup() override;
+  void evaluate_online() override;
+  YaoWireVector& get_output_wires() noexcept { return outputs_; };
+
+ private:
+  std::unique_ptr<ENCRYPTO::ObliviousTransfer::FixedXCOT128Receiver> ot_receiver_;
+  ENCRYPTO::ReusableFiberFuture<ENCRYPTO::block128_vector> garbler_keys_future_;
+  const beavy::BooleanBEAVYWireVector inputs_;
+  YaoWireVector outputs_;
 };
 
 template <typename T>

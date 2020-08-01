@@ -551,6 +551,54 @@ TEST_F(YaoTest, YaoToBooleanBEAVY) {
   }
 }
 
+TEST_F(YaoTest, YaoFromBooleanBEAVY) {
+  std::size_t num_wires = 8;
+  std::size_t num_simd = 10;
+  const auto inputs = generate_inputs(num_wires, num_simd);
+
+  auto [input_promise, wires_g_in] =
+      yao_providers_[garbler_i_]->make_boolean_input_gate_my(garbler_i_, num_wires, num_simd);
+  auto wires_e_in =
+      yao_providers_[evaluator_i_]->make_boolean_input_gate_other(garbler_i_, num_wires, num_simd);
+
+  auto wires_g_tmp =
+      yao_providers_[garbler_i_]->convert_to(MOTION::MPCProtocol::BooleanBEAVY, wires_g_in);
+  auto wires_e_tmp =
+      yao_providers_[evaluator_i_]->convert_to(MOTION::MPCProtocol::BooleanBEAVY, wires_e_in);
+  auto wires_g =
+      yao_providers_[garbler_i_]->convert_from(MOTION::MPCProtocol::BooleanBEAVY, wires_g_tmp);
+  auto wires_e =
+      yao_providers_[evaluator_i_]->convert_from(MOTION::MPCProtocol::BooleanBEAVY, wires_e_tmp);
+
+  run_setup();
+  run_gates_setup();
+  input_promise.set_value(inputs);
+  run_gates_online();
+
+  // check wire values
+  for (std::size_t wire_i = 0; wire_i < num_wires; ++wire_i) {
+    const auto& expected_output_bits = inputs.at(wire_i);
+    const auto wire_g = std::dynamic_pointer_cast<YaoWire>(wires_g.at(wire_i));
+    const auto wire_e = std::dynamic_pointer_cast<YaoWire>(wires_e.at(wire_i));
+    ASSERT_NE(wire_g, nullptr);
+    ASSERT_NE(wire_e, nullptr);
+    wire_g->wait_setup();
+    wire_e->wait_online();
+    const auto& keys_g = wire_g->get_keys();
+    const auto& keys_e = wire_e->get_keys();
+    ASSERT_EQ(keys_g.size(), num_simd);
+    ASSERT_EQ(keys_e.size(), num_simd);
+    const auto& global_offset = yao_providers_[garbler_i_]->get_global_offset();
+    for (std::size_t simd_j = 0; simd_j < num_simd; ++simd_j) {
+      if (expected_output_bits.Get(simd_j)) {
+        ASSERT_EQ(keys_e.at(simd_j), keys_g.at(simd_j) ^ global_offset);
+      } else {
+        ASSERT_EQ(keys_e.at(simd_j), keys_g.at(simd_j));
+      }
+    }
+  }
+}
+
 template <typename T>
 class YaoArithmeticConversionTest : public YaoTest {
   using is_enabled_t_ = ENCRYPTO::is_unsigned_int_t<T>;
