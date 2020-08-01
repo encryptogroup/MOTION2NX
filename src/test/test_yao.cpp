@@ -97,12 +97,22 @@ class YaoTest : public ::testing::Test {
   void run_gates_setup() {
     auto& gates_g = gate_registers_[garbler_i_]->get_gates();
     auto& gates_e = gate_registers_[evaluator_i_]->get_gates();
-    for (auto& gate : gates_g) {
-      gate->evaluate_setup();
-    }
-    for (auto& gate : gates_e) {
-      gate->evaluate_setup();
-    }
+    auto fut_g = std::async(std::launch::async, [&gates_g] {
+      for (auto& gate : gates_g) {
+        if (gate->need_setup()) {
+          gate->evaluate_setup();
+        }
+      }
+    });
+    auto fut_e = std::async(std::launch::async, [&gates_e] {
+      for (auto& gate : gates_e) {
+        if (gate->need_setup()) {
+          gate->evaluate_setup();
+        }
+      }
+    });
+    fut_g.get();
+    fut_e.get();
   }
 
   void run_gates_online() {
@@ -110,12 +120,16 @@ class YaoTest : public ::testing::Test {
     auto& gates_e = gate_registers_[evaluator_i_]->get_gates();
     auto fut_g = std::async(std::launch::async, [&gates_g] {
       for (auto& gate : gates_g) {
-        gate->evaluate_online();
+        if (gate->need_online()) {
+          gate->evaluate_online();
+        }
       }
     });
     auto fut_e = std::async(std::launch::async, [&gates_e] {
       for (auto& gate : gates_e) {
-        gate->evaluate_online();
+        if (gate->need_online()) {
+          gate->evaluate_online();
+        }
       }
     });
     fut_g.get();
