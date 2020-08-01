@@ -190,16 +190,22 @@ struct block128_vector {
     return *this;
   }
 
-  // xor the blocks in this vector with the blocks in a *different* one of same size
-  block128_vector& operator^=(const block128_vector& __restrict__ other) {
-    assert(size() == other.size());
+  // xor the blocks in this vector with an array of blocks *somewhere else* of same size
+  block128_vector& operator^=(const block128_t* __restrict__ other) {
     auto k0 = reinterpret_cast<std::byte* __restrict__>(
         __builtin_assume_aligned(block_vector.data(), alignment));
     auto k1 = reinterpret_cast<const std::byte* __restrict__>(
-        __builtin_assume_aligned(other.block_vector.data(), alignment));
+        __builtin_assume_aligned(other->data(), alignment));
     std::transform(k0, k0 + 16 * size(), k1, k0, [](auto a, auto b) { return a ^ b; });
     return *this;
   }
+
+  // xor the blocks in this vector with the blocks in a *different* one of same size
+  block128_vector& operator^=(const block128_vector& __restrict__ other) {
+    assert(size() == other.size());
+    return operator^=(other.data());
+  }
+
   block128_vector operator^(const block128_vector& __restrict__ other) const {
     assert(size() == other.size());
     block128_vector result(size());
