@@ -54,9 +54,11 @@ class MotionBaseProvider : public ENCRYPTO::enable_wait_setup {
 
   const std::vector<std::uint8_t>& get_aes_fixed_key() const { return aes_fixed_key_; }
   SharingRandomnessGenerator& get_my_randomness_generator(std::size_t party_id) {
+    assert(party_id != my_id_);
     return *my_randomness_generators_.at(party_id);
   }
   SharingRandomnessGenerator& get_their_randomness_generator(std::size_t party_id) {
+    assert(party_id != my_id_);
     return *their_randomness_generators_.at(party_id);
   }
 
