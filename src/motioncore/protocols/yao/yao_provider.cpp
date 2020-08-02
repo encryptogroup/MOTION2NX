@@ -55,11 +55,15 @@ struct YaoMessageHandler : public Communication::MessageHandler {
 
   ENCRYPTO::ReusableFiberPromise<Crypto::garbling::HalfGatePublicData> hg_public_data_promise_;
   ENCRYPTO::ReusableFiberFuture<Crypto::garbling::HalfGatePublicData> hg_public_data_future_;
+  ENCRYPTO::ReusableFiberPromise<ENCRYPTO::block128_t> shared_zero_promise_;
+  ENCRYPTO::ReusableFiberFuture<ENCRYPTO::block128_t> shared_zero_future_;
   std::shared_ptr<Logger> logger_;
 };
 
 YaoMessageHandler::YaoMessageHandler(std::shared_ptr<Logger> logger)
-    : hg_public_data_future_(hg_public_data_promise_.get_future()), logger_(logger) {}
+    : hg_public_data_future_(hg_public_data_promise_.get_future()),
+      shared_zero_future_(shared_zero_promise_.get_future()),
+      logger_(logger) {}
 
 void YaoMessageHandler::received_message([[maybe_unused]] std::size_t party_id,
                                          std::vector<std::uint8_t> &&raw_message) {
@@ -85,8 +89,12 @@ void YaoMessageHandler::received_message([[maybe_unused]] std::size_t party_id,
           reinterpret_cast<const std::byte *>(setup_message->aes_key()->data()));
       public_data.hash_key.load_from_memory(
           reinterpret_cast<const std::byte *>(setup_message->hash_key()->data()));
+      ENCRYPTO::block128_t shared_zero;
+      shared_zero.load_from_memory(
+          reinterpret_cast<const std::byte *>(setup_message->shared_zero()->data()));
       try {
         hg_public_data_promise_.set_value(std::move(public_data));
+        shared_zero_promise_.set_value(std::move(shared_zero));
       } catch (std::future_error &e) {
         // TODO: log and drop instead
         throw std::runtime_error(
@@ -301,13 +309,16 @@ YaoWireVector YaoProvider::make_and_gate(YaoWireVector &&in_a, YaoWireVector &&i
 }
 
 static flatbuffers::FlatBufferBuilder build_yao_setup_message(
-    const ENCRYPTO::block128_t &aes_key, const ENCRYPTO::block128_t &hash_key) {
+    const ENCRYPTO::block128_t& aes_key, const ENCRYPTO::block128_t& hash_key,
+    const ENCRYPTO::block128_t& shared_zero) {
   flatbuffers::FlatBufferBuilder builder;
   auto aes_vector =
-      builder.CreateVector(reinterpret_cast<const std::uint8_t *>(aes_key.data()), aes_key.size());
-  auto hash_vector = builder.CreateVector(reinterpret_cast<const std::uint8_t *>(hash_key.data()),
-                                          hash_key.size());
-  auto root = Communication::CreateYaoSetupMessage(builder, aes_vector, hash_vector);
+      builder.CreateVector(reinterpret_cast<const std::uint8_t*>(aes_key.data()), aes_key.size());
+  auto hash_vector =
+      builder.CreateVector(reinterpret_cast<const std::uint8_t*>(hash_key.data()), hash_key.size());
+  auto zero_vector = builder.CreateVector(reinterpret_cast<const std::uint8_t*>(shared_zero.data()),
+                                          shared_zero.size());
+  auto root = Communication::CreateYaoSetupMessage(builder, aes_vector, hash_vector, zero_vector);
   builder.Finish(root);
   return Communication::BuildMessage(Communication::MessageType::YaoSetup,
                                      builder.GetBufferPointer(), builder.GetSize());
@@ -324,18 +335,25 @@ ENCRYPTO::block128_t YaoProvider::get_global_offset() const {
   return hg_garbler_->get_offset();
 }
 
+ENCRYPTO::block128_t YaoProvider::get_shared_zero() const noexcept {
+  assert(setup_ran_);
+  return shared_zero_;
+}
+
 void YaoProvider::setup() {
   if (setup_ran_) {
     throw std::logic_error("YaoProvider::setup already ran");
   }
   if (role_ == Role::garbler) {
+    shared_zero_.set_to_random();
     hg_garbler_ = std::make_unique<Crypto::garbling::HalfGateGarbler>();
     auto public_data = hg_garbler_->get_public_data();
     communication_layer_.broadcast_message(
-        build_yao_setup_message(public_data.aes_key, public_data.hash_key));
+        build_yao_setup_message(public_data.aes_key, public_data.hash_key, shared_zero_));
   } else {
     auto public_data = message_handler_->hg_public_data_future_.get();
     hg_evaluator_ = std::make_unique<Crypto::garbling::HalfGateEvaluator>(public_data);
+    shared_zero_ = message_handler_->shared_zero_future_.get();
   }
   setup_ran_ = true;
 }

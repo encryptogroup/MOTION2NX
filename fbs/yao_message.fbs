@@ -2,7 +2,8 @@ namespace MOTION.Communication;
 
 table YaoSetupMessage {
   aes_key:[ubyte];      // 16 byte AES key
-  hash_key:[ubyte];      // 16 byte hash key
+  hash_key:[ubyte];     // 16 byte hash key
+  shared_zero:[ubyte];  // 16 byte zero share key
 }
 
 table YaoGateMessage {

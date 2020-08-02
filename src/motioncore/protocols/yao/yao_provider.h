@@ -117,6 +117,7 @@ class YaoProvider : public GateFactory,
 
   void setup();
   ENCRYPTO::block128_t get_global_offset() const;
+  ENCRYPTO::block128_t get_shared_zero() const noexcept;
 
   void send_blocks_message(std::size_t gate_id, ENCRYPTO::block128_vector&& message) const;
   void send_bits_message(std::size_t gate_id, ENCRYPTO::BitVector<>&& message) const;
@@ -201,6 +202,7 @@ class YaoProvider : public GateFactory,
   ENCRYPTO::ObliviousTransfer::OTProvider& ot_provider_;
   std::unique_ptr<Crypto::garbling::HalfGateGarbler> hg_garbler_;
   std::unique_ptr<Crypto::garbling::HalfGateEvaluator> hg_evaluator_;
+  ENCRYPTO::block128_t shared_zero_;
   std::shared_ptr<YaoMessageHandler> message_handler_;
   std::size_t my_id_;
   Role role_;
