@@ -64,6 +64,7 @@ add_library(motion
         protocols/gmw/tensor_op.cpp
         protocols/yao/conversion.cpp
         protocols/yao/gate.cpp
+        protocols/yao/plain.cpp
         protocols/yao/tensor_op.cpp
         protocols/yao/tools.cpp
         protocols/yao/yao_provider.cpp
