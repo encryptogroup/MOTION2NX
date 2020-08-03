@@ -38,6 +38,15 @@ template <typename T>
 class ACOTReceiver;
 }  // namespace ENCRYPTO::ObliviousTransfer
 
+namespace MOTION::proto::gmw {
+class BooleanGMWWire;
+using BooleanGMWWireVector = std::vector<std::shared_ptr<BooleanGMWWire>>;
+template <typename T>
+class ArithmeticGMWWire;
+template <typename T>
+using ArithmeticGMWWireP = std::shared_ptr<ArithmeticGMWWire<T>>;
+}  // namespace MOTION::proto::gmw
+
 namespace MOTION::proto::beavy {
 
 class BooleanBEAVYWire;
@@ -62,6 +71,7 @@ class BooleanBitToArithmeticBEAVYGate : public NewGate {
   beavy::ArithmeticBEAVYWireP<T>& get_output_wire() noexcept { return output_; };
 
  private:
+  using is_enabled_ = ENCRYPTO::is_unsigned_int_t<T>;
   beavy::BooleanBEAVYWireP input_;
   beavy::ArithmeticBEAVYWireP<T> output_;
   BEAVYProvider& beavy_provider_;
@@ -83,12 +93,79 @@ class BooleanToArithmeticBEAVYGate : public NewGate {
   beavy::ArithmeticBEAVYWireP<T>& get_output_wire() noexcept { return output_; };
 
  private:
+  using is_enabled_ = ENCRYPTO::is_unsigned_int_t<T>;
   beavy::BooleanBEAVYWireVector inputs_;
   beavy::ArithmeticBEAVYWireP<T> output_;
   BEAVYProvider& beavy_provider_;
   std::unique_ptr<ENCRYPTO::ObliviousTransfer::ACOTSender<T>> ot_sender_;
   std::unique_ptr<ENCRYPTO::ObliviousTransfer::ACOTReceiver<T>> ot_receiver_;
   std::vector<T> arithmetized_secret_share_;
+  ENCRYPTO::ReusableFiberFuture<std::vector<T>> share_future_;
+};
+
+class BooleanBEAVYToGMWGate : public NewGate {
+ public:
+  BooleanBEAVYToGMWGate(std::size_t gate_id, BEAVYProvider&, BooleanBEAVYWireVector&&);
+  bool need_setup() const noexcept override { return false; }
+  bool need_online() const noexcept override { return true; }
+  void evaluate_setup() override {}
+  void evaluate_online() override;
+  gmw::BooleanGMWWireVector& get_output_wires() noexcept { return outputs_; };
+
+ private:
+  BEAVYProvider& beavy_provider_;
+  BooleanBEAVYWireVector inputs_;
+  gmw::BooleanGMWWireVector outputs_;
+};
+
+class BooleanGMWToBEAVYGate : public NewGate {
+ public:
+  BooleanGMWToBEAVYGate(std::size_t gate_id, BEAVYProvider&, gmw::BooleanGMWWireVector&&);
+  bool need_setup() const noexcept override { return true; }
+  bool need_online() const noexcept override { return true; }
+  void evaluate_setup() override;
+  void evaluate_online() override;
+  BooleanBEAVYWireVector& get_output_wires() noexcept { return outputs_; };
+
+ private:
+  BEAVYProvider& beavy_provider_;
+  gmw::BooleanGMWWireVector inputs_;
+  BooleanBEAVYWireVector outputs_;
+  ENCRYPTO::ReusableFiberFuture<ENCRYPTO::BitVector<>> share_future_;
+};
+
+template <typename T>
+class ArithmeticBEAVYToGMWGate : public NewGate {
+ public:
+  ArithmeticBEAVYToGMWGate(std::size_t gate_id, BEAVYProvider&, ArithmeticBEAVYWireP<T>);
+  bool need_setup() const noexcept override { return false; }
+  bool need_online() const noexcept override { return true; }
+  void evaluate_setup() override {}
+  void evaluate_online() override;
+  gmw::ArithmeticGMWWireP<T>& get_output_wire() noexcept { return output_; };
+
+ private:
+  using is_enabled_ = ENCRYPTO::is_unsigned_int_t<T>;
+  BEAVYProvider& beavy_provider_;
+  ArithmeticBEAVYWireP<T> input_;
+  gmw::ArithmeticGMWWireP<T> output_;
+};
+
+template <typename T>
+class ArithmeticGMWToBEAVYGate : public NewGate {
+ public:
+  ArithmeticGMWToBEAVYGate(std::size_t gate_id, BEAVYProvider&, gmw::ArithmeticGMWWireP<T>);
+  bool need_setup() const noexcept override { return true; }
+  bool need_online() const noexcept override { return true; }
+  void evaluate_setup() override;
+  void evaluate_online() override;
+  ArithmeticBEAVYWireP<T>& get_output_wire() noexcept { return output_; };
+
+ private:
+  using is_enabled_ = ENCRYPTO::is_unsigned_int_t<T>;
+  BEAVYProvider& beavy_provider_;
+  gmw::ArithmeticGMWWireP<T> input_;
+  ArithmeticBEAVYWireP<T> output_;
   ENCRYPTO::ReusableFiberFuture<std::vector<T>> share_future_;
 };
 

@@ -29,6 +29,7 @@
 #include "beavy_provider.h"
 #include "crypto/oblivious_transfer/ot_flavors.h"
 #include "crypto/oblivious_transfer/ot_provider.h"
+#include "protocols/gmw/wire.h"
 #include "utility/constants.h"
 #include "utility/logger.h"
 
@@ -332,5 +333,247 @@ template class BooleanToArithmeticBEAVYGate<std::uint8_t>;
 template class BooleanToArithmeticBEAVYGate<std::uint16_t>;
 template class BooleanToArithmeticBEAVYGate<std::uint32_t>;
 template class BooleanToArithmeticBEAVYGate<std::uint64_t>;
+
+BooleanBEAVYToGMWGate::BooleanBEAVYToGMWGate(std::size_t gate_id, BEAVYProvider& beavy_provider,
+                                             BooleanBEAVYWireVector&& in)
+    : NewGate(gate_id), beavy_provider_(beavy_provider), inputs_(std::move(in)) {
+  const auto num_wires = inputs_.size();
+  const auto num_simd = inputs_.at(0)->get_num_simd();
+  outputs_.reserve(num_wires);
+  std::generate_n(std::back_inserter(outputs_), num_wires,
+                  [num_simd] { return std::make_shared<gmw::BooleanGMWWire>(num_simd); });
+}
+
+void BooleanBEAVYToGMWGate::evaluate_online() {
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = beavy_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(
+          fmt::format("Gate {}: BooleanBEAVYToGMWGate::evaluate_online start", gate_id_));
+    }
+  }
+
+  const auto num_wires = inputs_.size();
+  if (beavy_provider_.is_my_job(gate_id_)) {
+    for (std::size_t wire_i = 0; wire_i < num_wires; ++wire_i) {
+      const auto& wire_in = inputs_[wire_i];
+      auto& wire_out = outputs_[wire_i];
+      wire_in->wait_setup();
+      wire_in->wait_online();
+      wire_out->get_share() = wire_in->get_public_share() ^ wire_in->get_secret_share();
+      wire_out->set_online_ready();
+    }
+  } else {
+    for (std::size_t wire_i = 0; wire_i < num_wires; ++wire_i) {
+      const auto& wire_in = inputs_[wire_i];
+      auto& wire_out = outputs_[wire_i];
+      wire_in->wait_setup();
+      wire_in->wait_online();
+      wire_out->get_share() = wire_in->get_secret_share();
+      wire_out->set_online_ready();
+    }
+  }
+
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = beavy_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(
+          fmt::format("Gate {}: BooleanBEAVYToGMWGate::evaluate_online end", gate_id_));
+    }
+  }
+}
+
+BooleanGMWToBEAVYGate::BooleanGMWToBEAVYGate(std::size_t gate_id, BEAVYProvider& beavy_provider,
+                                             gmw::BooleanGMWWireVector&& in)
+    : NewGate(gate_id), beavy_provider_(beavy_provider), inputs_(std::move(in)) {
+  const auto num_wires = inputs_.size();
+  const auto num_simd = inputs_.at(0)->get_num_simd();
+  const auto my_id = beavy_provider_.get_my_id();
+  outputs_.reserve(num_wires);
+  std::generate_n(std::back_inserter(outputs_), num_wires,
+                  [num_simd] { return std::make_shared<BooleanBEAVYWire>(num_simd); });
+  share_future_ =
+      beavy_provider_.register_for_bits_message(1 - my_id, gate_id_, num_wires * num_simd);
+}
+
+void BooleanGMWToBEAVYGate::evaluate_setup() {
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = beavy_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(
+          fmt::format("Gate {}: BooleanGMWToBEAVYGate::evaluate_setup start", gate_id_));
+    }
+  }
+
+  const auto num_simd = inputs_.at(0)->get_num_simd();
+  for (auto& wire_out : outputs_) {
+    wire_out->get_secret_share() = ENCRYPTO::BitVector<>::Random(num_simd);
+    wire_out->set_setup_ready();
+  }
+
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = beavy_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(fmt::format("Gate {}: BooleanGMWToBEAVYGate::evaluate_setup end", gate_id_));
+    }
+  }
+}
+
+void BooleanGMWToBEAVYGate::evaluate_online() {
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = beavy_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(
+          fmt::format("Gate {}: BooleanGMWToBEAVYGate::evaluate_online start", gate_id_));
+    }
+  }
+
+  const auto my_id = beavy_provider_.get_my_id();
+  const auto num_wires = inputs_.size();
+  const auto num_simd = inputs_.at(0)->get_num_simd();
+  ENCRYPTO::BitVector<> my_share;
+  my_share.Reserve(Helpers::Convert::BitsToBytes(num_wires * num_simd));
+  for (std::size_t wire_i = 0; wire_i < num_wires; ++wire_i) {
+    const auto& wire_in = inputs_[wire_i];
+    const auto& wire_out = outputs_[wire_i];
+    wire_in->wait_online();
+    my_share.Append(wire_in->get_share() ^ wire_out->get_secret_share());
+  }
+  beavy_provider_.send_bits_message(1 - my_id, gate_id_, my_share);
+  my_share ^= share_future_.get();
+  for (std::size_t wire_i = 0; wire_i < num_wires; ++wire_i) {
+    const auto& wire_out = outputs_[wire_i];
+    wire_out->get_public_share() = my_share.Subset(wire_i * num_simd, (wire_i + 1) * num_simd);
+    wire_out->set_online_ready();
+  }
+
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = beavy_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(
+          fmt::format("Gate {}: BooleanGMWToBEAVYGate::evaluate_online end", gate_id_));
+    }
+  }
+}
+
+template <typename T>
+ArithmeticBEAVYToGMWGate<T>::ArithmeticBEAVYToGMWGate(std::size_t gate_id,
+                                                      BEAVYProvider& beavy_provider,
+                                                      ArithmeticBEAVYWireP<T> in)
+    : NewGate(gate_id), beavy_provider_(beavy_provider), input_(std::move(in)) {
+  const auto num_simd = input_->get_num_simd();
+  output_ = std::make_shared<gmw::ArithmeticGMWWire<T>>(num_simd);
+  output_->get_share().resize(num_simd);
+}
+
+template <typename T>
+void ArithmeticBEAVYToGMWGate<T>::evaluate_online() {
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = beavy_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(
+          fmt::format("Gate {}: ArithmeticBEAVYToGMWGate<T>::evaluate_online start", gate_id_));
+    }
+  }
+
+  if (beavy_provider_.is_my_job(gate_id_)) {
+    input_->wait_setup();
+    input_->wait_online();
+    const auto& pshare = input_->get_public_share();
+    const auto& sshare = input_->get_secret_share();
+    std::transform(std::begin(pshare), std::end(pshare), std::begin(sshare),
+                   std::begin(output_->get_share()), std::minus{});
+    output_->set_online_ready();
+  } else {
+    input_->wait_setup();
+    const auto& sshare = input_->get_secret_share();
+    std::transform(std::begin(sshare), std::end(sshare), std::begin(output_->get_share()),
+                   std::negate{});
+    output_->set_online_ready();
+  }
+
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = beavy_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(
+          fmt::format("Gate {}: ArithmeticBEAVYToGMWGate<T>::evaluate_online end", gate_id_));
+    }
+  }
+}
+
+template class ArithmeticBEAVYToGMWGate<std::uint8_t>;
+template class ArithmeticBEAVYToGMWGate<std::uint16_t>;
+template class ArithmeticBEAVYToGMWGate<std::uint32_t>;
+template class ArithmeticBEAVYToGMWGate<std::uint64_t>;
+
+template <typename T>
+ArithmeticGMWToBEAVYGate<T>::ArithmeticGMWToBEAVYGate(std::size_t gate_id,
+                                                      BEAVYProvider& beavy_provider,
+                                                      gmw::ArithmeticGMWWireP<T> in)
+    : NewGate(gate_id), beavy_provider_(beavy_provider), input_(std::move(in)) {
+  const auto num_simd = input_->get_num_simd();
+  const auto my_id = beavy_provider_.get_my_id();
+  output_ = std::make_shared<ArithmeticBEAVYWire<T>>(num_simd);
+  share_future_ = beavy_provider_.register_for_ints_message<T>(1 - my_id, gate_id_, num_simd);
+}
+
+template <typename T>
+void ArithmeticGMWToBEAVYGate<T>::evaluate_setup() {
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = beavy_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(
+          fmt::format("Gate {}: ArithmeticGMWToBEAVYGate<T>::evaluate_setup start", gate_id_));
+    }
+  }
+
+  const auto num_simd = input_->get_num_simd();
+  output_->get_secret_share() = Helpers::RandomVector<T>(num_simd);
+  output_->set_setup_ready();
+
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = beavy_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(
+          fmt::format("Gate {}: ArithmeticGMWToBEAVYGate<T>::evaluate_setup end", gate_id_));
+    }
+  }
+}
+
+template <typename T>
+void ArithmeticGMWToBEAVYGate<T>::evaluate_online() {
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = beavy_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(
+          fmt::format("Gate {}: ArithmeticGMWToBEAVYGate<T>::evaluate_online start", gate_id_));
+    }
+  }
+
+  const auto my_id = beavy_provider_.get_my_id();
+  input_->wait_online();
+  auto my_share = input_->get_share();
+  std::transform(std::begin(my_share), std::end(my_share), std::begin(output_->get_secret_share()),
+                 std::begin(my_share), std::plus{});
+  beavy_provider_.send_ints_message(1 - my_id, gate_id_, my_share);
+  const auto other_share = share_future_.get();
+  std::transform(std::begin(my_share), std::end(my_share), std::begin(other_share),
+                 std::begin(my_share), std::plus{});
+  output_->get_public_share() = std::move(my_share);
+  output_->set_online_ready();
+
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = beavy_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(
+          fmt::format("Gate {}: ArithmeticGMWToBEAVYGate<T>::evaluate_online end", gate_id_));
+    }
+  }
+}
+
+template class ArithmeticGMWToBEAVYGate<std::uint8_t>;
+template class ArithmeticGMWToBEAVYGate<std::uint16_t>;
+template class ArithmeticGMWToBEAVYGate<std::uint32_t>;
+template class ArithmeticGMWToBEAVYGate<std::uint64_t>;
 
 }  // namespace MOTION::proto::beavy

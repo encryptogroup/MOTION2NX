@@ -33,6 +33,7 @@
 #include "conversion.h"
 #include "crypto/motion_base_provider.h"
 #include "gate.h"
+#include "protocols/gmw/wire.h"
 #include "tensor_op.h"
 #include "utility/constants.h"
 #include "utility/logger.h"
@@ -494,26 +495,74 @@ template WireVector BEAVYProvider::basic_make_convert_bit_to_arithmetic_beavy_ga
 template WireVector BEAVYProvider::basic_make_convert_bit_to_arithmetic_beavy_gate<std::uint64_t>(
     BooleanBEAVYWireP);
 
+WireVector BEAVYProvider::make_convert_to_boolean_gmw_gate(BooleanBEAVYWireVector&& in_a) {
+  auto gate_id = gate_register_.get_next_gate_id();
+  auto gate = std::make_unique<BooleanBEAVYToGMWGate>(gate_id, *this, std::move(in_a));
+  auto output = gate->get_output_wires();
+  gate_register_.register_gate(std::move(gate));
+  return std::vector<std::shared_ptr<NewWire>>(std::begin(output), std::end(output));
+}
+
+template <typename T>
+WireVector BEAVYProvider::basic_make_convert_to_arithmetic_gmw_gate(const NewWireP& in_a) {
+  auto input = std::dynamic_pointer_cast<ArithmeticBEAVYWire<T>>(in_a);
+  auto gate_id = gate_register_.get_next_gate_id();
+  auto gate = std::make_unique<ArithmeticBEAVYToGMWGate<T>>(gate_id, *this, input);
+  auto output = gate->get_output_wire();
+  gate_register_.register_gate(std::move(gate));
+  return {std::dynamic_pointer_cast<NewWire>(output)};
+}
+
+WireVector BEAVYProvider::make_convert_to_arithmetic_gmw_gate(const WireVector& in_a) {
+  assert(in_a.size() == 1);
+  const auto& wire = in_a.at(0);
+  auto bit_size = wire->get_bit_size();
+  switch (bit_size) {
+    case 8:
+      return basic_make_convert_to_arithmetic_gmw_gate<std::uint8_t>(wire);
+    case 16:
+      return basic_make_convert_to_arithmetic_gmw_gate<std::uint16_t>(wire);
+    case 32:
+      return basic_make_convert_to_arithmetic_gmw_gate<std::uint32_t>(wire);
+    case 64:
+      return basic_make_convert_to_arithmetic_gmw_gate<std::uint64_t>(wire);
+    default:
+      throw std::logic_error(fmt::format(
+          "unsupported bit size {} for Arithmetic BEAVY to GMW conversion\n", bit_size));
+  }
+}
+
 WireVector BEAVYProvider::convert_boolean(MPCProtocol proto, const WireVector& in) {
   auto input = cast_wires(in);
 
   switch (proto) {
     case MPCProtocol::ArithmeticBEAVY:
       return make_convert_to_arithmetic_beavy_gate(std::move(input));
+    case MPCProtocol::BooleanGMW:
+      return make_convert_to_boolean_gmw_gate(std::move(input));
     default:
       throw std::logic_error(
-          fmt::format("BEAVY does not support conversion to {}", ToString(proto)));
+          fmt::format("BooleanBEAVY does not support conversion to {}", ToString(proto)));
+  }
+}
+
+WireVector BEAVYProvider::convert_arithmetic(MPCProtocol proto, const WireVector& in) {
+  switch (proto) {
+    case MPCProtocol::ArithmeticGMW:
+      return make_convert_to_arithmetic_gmw_gate(in);
+    default:
+      throw std::logic_error(
+          fmt::format("ArithmeticBEAVY does not support conversion to {}", ToString(proto)));
   }
 }
 
 WireVector BEAVYProvider::convert_to(MPCProtocol proto, const WireVector& in) {
-  auto input = cast_wires(in);
-  assert(input.size() > 0);
-  auto src_proto = input.at(0)->get_protocol();
+  assert(in.size() > 0);
+  auto src_proto = in.at(0)->get_protocol();
 
   switch (src_proto) {
     case MPCProtocol::ArithmeticBEAVY:
-      throw std::logic_error("not yet implemented");
+      return convert_arithmetic(proto, in);
     case MPCProtocol::BooleanBEAVY:
       return convert_boolean(proto, in);
     default:
@@ -521,8 +570,82 @@ WireVector BEAVYProvider::convert_to(MPCProtocol proto, const WireVector& in) {
   }
 }
 
-WireVector BEAVYProvider::convert_from(MPCProtocol, const WireVector &) {
-  throw std::logic_error("BEAVYProvider does not support conversions from other protocols");
+BooleanBEAVYWireVector BEAVYProvider::make_convert_from_boolean_gmw_gate(const WireVector &in) {
+  auto gate_id = gate_register_.get_next_gate_id();
+  gmw::BooleanGMWWireVector input;
+  input.reserve(in.size());
+  std::transform(std::begin(in), std::end(in), std::back_inserter(input),
+                 [](auto &w) { return std::dynamic_pointer_cast<gmw::BooleanGMWWire>(w); });
+  auto gate = std::make_unique<BooleanGMWToBEAVYGate>(gate_id, *this, std::move(input));
+  auto output = gate->get_output_wires();
+  gate_register_.register_gate(std::move(gate));
+  return output;
+}
+
+WireVector BEAVYProvider::convert_from_boolean(const WireVector& in) {
+  assert(in.size() > 0);
+  auto src_proto = in.at(0)->get_protocol();
+
+  switch (src_proto) {
+    case MPCProtocol::BooleanGMW:
+      return cast_wires(make_convert_from_boolean_gmw_gate(in));
+    default:
+      throw std::logic_error(
+          fmt::format("BooleanBEAVY does not support conversion from {}", ToString(src_proto)));
+  }
+}
+
+template <typename T>
+WireVector BEAVYProvider::basic_make_convert_from_arithmetic_gmw_gate(const NewWireP& in_a) {
+  auto input = std::dynamic_pointer_cast<gmw::ArithmeticGMWWire<T>>(in_a);
+  auto gate_id = gate_register_.get_next_gate_id();
+  auto gate = std::make_unique<ArithmeticGMWToBEAVYGate<T>>(gate_id, *this, input);
+  auto output = gate->get_output_wire();
+  gate_register_.register_gate(std::move(gate));
+  return {std::dynamic_pointer_cast<NewWire>(output)};
+}
+
+WireVector BEAVYProvider::make_convert_from_arithmetic_gmw_gate(const WireVector& in_a) {
+  assert(in_a.size() == 1);
+  const auto& wire = in_a.at(0);
+  auto bit_size = wire->get_bit_size();
+  switch (bit_size) {
+    case 8:
+      return basic_make_convert_from_arithmetic_gmw_gate<std::uint8_t>(wire);
+    case 16:
+      return basic_make_convert_from_arithmetic_gmw_gate<std::uint16_t>(wire);
+    case 32:
+      return basic_make_convert_from_arithmetic_gmw_gate<std::uint32_t>(wire);
+    case 64:
+      return basic_make_convert_from_arithmetic_gmw_gate<std::uint64_t>(wire);
+    default:
+      throw std::logic_error(fmt::format(
+          "unsupported bit size {} for Arithmetic BEAVY from GMW conversion\n", bit_size));
+  }
+}
+
+WireVector BEAVYProvider::convert_from_arithmetic(const WireVector& in) {
+  assert(in.size() > 0);
+  const auto src_proto = in.at(0)->get_protocol();
+  switch (src_proto) {
+    case MPCProtocol::ArithmeticGMW:
+      return make_convert_from_arithmetic_gmw_gate(in);
+    default:
+      throw std::logic_error(
+          fmt::format("ArithmeticBEAVY does not support conversion from {}", ToString(src_proto)));
+  }
+}
+
+WireVector BEAVYProvider::convert_from(MPCProtocol proto, const WireVector& in) {
+  assert(in.size() > 0);
+  switch (proto) {
+    case MPCProtocol::ArithmeticBEAVY:
+      return convert_from_arithmetic(in);
+    case MPCProtocol::BooleanBEAVY:
+      return convert_from_boolean(in);
+    default:
+      throw std::logic_error("expected BEAVY protocol");
+  }
 }
 
 // implementation of TensorOpFactory

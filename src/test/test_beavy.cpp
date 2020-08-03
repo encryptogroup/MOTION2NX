@@ -35,11 +35,13 @@
 #include "gate/new_gate.h"
 #include "protocols/beavy/beavy_provider.h"
 #include "protocols/beavy/wire.h"
+#include "protocols/gmw/wire.h"
 #include "statistics/run_time_stats.h"
 #include "utility/helpers.h"
 #include "utility/logger.h"
 
 using namespace MOTION::proto::beavy;
+namespace gmw = MOTION::proto::gmw;
 
 class BEAVYTest : public ::testing::Test {
  protected:
@@ -439,6 +441,84 @@ TEST_F(BooleanBEAVYTest, AND) {
     ASSERT_EQ(pshare_1.GetSize(), num_simd);
     ASSERT_EQ(sshare_0.GetSize(), num_simd);
     ASSERT_EQ(sshare_1.GetSize(), num_simd);
+    ASSERT_EQ(pshare_0, pshare_1);
+    ASSERT_EQ(expected_output_bits, pshare_0 ^ sshare_0 ^ sshare_1);
+  }
+}
+
+TEST_F(BooleanBEAVYTest, BooleanBEAVYToGMW) {
+  std::size_t num_wires = 8;
+  std::size_t num_simd = 10;
+  const auto expected_output = generate_inputs(num_wires, num_simd);
+
+  auto [input_promise, wires_in_0] =
+      beavy_providers_[0]->make_boolean_input_gate_my(0, num_wires, num_simd);
+  auto wires_in_1 = beavy_providers_[1]->make_boolean_input_gate_other(0, num_wires, num_simd);
+
+  auto wires_0 = beavy_providers_[0]->convert_to(MOTION::MPCProtocol::BooleanGMW, wires_in_0);
+  auto wires_1 = beavy_providers_[1]->convert_to(MOTION::MPCProtocol::BooleanGMW, wires_in_1);
+
+  run_setup();
+  run_gates_setup();
+  input_promise.set_value(expected_output);
+  run_gates_online();
+
+  // check wire values
+  ASSERT_EQ(wires_0.size(), num_wires);
+  ASSERT_EQ(wires_1.size(), num_wires);
+  for (std::size_t wire_i = 0; wire_i < num_wires; ++wire_i) {
+    const auto& expected_output_bits = expected_output.at(wire_i);
+    const auto wire_0 = std::dynamic_pointer_cast<gmw::BooleanGMWWire>(wires_0.at(wire_i));
+    const auto wire_1 = std::dynamic_pointer_cast<gmw::BooleanGMWWire>(wires_1.at(wire_i));
+    ASSERT_NE(wire_0, nullptr);
+    ASSERT_NE(wire_1, nullptr);
+    wire_0->wait_online();
+    wire_1->wait_online();
+    const auto& share_0 = wire_0->get_share();
+    const auto& share_1 = wire_1->get_share();
+    ASSERT_EQ(share_0.GetSize(), num_simd);
+    ASSERT_EQ(share_1.GetSize(), num_simd);
+    ASSERT_EQ(expected_output_bits, share_0 ^ share_1);
+  }
+}
+
+TEST_F(BooleanBEAVYTest, BooleanBEAVYFromGMW) {
+  std::size_t num_wires = 8;
+  std::size_t num_simd = 10;
+  const auto expected_output = generate_inputs(num_wires, num_simd);
+
+  auto [input_promise, wires_in_0] =
+      beavy_providers_[0]->make_boolean_input_gate_my(0, num_wires, num_simd);
+  auto wires_in_1 = beavy_providers_[1]->make_boolean_input_gate_other(0, num_wires, num_simd);
+
+  auto wires_tmp_0 = beavy_providers_[0]->convert_to(MOTION::MPCProtocol::BooleanGMW, wires_in_0);
+  auto wires_tmp_1 = beavy_providers_[1]->convert_to(MOTION::MPCProtocol::BooleanGMW, wires_in_1);
+  auto wires_0 = beavy_providers_[0]->convert_from(MOTION::MPCProtocol::BooleanBEAVY, wires_tmp_0);
+  auto wires_1 = beavy_providers_[1]->convert_from(MOTION::MPCProtocol::BooleanBEAVY, wires_tmp_1);
+
+  run_setup();
+  run_gates_setup();
+  input_promise.set_value(expected_output);
+  run_gates_online();
+
+  // check wire values
+  ASSERT_EQ(wires_0.size(), num_wires);
+  ASSERT_EQ(wires_1.size(), num_wires);
+  for (std::size_t wire_i = 0; wire_i < num_wires; ++wire_i) {
+    const auto& expected_output_bits = expected_output.at(wire_i);
+    const auto wire_0 = std::dynamic_pointer_cast<BooleanBEAVYWire>(wires_0.at(wire_i));
+    const auto wire_1 = std::dynamic_pointer_cast<BooleanBEAVYWire>(wires_1.at(wire_i));
+    ASSERT_NE(wire_0, nullptr);
+    ASSERT_NE(wire_1, nullptr);
+    wire_0->wait_online();
+    wire_1->wait_online();
+    const auto& sshare_0 = wire_0->get_secret_share();
+    const auto& sshare_1 = wire_1->get_secret_share();
+    const auto& pshare_0 = wire_0->get_public_share();
+    const auto& pshare_1 = wire_1->get_public_share();
+    ASSERT_EQ(sshare_0.GetSize(), num_simd);
+    ASSERT_EQ(sshare_1.GetSize(), num_simd);
+    ASSERT_EQ(pshare_0.GetSize(), num_simd);
     ASSERT_EQ(pshare_0, pshare_1);
     ASSERT_EQ(expected_output_bits, pshare_0 ^ sshare_0 ^ sshare_1);
   }
@@ -908,6 +988,87 @@ TYPED_TEST(ArithmeticBEAVYTest, BooleanToArithmeticBEAVY) {
   this->run_setup();
   this->run_gates_setup();
   input_promise.set_value(inputs);
+  this->run_gates_online();
+
+  // check wire values
+  ASSERT_EQ(wires_0.size(), 1);
+  ASSERT_EQ(wires_1.size(), 1);
+  const auto wire_0 = std::dynamic_pointer_cast<ArithmeticBEAVYWire<TypeParam>>(wires_0.at(0));
+  const auto wire_1 = std::dynamic_pointer_cast<ArithmeticBEAVYWire<TypeParam>>(wires_1.at(0));
+  ASSERT_NE(wire_0, nullptr);
+  ASSERT_NE(wire_1, nullptr);
+  wire_0->wait_online();
+  wire_1->wait_online();
+  const auto& sshare_0 = wire_0->get_secret_share();
+  const auto& sshare_1 = wire_1->get_secret_share();
+  const auto& pshare_0 = wire_0->get_public_share();
+  const auto& pshare_1 = wire_1->get_public_share();
+  ASSERT_EQ(sshare_0.size(), num_simd);
+  ASSERT_EQ(sshare_1.size(), num_simd);
+  ASSERT_EQ(pshare_0.size(), num_simd);
+  ASSERT_EQ(pshare_0, pshare_1);
+  for (std::size_t simd_j = 0; simd_j < num_simd; ++simd_j) {
+    ASSERT_EQ(expected_output.at(simd_j),
+              TypeParam(pshare_0.at(simd_j) - sshare_0.at(simd_j) - sshare_1.at(simd_j)));
+  }
+}
+
+TYPED_TEST(ArithmeticBEAVYTest, ArithmeticBEAVYToGMW) {
+  std::size_t num_wires = ENCRYPTO::bit_size_v<TypeParam>;
+  std::size_t num_simd = 1;
+  const auto expected_output = this->generate_inputs(num_simd);
+
+  auto [input_promise, wires_in_0] = this->make_arithmetic_T_input_gate_my(0, 0, num_simd);
+  auto wires_in_1 = this->make_arithmetic_T_input_gate_other(1, 0, num_simd);
+
+  auto wires_0 =
+      this->beavy_providers_[0]->convert_to(MOTION::MPCProtocol::ArithmeticGMW, wires_in_0);
+  auto wires_1 =
+      this->beavy_providers_[1]->convert_to(MOTION::MPCProtocol::ArithmeticGMW, wires_in_1);
+
+  this->run_setup();
+  this->run_gates_setup();
+  input_promise.set_value(expected_output);
+  this->run_gates_online();
+
+  // check wire values
+  ASSERT_EQ(wires_0.size(), 1);
+  ASSERT_EQ(wires_1.size(), 1);
+  const auto wire_0 = std::dynamic_pointer_cast<gmw::ArithmeticGMWWire<TypeParam>>(wires_0.at(0));
+  const auto wire_1 = std::dynamic_pointer_cast<gmw::ArithmeticGMWWire<TypeParam>>(wires_1.at(0));
+  ASSERT_NE(wire_0, nullptr);
+  ASSERT_NE(wire_1, nullptr);
+  wire_0->wait_online();
+  wire_1->wait_online();
+  const auto& share_0 = wire_0->get_share();
+  const auto& share_1 = wire_1->get_share();
+  ASSERT_EQ(share_0.size(), num_simd);
+  ASSERT_EQ(share_1.size(), num_simd);
+  for (std::size_t simd_j = 0; simd_j < num_simd; ++simd_j) {
+    ASSERT_EQ(expected_output.at(simd_j), TypeParam(share_0.at(simd_j) + share_1.at(simd_j)));
+  }
+}
+
+TYPED_TEST(ArithmeticBEAVYTest, ArithmeticBEAVYFromGMW) {
+  std::size_t num_wires = ENCRYPTO::bit_size_v<TypeParam>;
+  std::size_t num_simd = 1;
+  const auto expected_output = this->generate_inputs(num_simd);
+
+  auto [input_promise, wires_in_0] = this->make_arithmetic_T_input_gate_my(0, 0, num_simd);
+  auto wires_in_1 = this->make_arithmetic_T_input_gate_other(1, 0, num_simd);
+
+  auto wires_tmp_0 =
+      this->beavy_providers_[0]->convert_to(MOTION::MPCProtocol::ArithmeticGMW, wires_in_0);
+  auto wires_tmp_1 =
+      this->beavy_providers_[1]->convert_to(MOTION::MPCProtocol::ArithmeticGMW, wires_in_1);
+  auto wires_0 =
+      this->beavy_providers_[0]->convert_from(MOTION::MPCProtocol::ArithmeticBEAVY, wires_tmp_0);
+  auto wires_1 =
+      this->beavy_providers_[1]->convert_from(MOTION::MPCProtocol::ArithmeticBEAVY, wires_tmp_1);
+
+  this->run_setup();
+  this->run_gates_setup();
+  input_promise.set_value(expected_output);
   this->run_gates_online();
 
   // check wire values
