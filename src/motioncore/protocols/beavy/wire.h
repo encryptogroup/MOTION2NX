@@ -64,7 +64,8 @@ class BooleanBEAVYWire : public NewWire, public ENCRYPTO::enable_wait_setup {
   ENCRYPTO::BitVector<> secret_share_;
 };
 
-using BooleanBEAVYWireVector = std::vector<std::shared_ptr<BooleanBEAVYWire>>;
+using BooleanBEAVYWireP = std::shared_ptr<BooleanBEAVYWire>;
+using BooleanBEAVYWireVector = std::vector<BooleanBEAVYWireP>;
 
 template <typename T>
 class ArithmeticBEAVYWire : public NewWire, public ENCRYPTO::enable_wait_setup {

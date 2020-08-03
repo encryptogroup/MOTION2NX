@@ -30,6 +30,7 @@
 #include "communication/fbs_headers/gmw_message_generated.h"
 #include "communication/message.h"
 #include "communication/message_handler.h"
+#include "conversion.h"
 #include "crypto/motion_base_provider.h"
 #include "gate.h"
 #include "tensor_op.h"
@@ -446,8 +447,78 @@ WireVector BEAVYProvider::make_sqr_gate(const WireVector& in) {
   return make_arithmetic_unary_gate<ArithmeticBEAVYSQRGate>(in);
 }
 
-WireVector BEAVYProvider::convert_to(MPCProtocol, const WireVector&) {
-  throw std::logic_error("BEAVYProvider::convert_to is not yet implemented");
+template <typename T>
+WireVector BEAVYProvider::basic_make_convert_to_arithmetic_beavy_gate(
+    BooleanBEAVYWireVector&& in_a) {
+  [[maybe_unused]] auto num_wires = in_a.size();
+  assert(num_wires == ENCRYPTO::bit_size_v<T>);
+  auto gate_id = gate_register_.get_next_gate_id();
+  auto gate = std::make_unique<BooleanToArithmeticBEAVYGate<T>>(gate_id, *this, std::move(in_a));
+  auto output = gate->get_output_wire();
+  gate_register_.register_gate(std::move(gate));
+  return {std::dynamic_pointer_cast<NewWire>(output)};
+}
+
+WireVector BEAVYProvider::make_convert_to_arithmetic_beavy_gate(BooleanBEAVYWireVector&& in_a) {
+  auto bit_size = in_a.size();
+  switch (bit_size) {
+    case 8:
+      return basic_make_convert_to_arithmetic_beavy_gate<std::uint8_t>(std::move(in_a));
+    case 16:
+      return basic_make_convert_to_arithmetic_beavy_gate<std::uint16_t>(std::move(in_a));
+    case 32:
+      return basic_make_convert_to_arithmetic_beavy_gate<std::uint32_t>(std::move(in_a));
+    case 64:
+      return basic_make_convert_to_arithmetic_beavy_gate<std::uint64_t>(std::move(in_a));
+    default:
+      throw std::logic_error(fmt::format(
+          "unsupported bit size {} for Boolean to Arithmetic BEAVY conversion\n", bit_size));
+  }
+}
+
+template <typename T>
+WireVector BEAVYProvider::basic_make_convert_bit_to_arithmetic_beavy_gate(BooleanBEAVYWireP in_a) {
+  auto gate_id = gate_register_.get_next_gate_id();
+  auto gate = std::make_unique<BooleanBitToArithmeticBEAVYGate<T>>(gate_id, *this, std::move(in_a));
+  auto output = gate->get_output_wire();
+  gate_register_.register_gate(std::move(gate));
+  return {std::dynamic_pointer_cast<NewWire>(output)};
+}
+
+template WireVector BEAVYProvider::basic_make_convert_bit_to_arithmetic_beavy_gate<std::uint8_t>(
+    BooleanBEAVYWireP);
+template WireVector BEAVYProvider::basic_make_convert_bit_to_arithmetic_beavy_gate<std::uint16_t>(
+    BooleanBEAVYWireP);
+template WireVector BEAVYProvider::basic_make_convert_bit_to_arithmetic_beavy_gate<std::uint32_t>(
+    BooleanBEAVYWireP);
+template WireVector BEAVYProvider::basic_make_convert_bit_to_arithmetic_beavy_gate<std::uint64_t>(
+    BooleanBEAVYWireP);
+
+WireVector BEAVYProvider::convert_boolean(MPCProtocol proto, const WireVector& in) {
+  auto input = cast_wires(in);
+
+  switch (proto) {
+    case MPCProtocol::ArithmeticBEAVY:
+      return make_convert_to_arithmetic_beavy_gate(std::move(input));
+    default:
+      throw std::logic_error(
+          fmt::format("BEAVY does not support conversion to {}", ToString(proto)));
+  }
+}
+
+WireVector BEAVYProvider::convert_to(MPCProtocol proto, const WireVector& in) {
+  auto input = cast_wires(in);
+  assert(input.size() > 0);
+  auto src_proto = input.at(0)->get_protocol();
+
+  switch (src_proto) {
+    case MPCProtocol::ArithmeticBEAVY:
+      throw std::logic_error("not yet implemented");
+    case MPCProtocol::BooleanBEAVY:
+      return convert_boolean(proto, in);
+    default:
+      throw std::logic_error("expected BEAVY protocol");
+  }
 }
 
 WireVector BEAVYProvider::convert_from(MPCProtocol, const WireVector &) {

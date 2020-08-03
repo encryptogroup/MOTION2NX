@@ -818,3 +818,117 @@ TYPED_TEST(ArithmeticBEAVYTest, SQR) {
               TypeParam(pshare_0.at(simd_j) - sshare_0.at(simd_j) - sshare_1.at(simd_j)));
   }
 }
+
+// naive transposition of integers into bit vectors
+template <typename T>
+static std::vector<ENCRYPTO::BitVector<>> int_to_bit_vectors(const std::vector<T>& ints) {
+  const auto num_wires = ENCRYPTO::bit_size_v<T>;
+  const auto num_simd = ints.size();
+  std::vector<ENCRYPTO::BitVector<>> bits;
+  std::generate_n(std::back_inserter(bits), num_wires,
+                  [num_simd] { return ENCRYPTO::BitVector<>(num_simd); });
+  for (std::size_t wire_i = 0; wire_i < num_wires; ++wire_i) {
+    for (std::size_t simd_j = 0; simd_j < num_simd; ++simd_j) {
+      auto v = bool(ints[simd_j] & (T(1) << wire_i));
+      bits[wire_i].Set(v, simd_j);
+    }
+  }
+
+  return bits;
+}
+
+TYPED_TEST(ArithmeticBEAVYTest, BooleanBitToArithmeticBEAVY) {
+  std::size_t num_wires = 1;
+  std::size_t num_simd = 1;
+  auto expected_output = this->generate_inputs(num_simd);
+  std::transform(std::begin(expected_output), std::end(expected_output),
+                 std::begin(expected_output), [](auto x) { return x % 2; });
+  std::vector<ENCRYPTO::BitVector<>> inputs;
+  inputs.emplace_back(num_simd);
+  for (std::size_t simd_j = 0; simd_j < num_simd; ++simd_j) {
+    inputs.at(0).Set(expected_output.at(simd_j), simd_j);
+  }
+
+  auto [input_promise, wires_in_0] =
+      this->beavy_providers_[0]->make_boolean_input_gate_my(0, num_wires, num_simd);
+  auto wires_in_1 =
+      this->beavy_providers_[1]->make_boolean_input_gate_other(0, num_wires, num_simd);
+
+  auto wires_0 = this->beavy_providers_[0]
+                     ->template basic_make_convert_bit_to_arithmetic_beavy_gate<TypeParam>(
+                         std::dynamic_pointer_cast<BooleanBEAVYWire>(wires_in_0.at(0)));
+  auto wires_1 = this->beavy_providers_[1]
+                     ->template basic_make_convert_bit_to_arithmetic_beavy_gate<TypeParam>(
+                         std::dynamic_pointer_cast<BooleanBEAVYWire>(wires_in_1.at(0)));
+
+  this->run_setup();
+  this->run_gates_setup();
+  input_promise.set_value(inputs);
+  this->run_gates_online();
+
+  // check wire values
+  ASSERT_EQ(wires_0.size(), 1);
+  ASSERT_EQ(wires_1.size(), 1);
+  const auto wire_0 = std::dynamic_pointer_cast<ArithmeticBEAVYWire<TypeParam>>(wires_0.at(0));
+  const auto wire_1 = std::dynamic_pointer_cast<ArithmeticBEAVYWire<TypeParam>>(wires_1.at(0));
+  ASSERT_NE(wire_0, nullptr);
+  ASSERT_NE(wire_1, nullptr);
+  wire_0->wait_online();
+  wire_1->wait_online();
+  const auto& sshare_0 = wire_0->get_secret_share();
+  const auto& sshare_1 = wire_1->get_secret_share();
+  const auto& pshare_0 = wire_0->get_public_share();
+  const auto& pshare_1 = wire_1->get_public_share();
+  ASSERT_EQ(sshare_0.size(), num_simd);
+  ASSERT_EQ(sshare_1.size(), num_simd);
+  ASSERT_EQ(pshare_0.size(), num_simd);
+  ASSERT_EQ(pshare_0, pshare_1);
+  for (std::size_t simd_j = 0; simd_j < num_simd; ++simd_j) {
+    ASSERT_EQ(expected_output.at(simd_j),
+              TypeParam(pshare_0.at(simd_j) - sshare_0.at(simd_j) - sshare_1.at(simd_j)));
+  }
+}
+
+TYPED_TEST(ArithmeticBEAVYTest, BooleanToArithmeticBEAVY) {
+  std::size_t num_wires = ENCRYPTO::bit_size_v<TypeParam>;
+  std::size_t num_simd = 1;
+  const auto expected_output = this->generate_inputs(num_simd);
+  std::vector<ENCRYPTO::BitVector<>> inputs = int_to_bit_vectors(expected_output);
+
+  auto [input_promise, wires_in_0] =
+      this->beavy_providers_[0]->make_boolean_input_gate_my(0, num_wires, num_simd);
+  auto wires_in_1 =
+      this->beavy_providers_[1]->make_boolean_input_gate_other(0, num_wires, num_simd);
+
+  auto wires_0 =
+      this->beavy_providers_[0]->convert_to(MOTION::MPCProtocol::ArithmeticBEAVY, wires_in_0);
+  auto wires_1 =
+      this->beavy_providers_[1]->convert_to(MOTION::MPCProtocol::ArithmeticBEAVY, wires_in_1);
+
+  this->run_setup();
+  this->run_gates_setup();
+  input_promise.set_value(inputs);
+  this->run_gates_online();
+
+  // check wire values
+  ASSERT_EQ(wires_0.size(), 1);
+  ASSERT_EQ(wires_1.size(), 1);
+  const auto wire_0 = std::dynamic_pointer_cast<ArithmeticBEAVYWire<TypeParam>>(wires_0.at(0));
+  const auto wire_1 = std::dynamic_pointer_cast<ArithmeticBEAVYWire<TypeParam>>(wires_1.at(0));
+  ASSERT_NE(wire_0, nullptr);
+  ASSERT_NE(wire_1, nullptr);
+  wire_0->wait_online();
+  wire_1->wait_online();
+  const auto& sshare_0 = wire_0->get_secret_share();
+  const auto& sshare_1 = wire_1->get_secret_share();
+  const auto& pshare_0 = wire_0->get_public_share();
+  const auto& pshare_1 = wire_1->get_public_share();
+  ASSERT_EQ(sshare_0.size(), num_simd);
+  ASSERT_EQ(sshare_1.size(), num_simd);
+  ASSERT_EQ(pshare_0.size(), num_simd);
+  ASSERT_EQ(pshare_0, pshare_1);
+  for (std::size_t simd_j = 0; simd_j < num_simd; ++simd_j) {
+    ASSERT_EQ(expected_output.at(simd_j),
+              TypeParam(pshare_0.at(simd_j) - sshare_0.at(simd_j) - sshare_1.at(simd_j)));
+  }
+}

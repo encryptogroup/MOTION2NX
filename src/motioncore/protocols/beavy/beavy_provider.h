@@ -57,7 +57,8 @@ namespace proto::beavy {
 enum class OutputRecipient : std::uint8_t { garbler, evaluator, both };
 
 class BooleanBEAVYWire;
-using BooleanBEAVYWireVector = std::vector<std::shared_ptr<BooleanBEAVYWire>>;
+using BooleanBEAVYWireP = std::shared_ptr<BooleanBEAVYWire>;
+using BooleanBEAVYWireVector = std::vector<BooleanBEAVYWireP>;
 
 class BEAVYProvider : public GateFactory,
                       public ENCRYPTO::enable_wait_setup,
@@ -191,6 +192,15 @@ class BEAVYProvider : public GateFactory,
   WireVector make_add_gate(const WireVector& in_a, const WireVector& in_b);
   WireVector make_mul_gate(const WireVector& in_a, const WireVector& in_b);
   WireVector make_sqr_gate(const WireVector& in_a);
+  template <typename T>
+  WireVector basic_make_convert_to_arithmetic_beavy_gate(BooleanBEAVYWireVector&& in_a);
+  WireVector make_convert_to_arithmetic_beavy_gate(BooleanBEAVYWireVector&& in_a);
+ public:
+  // TODO: design API for bit x integer operations
+  template <typename T>
+  WireVector basic_make_convert_bit_to_arithmetic_beavy_gate(BooleanBEAVYWireP in_a);
+ private:
+  WireVector convert_boolean(MPCProtocol proto, const WireVector&);
 
   // tensor stuff
   template <typename T>
