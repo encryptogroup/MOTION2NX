@@ -270,10 +270,6 @@ YaoInputGateEvaluator::YaoInputGateEvaluator(
   }
 }
 
-void YaoInputGateEvaluator::evaluate_setup() {
-  // nothing to do
-}
-
 void YaoInputGateEvaluator::evaluate_online() {
   if constexpr (MOTION_VERBOSE_DEBUG) {
     auto logger = yao_provider_.get_logger();
@@ -322,6 +318,13 @@ YaoOutputGateGarbler::YaoOutputGateGarbler(std::size_t gate_id, YaoProvider& yao
     // We receive output, so the evaluator needs to send us the encoded output.
     auto num_gates = detail::count_bits(inputs_);
     bits_future_ = yao_provider_.register_for_bits_message(gate_id, num_gates);
+  }
+
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = yao_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(fmt::format("Gate {}: YaoOutputGateGarbler created", gate_id_));
+    }
   }
 }
 
@@ -418,6 +421,13 @@ YaoOutputGateEvaluator::YaoOutputGateEvaluator(std::size_t gate_id, YaoProvider&
     // We receive output, so the garbler needs to send us the decoding information.
     auto num_gates = detail::count_bits(inputs_);
     bits_future_ = yao_provider_.register_for_bits_message(gate_id, num_gates);
+  }
+
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = yao_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(fmt::format("Gate {}: YaoOutputGateEvaluator created", gate_id_));
+    }
   }
 }
 
@@ -548,10 +558,6 @@ void YaoINVGateGarbler::evaluate_setup() {
   }
 }
 
-void YaoINVGateGarbler::evaluate_online() {
-  // nothing to do
-}
-
 YaoINVGateEvaluator::YaoINVGateEvaluator(std::size_t gate_id, YaoProvider& yao_provider,
                                          YaoWireVector&& in)
     : BasicYaoUnaryGate(gate_id, yao_provider, std::move(in), true) {
@@ -563,31 +569,13 @@ YaoINVGateEvaluator::YaoINVGateEvaluator(std::size_t gate_id, YaoProvider& yao_p
   }
 }
 
-void YaoINVGateEvaluator::evaluate_setup() {
-  // nothing to do
-}
-
-void YaoINVGateEvaluator::evaluate_online() {
+YaoXORGateGarbler::YaoXORGateGarbler(std::size_t gate_id, YaoProvider& yao_provider,
+                                     YaoWireVector&& in_a, YaoWireVector&& in_b)
+    : BasicYaoBinaryGate(gate_id, yao_provider, std::move(in_a), std::move(in_b)) {
   if constexpr (MOTION_VERBOSE_DEBUG) {
     auto logger = yao_provider_.get_logger();
     if (logger) {
-      logger->LogTrace(
-          fmt::format("Gate {}: YaoINVGateEvaluator::evaluate_online start", gate_id_));
-    }
-  }
-
-  // for (std::size_t wire_i = 0; wire_i < num_wires_; ++wire_i) {
-  //   const auto& w_a = inputs_[wire_i];
-  //   w_a->wait_online();
-  //   auto& w_o = outputs_[wire_i];
-  //   w_o->get_keys() = w_a->get_keys();
-  //   w_o->set_online_ready();
-  // }
-
-  if constexpr (MOTION_VERBOSE_DEBUG) {
-    auto logger = yao_provider_.get_logger();
-    if (logger) {
-      logger->LogTrace(fmt::format("Gate {}: YaoINVGateEvaluator::evaluate_online end", gate_id_));
+      logger->LogTrace(fmt::format("Gate {}: YaoXORGateGarbler created", gate_id_));
     }
   }
 }
@@ -619,12 +607,15 @@ void YaoXORGateGarbler::evaluate_setup() {
   }
 }
 
-void YaoXORGateGarbler::evaluate_online() {
-  // nothing to do
-}
-
-void YaoXORGateEvaluator::evaluate_setup() {
-  // nothing to do
+YaoXORGateEvaluator::YaoXORGateEvaluator(std::size_t gate_id, YaoProvider& yao_provider,
+                                         YaoWireVector&& in_a, YaoWireVector&& in_b)
+    : BasicYaoBinaryGate(gate_id, yao_provider, std::move(in_a), std::move(in_b)) {
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = yao_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(fmt::format("Gate {}: YaoXORGateEvaluator created", gate_id_));
+    }
+  }
 }
 
 void YaoXORGateEvaluator::evaluate_online() {
@@ -699,10 +690,6 @@ void YaoANDGateGarbler::evaluate_setup() {
   }
 }
 
-void YaoANDGateGarbler::evaluate_online() {
-  // nothing to do
-}
-
 YaoANDGateEvaluator::YaoANDGateEvaluator(std::size_t gate_id, YaoProvider& yao_provider,
                                          YaoWireVector&& in_a, YaoWireVector&& in_b)
     : BasicYaoBinaryGate(gate_id, yao_provider, std::move(in_a), std::move(in_b)) {
@@ -722,8 +709,7 @@ void YaoANDGateEvaluator::evaluate_setup() {
   if constexpr (MOTION_VERBOSE_DEBUG) {
     auto logger = yao_provider_.get_logger();
     if (logger) {
-      logger->LogTrace(
-          fmt::format("Gate {}: YaoANDGateEvaluator::evaluate_setup start", gate_id_));
+      logger->LogTrace(fmt::format("Gate {}: YaoANDGateEvaluator::evaluate_setup start", gate_id_));
     }
   }
 
@@ -733,8 +719,7 @@ void YaoANDGateEvaluator::evaluate_setup() {
   if constexpr (MOTION_VERBOSE_DEBUG) {
     auto logger = yao_provider_.get_logger();
     if (logger) {
-      logger->LogTrace(
-          fmt::format("Gate {}: YaoANDGateEvaluator::evaluate_setup end", gate_id_));
+      logger->LogTrace(fmt::format("Gate {}: YaoANDGateEvaluator::evaluate_setup end", gate_id_));
     }
   }
 }

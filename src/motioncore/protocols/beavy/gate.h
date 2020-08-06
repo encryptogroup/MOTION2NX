@@ -123,7 +123,7 @@ class BooleanBEAVYOutputGate : public NewGate {
   ENCRYPTO::ReusableFiberFuture<std::vector<ENCRYPTO::BitVector<>>> get_output_future();
   bool need_setup() const noexcept override { return false; }
   bool need_online() const noexcept override { return true; }
-  void evaluate_setup() override;
+  void evaluate_setup() override {}
   void evaluate_online() override;
 
  private:

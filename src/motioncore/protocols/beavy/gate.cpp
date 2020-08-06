@@ -275,10 +275,6 @@ BooleanBEAVYOutputGate::get_output_future() {
   }
 }
 
-void BooleanBEAVYOutputGate::evaluate_setup() {
-  // nothing to do
-}
-
 void BooleanBEAVYOutputGate::evaluate_online() {
   if constexpr (MOTION_VERBOSE_DEBUG) {
     auto logger = beavy_provider_.get_logger();

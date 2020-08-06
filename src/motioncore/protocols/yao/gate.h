@@ -126,7 +126,7 @@ class YaoInputGateEvaluator : public detail::BasicYaoInputGate {
                         ENCRYPTO::ReusableFiberFuture<std::vector<ENCRYPTO::BitVector<>>>&&);
   bool need_setup() const noexcept override { return false; }
   bool need_online() const noexcept override { return true; }
-  void evaluate_setup() override;
+  void evaluate_setup() override {}
   void evaluate_online() override;
 
  private:
@@ -162,7 +162,7 @@ class YaoINVGateGarbler : public detail::BasicYaoUnaryGate {
   bool need_setup() const noexcept override { return true; }
   bool need_online() const noexcept override { return false; }
   void evaluate_setup() override;
-  void evaluate_online() override;
+  void evaluate_online() override {}
 };
 
 class YaoINVGateEvaluator : public detail::BasicYaoUnaryGate {
@@ -170,25 +170,25 @@ class YaoINVGateEvaluator : public detail::BasicYaoUnaryGate {
   YaoINVGateEvaluator(std::size_t gate_id, YaoProvider&, YaoWireVector&&);
   bool need_setup() const noexcept override { return false; }
   bool need_online() const noexcept override { return false; }
-  void evaluate_setup() override;
-  void evaluate_online() override;
+  void evaluate_setup() override {}
+  void evaluate_online() override {}
 };
 
 class YaoXORGateGarbler : public detail::BasicYaoBinaryGate {
  public:
-  using detail::BasicYaoBinaryGate::BasicYaoBinaryGate;
+  YaoXORGateGarbler(std::size_t gate_id, YaoProvider&, YaoWireVector&&, YaoWireVector&&);
   bool need_setup() const noexcept override { return true; }
   bool need_online() const noexcept override { return false; }
   void evaluate_setup() override;
-  void evaluate_online() override;
+  void evaluate_online() override {}
 };
 
 class YaoXORGateEvaluator : public detail::BasicYaoBinaryGate {
  public:
-  using detail::BasicYaoBinaryGate::BasicYaoBinaryGate;
+  YaoXORGateEvaluator(std::size_t gate_id, YaoProvider&, YaoWireVector&&, YaoWireVector&&);
   bool need_setup() const noexcept override { return false; }
   bool need_online() const noexcept override { return true; }
-  void evaluate_setup() override;
+  void evaluate_setup() override {}
   void evaluate_online() override;
 };
 
@@ -198,7 +198,7 @@ class YaoANDGateGarbler : public detail::BasicYaoBinaryGate {
   bool need_setup() const noexcept override { return true; }
   bool need_online() const noexcept override { return false; }
   void evaluate_setup() override;
-  void evaluate_online() override;
+  void evaluate_online() override {}
 };
 
 class YaoANDGateEvaluator : public detail::BasicYaoBinaryGate {

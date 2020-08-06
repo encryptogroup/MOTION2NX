@@ -210,10 +210,6 @@ void BooleanGMWInputGateReceiver::evaluate_setup() {
   }
 }
 
-void BooleanGMWInputGateReceiver::evaluate_online() {
-  // nothing to do
-}
-
 // Determine the total number of bits in a collection of wires.
 static std::size_t count_bits(const BooleanGMWWireVector& wires) {
   return std::transform_reduce(std::begin(wires), std::end(wires), 0, std::plus<>(),
@@ -241,10 +237,6 @@ BooleanGMWOutputGate::get_output_future() {
   } else {
     throw std::logic_error("not this parties output");
   }
-}
-
-void BooleanGMWOutputGate::evaluate_setup() {
-  // nothing to do
 }
 
 void BooleanGMWOutputGate::evaluate_online() {
@@ -303,10 +295,6 @@ BooleanGMWINVGate::BooleanGMWINVGate(std::size_t gate_id, const GMWProvider& gmw
     : detail::BasicBooleanGMWUnaryGate(gate_id, std::move(in), !gmw_provider.is_my_job(gate_id)),
       is_my_job_(gmw_provider.is_my_job(gate_id)) {}
 
-void BooleanGMWINVGate::evaluate_setup() {
-  // nothing to do
-}
-
 void BooleanGMWINVGate::evaluate_online() {
   if (!is_my_job_) {
     return;
@@ -319,10 +307,6 @@ void BooleanGMWINVGate::evaluate_online() {
     w_o->get_share() = ~w_in->get_share();
     w_o->set_online_ready();
   }
-}
-
-void BooleanGMWXORGate::evaluate_setup() {
-  // nothing to do
 }
 
 void BooleanGMWXORGate::evaluate_online() {
@@ -346,10 +330,6 @@ BooleanGMWANDGate::BooleanGMWANDGate(std::size_t gate_id, GMWProvider& gmw_provi
   auto num_simd = inputs_a_.at(0)->get_num_simd();
   mt_offset_ = gmw_provider_.get_mt_provider().RequestBinaryMTs(num_wires * num_simd);
   share_futures_ = gmw_provider_.register_for_bits_messages(gate_id_, 2 * count_bits(inputs_a_));
-}
-
-void BooleanGMWANDGate::evaluate_setup() {
-  // nothing to do
 }
 
 void BooleanGMWANDGate::evaluate_online() {
@@ -560,11 +540,6 @@ void ArithmeticGMWInputGateReceiver<T>::evaluate_setup() {
   }
 }
 
-template <typename T>
-void ArithmeticGMWInputGateReceiver<T>::evaluate_online() {
-  // nothing to do
-}
-
 template class ArithmeticGMWInputGateReceiver<std::uint8_t>;
 template class ArithmeticGMWInputGateReceiver<std::uint16_t>;
 template class ArithmeticGMWInputGateReceiver<std::uint32_t>;
@@ -592,11 +567,6 @@ ENCRYPTO::ReusableFiberFuture<std::vector<T>> ArithmeticGMWOutputGate<T>::get_ou
   } else {
     throw std::logic_error("not this parties output");
   }
-}
-
-template <typename T>
-void ArithmeticGMWOutputGate<T>::evaluate_setup() {
-  // nothing to do
 }
 
 template <typename T>
@@ -659,11 +629,6 @@ ENCRYPTO::ReusableFiberFuture<std::vector<T>> ArithmeticGMWOutputShareGate<T>::g
 }
 
 template <typename T>
-void ArithmeticGMWOutputShareGate<T>::evaluate_setup() {
-  // nothing to do
-}
-
-template <typename T>
 void ArithmeticGMWOutputShareGate<T>::evaluate_online() {
   input_->wait_online();
   output_promise_.set_value(input_->get_share());
@@ -679,11 +644,6 @@ ArithmeticGMWNEGGate<T>::ArithmeticGMWNEGGate(std::size_t gate_id, GMWProvider& 
                                               ArithmeticGMWWireP<T>&& in)
     : detail::BasicArithmeticGMWUnaryGate<T>(gate_id, gmw_provider, std::move(in)) {
   this->output_->get_share().resize(this->input_->get_num_simd());
-}
-
-template <typename T>
-void ArithmeticGMWNEGGate<T>::evaluate_setup() {
-  // nothing to do
 }
 
 template <typename T>
@@ -707,11 +667,6 @@ ArithmeticGMWADDGate<T>::ArithmeticGMWADDGate(std::size_t gate_id, GMWProvider& 
     : detail::BasicArithmeticGMWBinaryGate<T>(gate_id, gmw_provider, std::move(in_a),
                                               std::move(in_b)) {
   this->output_->get_share().resize(this->input_a_->get_num_simd());
-}
-
-template <typename T>
-void ArithmeticGMWADDGate<T>::evaluate_setup() {
-  // nothing to do
 }
 
 template <typename T>
@@ -741,11 +696,6 @@ ArithmeticGMWMULGate<T>::ArithmeticGMWMULGate(std::size_t gate_id, GMWProvider& 
           gmw_provider.get_mt_provider().RequestArithmeticMTs<T>(this->input_a_->get_num_simd())),
       share_futures_(gmw_provider_.register_for_ints_messages<T>(
           this->gate_id_, 2 * this->input_a_->get_num_simd())) {}
-
-template <typename T>
-void ArithmeticGMWMULGate<T>::evaluate_setup() {
-  // nothing to do
-}
 
 template <typename T>
 void ArithmeticGMWMULGate<T>::evaluate_online() {
@@ -807,11 +757,6 @@ ArithmeticGMWSQRGate<T>::ArithmeticGMWSQRGate(std::size_t gate_id, GMWProvider& 
           gmw_provider.get_sp_provider().RequestSPs<T>(this->input_->get_num_simd())),
       share_futures_(gmw_provider_.register_for_ints_messages<T>(
           this->gate_id_, this->input_->get_num_simd())) {}
-
-template <typename T>
-void ArithmeticGMWSQRGate<T>::evaluate_setup() {
-  // nothing to do
-}
 
 template <typename T>
 void ArithmeticGMWSQRGate<T>::evaluate_online() {
