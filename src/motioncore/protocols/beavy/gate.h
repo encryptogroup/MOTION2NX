@@ -244,7 +244,7 @@ class ArithmeticBEAVYOutputShareGate : public NewGate {
   ArithmeticBEAVYOutputShareGate(std::size_t gate_id, ArithmeticBEAVYWireP<T>&&);
   ENCRYPTO::ReusableFiberFuture<std::vector<T>> get_public_share_future();
   ENCRYPTO::ReusableFiberFuture<std::vector<T>> get_secret_share_future();
-  bool need_setup() const noexcept override { return false; }
+  bool need_setup() const noexcept override { return true; }
   bool need_online() const noexcept override { return true; }
   void evaluate_setup() override;
   void evaluate_online() override;
