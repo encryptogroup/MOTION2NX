@@ -28,6 +28,8 @@
 
 #include "gate/new_gate.h"
 #include "utility/bit_vector.h"
+#include "utility/constants.h"
+#include "utility/logger.h"
 #include "utility/reusable_future.h"
 #include "utility/type_traits.hpp"
 
@@ -47,7 +49,7 @@ class ArithmeticInputAdapterGate : public InputGateClass {
                              ENCRYPTO::ReusableFiberFuture<std::vector<T>>&& int_vector_future_1,
                              ENCRYPTO::ReusableFiberFuture<std::vector<T>>&& int_vector_future_2,
                              std::function<T(T)> unary_op, std::function<T(T, T)> binary_op,
-                             Args&&... args)
+                             std::shared_ptr<Logger> logger, Args&&... args)
       : InputGateClass(std::forward<Args>(args)...,
                        // ugly hack!
                        [this] {
@@ -60,27 +62,62 @@ class ArithmeticInputAdapterGate : public InputGateClass {
         int_vector_future_1_(std::move(int_vector_future_1)),
         int_vector_future_2_(std::move(int_vector_future_2)),
         unary_op_(unary_op),
-        binary_op_(binary_op) {}
+        binary_op_(binary_op),
+        logger_(logger) {
+    if constexpr (MOTION_VERBOSE_DEBUG) {
+      if (logger_) {
+        logger_->LogTrace(
+            fmt::format("Gate {}: ArithmeticInputAdapterGate created", InputGateClass::gate_id_));
+      }
+    }
+  }
 
   template <typename... Args>
   ArithmeticInputAdapterGate(ENCRYPTO::ReusableFiberFuture<std::vector<T>>&& int_vector_future,
-                             std::function<T(T)> unary_op, Args&&... args)
+                             std::function<T(T)> unary_op, std::shared_ptr<Logger> logger,
+                             Args&&... args)
       : ArithmeticInputAdapterGate(base_constructor_tag{}, std::move(int_vector_future),
                                    ENCRYPTO::ReusableFiberFuture<std::vector<T>>{}, unary_op,
-                                   std::function<T(T, T)>{}, std::forward<Args>(args)...) {}
+                                   std::function<T(T, T)>{}, logger, std::forward<Args>(args)...) {}
 
   template <typename... Args>
   ArithmeticInputAdapterGate(ENCRYPTO::ReusableFiberFuture<std::vector<T>>&& int_vector_future_1,
                              ENCRYPTO::ReusableFiberFuture<std::vector<T>>&& int_vector_future_2,
-                             std::function<T(T, T)> binary_op, Args&&... args)
+                             std::function<T(T, T)> binary_op, std::shared_ptr<Logger> logger,
+                             Args&&... args)
       : ArithmeticInputAdapterGate(base_constructor_tag{}, std::move(int_vector_future_1),
                                    std::move(int_vector_future_2), std::function<T(T)>{}, binary_op,
-                                   std::forward<Args>(args)...) {}
+                                   logger, std::forward<Args>(args)...) {}
 
   bool need_setup() const noexcept override { return InputGateClass::need_setup(); }
   bool need_online() const noexcept override { return InputGateClass::need_online(); }
-  void evaluate_setup() override { InputGateClass::evaluate_setup(); }
+
+  void evaluate_setup() override {
+    if constexpr (MOTION_VERBOSE_DEBUG) {
+      if (logger_) {
+        logger_->LogTrace(fmt::format("Gate {}: ArithmeticInputAdapterGate::evaluate_setup start",
+                                      InputGateClass::gate_id_));
+      }
+    }
+
+    InputGateClass::evaluate_setup();
+
+    if constexpr (MOTION_VERBOSE_DEBUG) {
+      if (logger_) {
+        logger_->LogTrace(fmt::format("Gate {}: ArithmeticInputAdapterGate::evaluate_setup end",
+                                      InputGateClass::gate_id_));
+      }
+    }
+  }
+
   void evaluate_online() override {
+    if constexpr (MOTION_VERBOSE_DEBUG) {
+      if (logger_) {
+        logger_->LogTrace(fmt::format("Gate {}: ArithmeticInputAdapterGate::evaluate_online start",
+                                      InputGateClass::gate_id_));
+      }
+    }
+
     auto int_vector = int_vector_future_1_.get();
     if (int_vector_future_2_.valid()) {
       auto int_vector_2 = int_vector_future_2_.get();
@@ -95,6 +132,13 @@ class ArithmeticInputAdapterGate : public InputGateClass {
     }
     bit_vectors_promise_.set_value(ENCRYPTO::ToInput(int_vector));
     InputGateClass::evaluate_online();
+
+    if constexpr (MOTION_VERBOSE_DEBUG) {
+      if (logger_) {
+        logger_->LogTrace(fmt::format("Gate {}: ArithmeticInputAdapterGate::evaluate_online end",
+                                      InputGateClass::gate_id_));
+      }
+    }
   }
 
  private:
@@ -103,6 +147,7 @@ class ArithmeticInputAdapterGate : public InputGateClass {
   ENCRYPTO::ReusableFiberFuture<std::vector<T>> int_vector_future_2_;
   std::function<T(T)> unary_op_;
   std::function<T(T, T)> binary_op_;
+  std::shared_ptr<Logger> logger_;
   // another ugly hack!
   static thread_local ENCRYPTO::ReusableFiberPromise<std::vector<ENCRYPTO::BitVector<>>>
       tmp_promise_;
