@@ -532,7 +532,7 @@ WireVector BEAVYProvider::make_convert_to_arithmetic_gmw_gate(const WireVector& 
   }
 }
 
-WireVector BEAVYProvider::convert_boolean(MPCProtocol proto, const WireVector& in) {
+WireVector BEAVYProvider::convert_from_boolean_beavy(MPCProtocol proto, const WireVector& in) {
   auto input = cast_wires(in);
 
   switch (proto) {
@@ -546,7 +546,7 @@ WireVector BEAVYProvider::convert_boolean(MPCProtocol proto, const WireVector& i
   }
 }
 
-WireVector BEAVYProvider::convert_arithmetic(MPCProtocol proto, const WireVector& in) {
+WireVector BEAVYProvider::convert_from_arithmetic_beavy(MPCProtocol proto, const WireVector& in) {
   switch (proto) {
     case MPCProtocol::ArithmeticGMW:
       return make_convert_to_arithmetic_gmw_gate(in);
@@ -556,33 +556,19 @@ WireVector BEAVYProvider::convert_arithmetic(MPCProtocol proto, const WireVector
   }
 }
 
-WireVector BEAVYProvider::convert_to(MPCProtocol proto, const WireVector& in) {
-  assert(in.size() > 0);
-  auto src_proto = in.at(0)->get_protocol();
-
-  switch (src_proto) {
-    case MPCProtocol::ArithmeticBEAVY:
-      return convert_arithmetic(proto, in);
-    case MPCProtocol::BooleanBEAVY:
-      return convert_boolean(proto, in);
-    default:
-      throw std::logic_error("expected BEAVY protocol");
-  }
-}
-
-BooleanBEAVYWireVector BEAVYProvider::make_convert_from_boolean_gmw_gate(const WireVector &in) {
+BooleanBEAVYWireVector BEAVYProvider::make_convert_from_boolean_gmw_gate(const WireVector& in) {
   auto gate_id = gate_register_.get_next_gate_id();
   gmw::BooleanGMWWireVector input;
   input.reserve(in.size());
   std::transform(std::begin(in), std::end(in), std::back_inserter(input),
-                 [](auto &w) { return std::dynamic_pointer_cast<gmw::BooleanGMWWire>(w); });
+                 [](auto& w) { return std::dynamic_pointer_cast<gmw::BooleanGMWWire>(w); });
   auto gate = std::make_unique<BooleanGMWToBEAVYGate>(gate_id, *this, std::move(input));
   auto output = gate->get_output_wires();
   gate_register_.register_gate(std::move(gate));
   return output;
 }
 
-WireVector BEAVYProvider::convert_from_boolean(const WireVector& in) {
+WireVector BEAVYProvider::convert_from_other_to_boolean_beavy(const WireVector& in) {
   assert(in.size() > 0);
   auto src_proto = in.at(0)->get_protocol();
 
@@ -624,7 +610,7 @@ WireVector BEAVYProvider::make_convert_from_arithmetic_gmw_gate(const WireVector
   }
 }
 
-WireVector BEAVYProvider::convert_from_arithmetic(const WireVector& in) {
+WireVector BEAVYProvider::convert_from_other_to_arithmetic_beavy(const WireVector& in) {
   assert(in.size() > 0);
   const auto src_proto = in.at(0)->get_protocol();
   switch (src_proto) {
@@ -636,16 +622,21 @@ WireVector BEAVYProvider::convert_from_arithmetic(const WireVector& in) {
   }
 }
 
-WireVector BEAVYProvider::convert_from(MPCProtocol proto, const WireVector& in) {
-  assert(in.size() > 0);
-  switch (proto) {
-    case MPCProtocol::ArithmeticBEAVY:
-      return convert_from_arithmetic(in);
-    case MPCProtocol::BooleanBEAVY:
-      return convert_from_boolean(in);
-    default:
-      throw std::logic_error("expected BEAVY protocol");
+WireVector BEAVYProvider::convert(MPCProtocol dst_proto, const WireVector& in) {
+  if (in.empty()) {
+    throw std::logic_error("empty WireVector");
   }
+  const auto src_proto = in[0]->get_protocol();
+  if (src_proto == MPCProtocol::ArithmeticBEAVY) {
+    return convert_from_arithmetic_beavy(dst_proto, in);
+  } else if (src_proto == MPCProtocol::BooleanBEAVY) {
+    return convert_from_boolean_beavy(dst_proto, in);
+  } else if (dst_proto == MPCProtocol::ArithmeticBEAVY) {
+    return convert_from_other_to_arithmetic_beavy(in);
+  } else if (dst_proto == MPCProtocol::BooleanBEAVY) {
+    return convert_from_other_to_boolean_beavy(in);
+  }
+  throw std::logic_error("expected conversion to or from BEAVY protocol");
 }
 
 // implementation of TensorOpFactory

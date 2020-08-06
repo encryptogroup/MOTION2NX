@@ -58,6 +58,37 @@ WireVector CircuitBuilder::make_binary_gate(ENCRYPTO::PrimitiveOperationType op,
   }
 }
 
+WireVector CircuitBuilder::convert(MPCProtocol dst_proto, const WireVector& wires) {
+  if (wires.empty()) {
+    throw std::logic_error("empty WireVector");
+  }
+  const auto src_proto = wires[0]->get_protocol();
+  const auto convert_f = [dst_proto, wires](auto& factory) -> std::pair<WireVector, bool> {
+    try {
+      auto output_wires = factory.convert(dst_proto, wires);
+      return {std::move(output_wires), true};
+    } catch (std::exception& e) {
+      return {{}, false};
+    }
+  };
+  {
+    auto& factory = get_gate_factory(src_proto);
+    auto [output_wires, success] = convert_f(factory);
+    if (success) {
+      return output_wires;
+    }
+  }
+  {
+    auto& factory = get_gate_factory(dst_proto);
+    auto [output_wires, success] = convert_f(factory);
+    if (success) {
+      return output_wires;
+    }
+  }
+  throw std::runtime_error(fmt::format("no convertion from {} to {} supported", ToString(src_proto),
+                                       ToString(dst_proto)));
+}
+
 WireVector CircuitBuilder::make_circuit(const ENCRYPTO::AlgorithmDescription& algo,
                                         const WireVector& wires_in_a,
                                         const WireVector& wires_in_b) {

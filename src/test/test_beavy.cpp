@@ -455,8 +455,8 @@ TEST_F(BooleanBEAVYTest, BooleanBEAVYToGMW) {
       beavy_providers_[0]->make_boolean_input_gate_my(0, num_wires, num_simd);
   auto wires_in_1 = beavy_providers_[1]->make_boolean_input_gate_other(0, num_wires, num_simd);
 
-  auto wires_0 = beavy_providers_[0]->convert_to(MOTION::MPCProtocol::BooleanGMW, wires_in_0);
-  auto wires_1 = beavy_providers_[1]->convert_to(MOTION::MPCProtocol::BooleanGMW, wires_in_1);
+  auto wires_0 = beavy_providers_[0]->convert(MOTION::MPCProtocol::BooleanGMW, wires_in_0);
+  auto wires_1 = beavy_providers_[1]->convert(MOTION::MPCProtocol::BooleanGMW, wires_in_1);
 
   run_setup();
   run_gates_setup();
@@ -491,10 +491,10 @@ TEST_F(BooleanBEAVYTest, BooleanBEAVYFromGMW) {
       beavy_providers_[0]->make_boolean_input_gate_my(0, num_wires, num_simd);
   auto wires_in_1 = beavy_providers_[1]->make_boolean_input_gate_other(0, num_wires, num_simd);
 
-  auto wires_tmp_0 = beavy_providers_[0]->convert_to(MOTION::MPCProtocol::BooleanGMW, wires_in_0);
-  auto wires_tmp_1 = beavy_providers_[1]->convert_to(MOTION::MPCProtocol::BooleanGMW, wires_in_1);
-  auto wires_0 = beavy_providers_[0]->convert_from(MOTION::MPCProtocol::BooleanBEAVY, wires_tmp_0);
-  auto wires_1 = beavy_providers_[1]->convert_from(MOTION::MPCProtocol::BooleanBEAVY, wires_tmp_1);
+  auto wires_tmp_0 = beavy_providers_[0]->convert(MOTION::MPCProtocol::BooleanGMW, wires_in_0);
+  auto wires_tmp_1 = beavy_providers_[1]->convert(MOTION::MPCProtocol::BooleanGMW, wires_in_1);
+  auto wires_0 = beavy_providers_[0]->convert(MOTION::MPCProtocol::BooleanBEAVY, wires_tmp_0);
+  auto wires_1 = beavy_providers_[1]->convert(MOTION::MPCProtocol::BooleanBEAVY, wires_tmp_1);
 
   run_setup();
   run_gates_setup();
@@ -863,7 +863,7 @@ TYPED_TEST(ArithmeticBEAVYTest, SQR) {
   const auto inputs = this->generate_inputs(num_simd);
   std::vector<TypeParam> expected_output;
   std::transform(std::begin(inputs), std::end(inputs), std::back_inserter(expected_output),
-                 [] (auto x) { return x * x; });
+                 [](auto x) { return x * x; });
 
   // input of party 0
   auto [input_promise, wires_in_0] = this->make_arithmetic_T_input_gate_my(0, 0, num_simd);
@@ -981,9 +981,9 @@ TYPED_TEST(ArithmeticBEAVYTest, BooleanToArithmeticBEAVY) {
       this->beavy_providers_[1]->make_boolean_input_gate_other(0, num_wires, num_simd);
 
   auto wires_0 =
-      this->beavy_providers_[0]->convert_to(MOTION::MPCProtocol::ArithmeticBEAVY, wires_in_0);
+      this->beavy_providers_[0]->convert(MOTION::MPCProtocol::ArithmeticBEAVY, wires_in_0);
   auto wires_1 =
-      this->beavy_providers_[1]->convert_to(MOTION::MPCProtocol::ArithmeticBEAVY, wires_in_1);
+      this->beavy_providers_[1]->convert(MOTION::MPCProtocol::ArithmeticBEAVY, wires_in_1);
 
   this->run_setup();
   this->run_gates_setup();
@@ -1021,10 +1021,8 @@ TYPED_TEST(ArithmeticBEAVYTest, ArithmeticBEAVYToGMW) {
   auto [input_promise, wires_in_0] = this->make_arithmetic_T_input_gate_my(0, 0, num_simd);
   auto wires_in_1 = this->make_arithmetic_T_input_gate_other(1, 0, num_simd);
 
-  auto wires_0 =
-      this->beavy_providers_[0]->convert_to(MOTION::MPCProtocol::ArithmeticGMW, wires_in_0);
-  auto wires_1 =
-      this->beavy_providers_[1]->convert_to(MOTION::MPCProtocol::ArithmeticGMW, wires_in_1);
+  auto wires_0 = this->beavy_providers_[0]->convert(MOTION::MPCProtocol::ArithmeticGMW, wires_in_0);
+  auto wires_1 = this->beavy_providers_[1]->convert(MOTION::MPCProtocol::ArithmeticGMW, wires_in_1);
 
   this->run_setup();
   this->run_gates_setup();
@@ -1058,13 +1056,13 @@ TYPED_TEST(ArithmeticBEAVYTest, ArithmeticBEAVYFromGMW) {
   auto wires_in_1 = this->make_arithmetic_T_input_gate_other(1, 0, num_simd);
 
   auto wires_tmp_0 =
-      this->beavy_providers_[0]->convert_to(MOTION::MPCProtocol::ArithmeticGMW, wires_in_0);
+      this->beavy_providers_[0]->convert(MOTION::MPCProtocol::ArithmeticGMW, wires_in_0);
   auto wires_tmp_1 =
-      this->beavy_providers_[1]->convert_to(MOTION::MPCProtocol::ArithmeticGMW, wires_in_1);
+      this->beavy_providers_[1]->convert(MOTION::MPCProtocol::ArithmeticGMW, wires_in_1);
   auto wires_0 =
-      this->beavy_providers_[0]->convert_from(MOTION::MPCProtocol::ArithmeticBEAVY, wires_tmp_0);
+      this->beavy_providers_[0]->convert(MOTION::MPCProtocol::ArithmeticBEAVY, wires_tmp_0);
   auto wires_1 =
-      this->beavy_providers_[1]->convert_from(MOTION::MPCProtocol::ArithmeticBEAVY, wires_tmp_1);
+      this->beavy_providers_[1]->convert(MOTION::MPCProtocol::ArithmeticBEAVY, wires_tmp_1);
 
   this->run_setup();
   this->run_gates_setup();

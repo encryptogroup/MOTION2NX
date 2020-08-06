@@ -143,8 +143,7 @@ class GMWProvider : public GateFactory,
       ENCRYPTO::PrimitiveOperationType op, const std::vector<std::shared_ptr<NewWire>>&,
       const std::vector<std::shared_ptr<NewWire>>&) override;
 
-  WireVector convert_to(MPCProtocol proto, const WireVector&) override;
-  WireVector convert_from(MPCProtocol proto, const WireVector&) override;
+  WireVector convert(MPCProtocol dst_proto, const WireVector&) override;
 
   // other gates
   template <typename T>

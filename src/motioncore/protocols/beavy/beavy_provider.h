@@ -59,7 +59,7 @@ template <typename T>
 class ArithmeticGMWWire;
 template <typename T>
 using ArithmeticGMWWireP = std::shared_ptr<ArithmeticGMWWire<T>>;
-}  // namespace MOTION::proto::gmw
+}  // namespace proto::gmw
 
 namespace proto::beavy {
 
@@ -148,8 +148,7 @@ class BEAVYProvider : public GateFactory,
       const std::vector<std::shared_ptr<NewWire>>&) override;
 
   // conversions
-  WireVector convert_to(MPCProtocol protocol, const WireVector&) override;
-  WireVector convert_from(MPCProtocol protocol, const WireVector&) override;
+  WireVector convert(MPCProtocol dst_protocol, const WireVector&) override;
 
   // implementation of TensorOpFactory
   std::pair<ENCRYPTO::ReusableFiberPromise<IntegerValues<std::uint64_t>>, tensor::TensorCP>
@@ -204,23 +203,26 @@ class BEAVYProvider : public GateFactory,
   template <typename T>
   WireVector basic_make_convert_to_arithmetic_beavy_gate(BooleanBEAVYWireVector&& in_a);
   WireVector make_convert_to_arithmetic_beavy_gate(BooleanBEAVYWireVector&& in_a);
+
  public:
   // TODO: design API for bit x integer operations
   template <typename T>
   WireVector basic_make_convert_bit_to_arithmetic_beavy_gate(BooleanBEAVYWireP in_a);
+
  private:
   WireVector make_convert_to_boolean_gmw_gate(BooleanBEAVYWireVector&& in_a);
-  BooleanBEAVYWireVector make_convert_from_boolean_gmw_gate(const WireVector &in);
+  BooleanBEAVYWireVector make_convert_from_boolean_gmw_gate(const WireVector& in);
   template <typename T>
   WireVector basic_make_convert_to_arithmetic_gmw_gate(const NewWireP& in_a);
   WireVector make_convert_to_arithmetic_gmw_gate(const WireVector& in_a);
   template <typename T>
   WireVector basic_make_convert_from_arithmetic_gmw_gate(const NewWireP& in_a);
   WireVector make_convert_from_arithmetic_gmw_gate(const WireVector& in_a);
-  WireVector convert_boolean(MPCProtocol proto, const WireVector&);
-  WireVector convert_arithmetic(MPCProtocol proto, const WireVector&);
-  WireVector convert_from_arithmetic(const WireVector&);
-  WireVector convert_from_boolean(const WireVector&);
+  WireVector convert_from_arithmetic_beavy(MPCProtocol dst_protocol, const WireVector&);
+  WireVector convert_from_boolean_beavy(MPCProtocol dst_protocol, const WireVector&);
+  WireVector convert_from_other_to_beavy(MPCProtocol dst_protocol, const WireVector&);
+  WireVector convert_from_other_to_arithmetic_beavy(const WireVector&);
+  WireVector convert_from_other_to_boolean_beavy(const WireVector&);
 
   // tensor stuff
   template <typename T>

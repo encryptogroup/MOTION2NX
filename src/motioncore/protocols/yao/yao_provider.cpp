@@ -691,6 +691,7 @@ WireVector YaoProvider::basic_make_convert_from_arithmetic_beavy_gate(const Wire
   assert(in.size() == 1);
   auto num_wires = ENCRYPTO::bit_size_v<T>;
   auto arith_wire = std::dynamic_pointer_cast<beavy::ArithmeticBEAVYWire<T>>(in.at(0));
+  assert(arith_wire != nullptr);
   auto num_simd = arith_wire->get_num_simd();
   auto share_output_gate_id = gate_register_.get_next_gate_id();
   auto share_output_gate = std::make_unique<beavy::ArithmeticBEAVYOutputShareGate<T>>(
@@ -750,10 +751,10 @@ WireVector YaoProvider::make_convert_from_arithmetic_beavy_gate(const WireVector
   }
 }
 
-WireVector YaoProvider::convert_to(MPCProtocol proto, const WireVector& in) {
+WireVector YaoProvider::convert_from_yao(MPCProtocol dst_proto, const WireVector& in) {
   auto input = cast_wires(in);
 
-  switch (proto) {
+  switch (dst_proto) {
     case MPCProtocol::ArithmeticBEAVY:
       return make_convert_to_arithmetic_beavy_gate(std::move(input));
     case MPCProtocol::ArithmeticGMW:
@@ -763,12 +764,13 @@ WireVector YaoProvider::convert_to(MPCProtocol proto, const WireVector& in) {
     case MPCProtocol::BooleanGMW:
       return make_convert_to_boolean_gmw_gate(std::move(input));
     default:
-      throw std::logic_error(fmt::format("Yao does not support conversion to {}", ToString(proto)));
+      throw std::logic_error(
+          fmt::format("Yao does not support conversion from Yao to {}", ToString(dst_proto)));
   }
 }
 
-WireVector YaoProvider::convert_from(MPCProtocol proto, const WireVector& in) {
-  switch (proto) {
+WireVector YaoProvider::convert_from_other_to_yao(MPCProtocol src_proto, const WireVector& in) {
+  switch (src_proto) {
     case MPCProtocol::ArithmeticBEAVY:
       return make_convert_from_arithmetic_beavy_gate(in);
     case MPCProtocol::ArithmeticGMW:
@@ -779,7 +781,19 @@ WireVector YaoProvider::convert_from(MPCProtocol proto, const WireVector& in) {
       return cast_wires(make_convert_from_boolean_gmw_gate(in));
     default:
       throw std::logic_error(
-          fmt::format("Yao does not support conversion from {}", ToString(proto)));
+          fmt::format("Yao does not support conversion from {} to Yao", ToString(src_proto)));
+  }
+}
+
+WireVector YaoProvider::convert(MPCProtocol dst_proto, const WireVector& in) {
+  if (in.empty()) {
+    throw std::logic_error("empty WireVector");
+  }
+  const auto src_proto = in[0]->get_protocol();
+  if (src_proto == MPCProtocol::Yao) {
+    return convert_from_yao(dst_proto, in);
+  } else {
+    return convert_from_other_to_yao(src_proto, in);
   }
 }
 

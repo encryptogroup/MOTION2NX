@@ -510,23 +510,19 @@ WireVector GMWProvider::convert_boolean(MPCProtocol proto, const WireVector &in)
   }
 }
 
-WireVector GMWProvider::convert_to(MPCProtocol proto, const WireVector &in) {
+WireVector GMWProvider::convert(MPCProtocol dst_proto, const WireVector &in) {
   auto input = cast_wires(in);
   assert(input.size() > 0);
   auto src_proto = input.at(0)->get_protocol();
 
   switch (src_proto) {
     case MPCProtocol::ArithmeticGMW:
-      throw std::logic_error("not yet implemented");
+      throw std::logic_error("not implemented");
     case MPCProtocol::BooleanGMW:
-      return convert_boolean(proto, in);
+      return convert_boolean(dst_proto, in);
     default:
       throw std::logic_error("expected GMW protocol");
   }
-}
-
-WireVector GMWProvider::convert_from(MPCProtocol, const WireVector &) {
-  throw std::logic_error("GMWProvider does not support conversions from other protocols");
 }
 
 // implementation of TensorOpFactory
