@@ -51,7 +51,7 @@ namespace MOTION::proto::yao {
 
 struct YaoMessageHandler : public Communication::MessageHandler {
   YaoMessageHandler(std::shared_ptr<Logger> logger);
-  void received_message(std::size_t, std::vector<std::uint8_t> &&raw_message) override;
+  void received_message(std::size_t, std::vector<std::uint8_t>&& raw_message) override;
 
   ENCRYPTO::ReusableFiberPromise<Crypto::garbling::HalfGatePublicData> hg_public_data_promise_;
   ENCRYPTO::ReusableFiberFuture<Crypto::garbling::HalfGatePublicData> hg_public_data_future_;
@@ -66,7 +66,7 @@ YaoMessageHandler::YaoMessageHandler(std::shared_ptr<Logger> logger)
       logger_(logger) {}
 
 void YaoMessageHandler::received_message([[maybe_unused]] std::size_t party_id,
-                                         std::vector<std::uint8_t> &&raw_message) {
+                                         std::vector<std::uint8_t>&& raw_message) {
   assert(!raw_message.empty());
   flatbuffers::Verifier verifier(raw_message.data(), raw_message.size());
   auto message = Communication::GetMessage(raw_message.data());
@@ -86,16 +86,16 @@ void YaoMessageHandler::received_message([[maybe_unused]] std::size_t party_id,
       }
       Crypto::garbling::HalfGatePublicData public_data;
       public_data.aes_key.load_from_memory(
-          reinterpret_cast<const std::byte *>(setup_message->aes_key()->data()));
+          reinterpret_cast<const std::byte*>(setup_message->aes_key()->data()));
       public_data.hash_key.load_from_memory(
-          reinterpret_cast<const std::byte *>(setup_message->hash_key()->data()));
+          reinterpret_cast<const std::byte*>(setup_message->hash_key()->data()));
       ENCRYPTO::block128_t shared_zero;
       shared_zero.load_from_memory(
-          reinterpret_cast<const std::byte *>(setup_message->shared_zero()->data()));
+          reinterpret_cast<const std::byte*>(setup_message->shared_zero()->data()));
       try {
         hg_public_data_promise_.set_value(std::move(public_data));
         shared_zero_promise_.set_value(std::move(shared_zero));
-      } catch (std::future_error &e) {
+      } catch (std::future_error& e) {
         // TODO: log and drop instead
         throw std::runtime_error(
             fmt::format("received second YaoSetupMessage from party {}: {}", party_id, e.what()));
@@ -109,10 +109,10 @@ void YaoMessageHandler::received_message([[maybe_unused]] std::size_t party_id,
   }
 }
 
-YaoProvider::YaoProvider(Communication::CommunicationLayer &communication_layer,
-                         GateRegister &gate_register, CircuitLoader &circuit_loader,
-                         Crypto::MotionBaseProvider &motion_base_provider,
-                         ENCRYPTO::ObliviousTransfer::OTProvider &ot_provider,
+YaoProvider::YaoProvider(Communication::CommunicationLayer& communication_layer,
+                         GateRegister& gate_register, CircuitLoader& circuit_loader,
+                         Crypto::MotionBaseProvider& motion_base_provider,
+                         ENCRYPTO::ObliviousTransfer::OTProvider& ot_provider,
                          std::shared_ptr<Logger> logger)
     : CommMixin(communication_layer, Communication::MessageType::YaoGate, logger),
       communication_layer_(communication_layer),
@@ -141,11 +141,11 @@ YaoProvider::~YaoProvider() = default;
 static YaoWireVector cast_wires(std::vector<std::shared_ptr<NewWire>> wires) {
   YaoWireVector result(wires.size());
   std::transform(std::begin(wires), std::end(wires), std::begin(result),
-                 [](auto &w) { return std::dynamic_pointer_cast<YaoWire>(w); });
+                 [](auto& w) { return std::dynamic_pointer_cast<YaoWire>(w); });
   return result;
 }
 
-static std::vector<std::shared_ptr<NewWire>> cast_wires(const YaoWireVector &wires) {
+static std::vector<std::shared_ptr<NewWire>> cast_wires(const YaoWireVector& wires) {
   return std::vector<std::shared_ptr<NewWire>>(std::begin(wires), std::end(wires));
 }
 
@@ -190,7 +190,7 @@ WireVector YaoProvider::make_boolean_input_gate_other(std::size_t input_owner,
 }
 
 ENCRYPTO::ReusableFiberFuture<BitValues> YaoProvider::make_boolean_output_gate_my(
-    std::size_t output_owner, const WireVector &in) {
+    std::size_t output_owner, const WireVector& in) {
   if (output_owner == 1 - my_id_) {
     throw std::logic_error("trying to create output gate for wrong party");
   }
@@ -211,7 +211,7 @@ ENCRYPTO::ReusableFiberFuture<BitValues> YaoProvider::make_boolean_output_gate_m
   return future;
 }
 
-void YaoProvider::make_boolean_output_gate_other(std::size_t output_owner, const WireVector &in) {
+void YaoProvider::make_boolean_output_gate_other(std::size_t output_owner, const WireVector& in) {
   if (output_owner != 1 - my_id_) {
     throw std::logic_error("trying to create output gate for wrong party");
   }
@@ -230,7 +230,7 @@ void YaoProvider::make_boolean_output_gate_other(std::size_t output_owner, const
 }
 
 std::vector<std::shared_ptr<NewWire>> YaoProvider::make_unary_gate(
-    ENCRYPTO::PrimitiveOperationType op, const std::vector<std::shared_ptr<NewWire>> &in_a) {
+    ENCRYPTO::PrimitiveOperationType op, const std::vector<std::shared_ptr<NewWire>>& in_a) {
   auto input_a = cast_wires(in_a);
   YaoWireVector output;
 
@@ -246,8 +246,8 @@ std::vector<std::shared_ptr<NewWire>> YaoProvider::make_unary_gate(
 }
 
 std::vector<std::shared_ptr<NewWire>> YaoProvider::make_binary_gate(
-    ENCRYPTO::PrimitiveOperationType op, const std::vector<std::shared_ptr<NewWire>> &in_a,
-    const std::vector<std::shared_ptr<NewWire>> &in_b) {
+    ENCRYPTO::PrimitiveOperationType op, const std::vector<std::shared_ptr<NewWire>>& in_a,
+    const std::vector<std::shared_ptr<NewWire>>& in_b) {
   auto input_a = cast_wires(in_a);
   auto input_b = cast_wires(in_b);
   YaoWireVector output;
@@ -266,7 +266,7 @@ std::vector<std::shared_ptr<NewWire>> YaoProvider::make_binary_gate(
   return cast_wires(std::move(output));
 }
 
-YaoWireVector YaoProvider::make_inv_gate(YaoWireVector &&in_a) {
+YaoWireVector YaoProvider::make_inv_gate(YaoWireVector&& in_a) {
   YaoWireVector output;
   auto gate_id = gate_register_.get_next_gate_id();
   std::unique_ptr<detail::BasicYaoUnaryGate> gate;
@@ -280,7 +280,7 @@ YaoWireVector YaoProvider::make_inv_gate(YaoWireVector &&in_a) {
   return output;
 }
 
-YaoWireVector YaoProvider::make_xor_gate(YaoWireVector &&in_a, YaoWireVector &&in_b) {
+YaoWireVector YaoProvider::make_xor_gate(YaoWireVector&& in_a, YaoWireVector&& in_b) {
   YaoWireVector output;
   auto gate_id = gate_register_.get_next_gate_id();
   std::unique_ptr<detail::BasicYaoBinaryGate> gate;
@@ -294,7 +294,7 @@ YaoWireVector YaoProvider::make_xor_gate(YaoWireVector &&in_a, YaoWireVector &&i
   return output;
 }
 
-YaoWireVector YaoProvider::make_and_gate(YaoWireVector &&in_a, YaoWireVector &&in_b) {
+YaoWireVector YaoProvider::make_and_gate(YaoWireVector&& in_a, YaoWireVector&& in_b) {
   YaoWireVector output;
   auto gate_id = gate_register_.get_next_gate_id();
   std::unique_ptr<detail::BasicYaoBinaryGate> gate;
@@ -359,16 +359,16 @@ void YaoProvider::setup() {
 }
 
 void YaoProvider::send_blocks_message(std::size_t gate_id,
-                                      ENCRYPTO::block128_vector &&message) const {
+                                      ENCRYPTO::block128_vector&& message) const {
   CommMixin::send_blocks_message(1 - my_id_, gate_id, std::move(message));
 }
 
-void YaoProvider::send_bits_message(std::size_t gate_id, ENCRYPTO::BitVector<> &&message) const {
+void YaoProvider::send_bits_message(std::size_t gate_id, ENCRYPTO::BitVector<>&& message) const {
   CommMixin::send_bits_message(1 - my_id_, gate_id, std::move(message));
 }
 
 void YaoProvider::send_bits_message(std::size_t gate_id,
-                                    const ENCRYPTO::BitVector<> &message) const {
+                                    const ENCRYPTO::BitVector<>& message) const {
   CommMixin::send_bits_message(1 - my_id_, gate_id, message);
 }
 
@@ -383,19 +383,19 @@ ENCRYPTO::ReusableFiberFuture<ENCRYPTO::BitVector<>> YaoProvider::register_for_b
 }
 
 void YaoProvider::create_garbled_tables(std::size_t gate_id,
-                                        const ENCRYPTO::block128_vector &keys_a,
-                                        const ENCRYPTO::block128_vector &keys_b,
-                                        ENCRYPTO::block128_t *tables,
-                                        ENCRYPTO::block128_vector &keys_out) const noexcept {
+                                        const ENCRYPTO::block128_vector& keys_a,
+                                        const ENCRYPTO::block128_vector& keys_b,
+                                        ENCRYPTO::block128_t* tables,
+                                        ENCRYPTO::block128_vector& keys_out) const noexcept {
   assert(hg_garbler_);
   hg_garbler_->batch_garble_and(keys_out, tables, gate_id, keys_a, keys_b);
 }
 
 void YaoProvider::evaluate_garbled_tables(std::size_t gate_id,
-                                          const ENCRYPTO::block128_vector &keys_a,
-                                          const ENCRYPTO::block128_vector &keys_b,
-                                          const ENCRYPTO::block128_t *tables,
-                                          ENCRYPTO::block128_vector &keys_out) const noexcept {
+                                          const ENCRYPTO::block128_vector& keys_a,
+                                          const ENCRYPTO::block128_vector& keys_b,
+                                          const ENCRYPTO::block128_t* tables,
+                                          ENCRYPTO::block128_vector& keys_out) const noexcept {
   assert(hg_evaluator_);
   hg_evaluator_->batch_evaluate_and(keys_out, tables, gate_id, keys_a, keys_b);
 }
@@ -422,11 +422,11 @@ void YaoProvider::evaluate_garbled_circuit(std::size_t gate_id, std::size_t num_
                                   num_simd, algo);
 }
 
-static std::vector<std::shared_ptr<NewWire>> cast_wires(gmw::BooleanGMWWireVector &&wires) {
+static std::vector<std::shared_ptr<NewWire>> cast_wires(gmw::BooleanGMWWireVector&& wires) {
   return std::vector<std::shared_ptr<NewWire>>(std::begin(wires), std::end(wires));
 }
 
-WireVector YaoProvider::make_convert_to_boolean_gmw_gate(YaoWireVector &&in_a) {
+WireVector YaoProvider::make_convert_to_boolean_gmw_gate(YaoWireVector&& in_a) {
   auto gate_id = gate_register_.get_next_gate_id();
   gmw::BooleanGMWWireVector output;
   if (role_ == Role::garbler) {
@@ -441,13 +441,13 @@ WireVector YaoProvider::make_convert_to_boolean_gmw_gate(YaoWireVector &&in_a) {
   return cast_wires(std::move(output));
 }
 
-YaoWireVector YaoProvider::make_convert_from_boolean_gmw_gate(const WireVector &in) {
+YaoWireVector YaoProvider::make_convert_from_boolean_gmw_gate(const WireVector& in) {
   auto gate_id = gate_register_.get_next_gate_id();
   YaoWireVector output;
   gmw::BooleanGMWWireVector input;
   input.reserve(in.size());
   std::transform(std::begin(in), std::end(in), std::back_inserter(input),
-                 [](auto &w) { return std::dynamic_pointer_cast<gmw::BooleanGMWWire>(w); });
+                 [](auto& w) { return std::dynamic_pointer_cast<gmw::BooleanGMWWire>(w); });
   if (role_ == Role::garbler) {
     auto gate = std::make_unique<BooleanGMWToYaoGateGarbler>(gate_id, *this, std::move(input));
     output = gate->get_output_wires();
@@ -461,14 +461,14 @@ YaoWireVector YaoProvider::make_convert_from_boolean_gmw_gate(const WireVector &
 }
 
 template <typename T>
-WireVector YaoProvider::basic_make_convert_to_arithmetic_gmw_gate(YaoWireVector &&in_a) {
+WireVector YaoProvider::basic_make_convert_to_arithmetic_gmw_gate(YaoWireVector&& in_a) {
   auto num_wires = in_a.size();
   assert(num_wires == ENCRYPTO::bit_size_v<T>);
   auto conv_gate_id = gate_register_.get_next_gate_id();
   auto input_gate_id = gate_register_.get_next_gate_id();
   auto num_simd = in_a[0]->get_num_simd();
   YaoWireVector in_b;
-  YaoToArithmeticGMWGateEvaluator<T> *y2a_gate_evaluator = nullptr;
+  YaoToArithmeticGMWGateEvaluator<T>* y2a_gate_evaluator = nullptr;
   gmw::ArithmeticGMWWireP<T> output;
   if (role_ == Role::garbler) {
     auto conv_gate =
@@ -493,7 +493,7 @@ WireVector YaoProvider::basic_make_convert_to_arithmetic_gmw_gate(YaoWireVector 
 
   // sum up the additive shares in a Boolean circuit
   const auto circuit_name = fmt::format("int_add{}_size.bristol", ENCRYPTO::bit_size_v<T>);
-  const auto &algo = circuit_loader_.load_circuit(circuit_name, CircuitFormat::Bristol);
+  const auto& algo = circuit_loader_.load_circuit(circuit_name, CircuitFormat::Bristol);
   auto sum_wires = make_circuit(*this, algo, cast_wires(in_a), cast_wires(in_b));
 
   // the output is given to the evaluator
@@ -506,7 +506,7 @@ WireVector YaoProvider::basic_make_convert_to_arithmetic_gmw_gate(YaoWireVector 
   return {std::dynamic_pointer_cast<NewWire>(output)};
 }
 
-WireVector YaoProvider::make_convert_to_arithmetic_gmw_gate(YaoWireVector &&in_a) {
+WireVector YaoProvider::make_convert_to_arithmetic_gmw_gate(YaoWireVector&& in_a) {
   auto bit_size = in_a.size();
   switch (bit_size) {
     case 8:
@@ -524,7 +524,7 @@ WireVector YaoProvider::make_convert_to_arithmetic_gmw_gate(YaoWireVector &&in_a
 }
 
 template <typename T>
-WireVector YaoProvider::basic_make_convert_from_arithmetic_gmw_gate(const WireVector &in) {
+WireVector YaoProvider::basic_make_convert_from_arithmetic_gmw_gate(const WireVector& in) {
   assert(in.size() == 1);
   auto num_wires = ENCRYPTO::bit_size_v<T>;
   auto arith_wire = std::dynamic_pointer_cast<gmw::ArithmeticGMWWire<T>>(in.at(0));
@@ -562,12 +562,12 @@ WireVector YaoProvider::basic_make_convert_from_arithmetic_gmw_gate(const WireVe
 
   // sum up the additive shares in a Boolean circuit
   const auto circuit_name = fmt::format("int_add{}_size.bristol", ENCRYPTO::bit_size_v<T>);
-  const auto &algo = circuit_loader_.load_circuit(circuit_name, CircuitFormat::Bristol);
+  const auto& algo = circuit_loader_.load_circuit(circuit_name, CircuitFormat::Bristol);
   auto sum_wires = make_circuit(*this, algo, cast_wires(wires_0), cast_wires(wires_1));
   return sum_wires;
 }
 
-WireVector YaoProvider::make_convert_from_arithmetic_gmw_gate(const WireVector &in) {
+WireVector YaoProvider::make_convert_from_arithmetic_gmw_gate(const WireVector& in) {
   assert(in.size() == 1);
   auto bit_size = in.at(0)->get_bit_size();
   switch (bit_size) {
@@ -585,11 +585,11 @@ WireVector YaoProvider::make_convert_from_arithmetic_gmw_gate(const WireVector &
   }
 }
 
-static std::vector<std::shared_ptr<NewWire>> cast_wires(beavy::BooleanBEAVYWireVector &&wires) {
+static std::vector<std::shared_ptr<NewWire>> cast_wires(beavy::BooleanBEAVYWireVector&& wires) {
   return std::vector<std::shared_ptr<NewWire>>(std::begin(wires), std::end(wires));
 }
 
-WireVector YaoProvider::make_convert_to_boolean_beavy_gate(YaoWireVector &&in_a) {
+WireVector YaoProvider::make_convert_to_boolean_beavy_gate(YaoWireVector&& in_a) {
   auto gate_id = gate_register_.get_next_gate_id();
   beavy::BooleanBEAVYWireVector output;
   if (role_ == Role::garbler) {
@@ -604,13 +604,13 @@ WireVector YaoProvider::make_convert_to_boolean_beavy_gate(YaoWireVector &&in_a)
   return cast_wires(std::move(output));
 }
 
-YaoWireVector YaoProvider::make_convert_from_boolean_beavy_gate(const WireVector &in) {
+YaoWireVector YaoProvider::make_convert_from_boolean_beavy_gate(const WireVector& in) {
   auto gate_id = gate_register_.get_next_gate_id();
   YaoWireVector output;
   beavy::BooleanBEAVYWireVector input;
   input.reserve(in.size());
   std::transform(std::begin(in), std::end(in), std::back_inserter(input),
-                 [](auto &w) { return std::dynamic_pointer_cast<beavy::BooleanBEAVYWire>(w); });
+                 [](auto& w) { return std::dynamic_pointer_cast<beavy::BooleanBEAVYWire>(w); });
   if (role_ == Role::garbler) {
     auto gate = std::make_unique<BooleanBEAVYToYaoGateGarbler>(gate_id, *this, std::move(input));
     output = gate->get_output_wires();
@@ -624,14 +624,14 @@ YaoWireVector YaoProvider::make_convert_from_boolean_beavy_gate(const WireVector
 }
 
 template <typename T>
-WireVector YaoProvider::basic_make_convert_to_arithmetic_beavy_gate(YaoWireVector &&in_a) {
+WireVector YaoProvider::basic_make_convert_to_arithmetic_beavy_gate(YaoWireVector&& in_a) {
   auto num_wires = in_a.size();
   assert(num_wires == ENCRYPTO::bit_size_v<T>);
   auto conv_gate_id = gate_register_.get_next_gate_id();
   auto input_gate_id = gate_register_.get_next_gate_id();
   auto num_simd = in_a[0]->get_num_simd();
   YaoWireVector in_b;
-  YaoToArithmeticBEAVYGateEvaluator<T> *y2a_gate_evaluator = nullptr;
+  YaoToArithmeticBEAVYGateEvaluator<T>* y2a_gate_evaluator = nullptr;
   beavy::ArithmeticBEAVYWireP<T> output;
   if (role_ == Role::garbler) {
     auto conv_gate =
@@ -656,7 +656,7 @@ WireVector YaoProvider::basic_make_convert_to_arithmetic_beavy_gate(YaoWireVecto
 
   // sum up the additive shares in a Boolean circuit
   const auto circuit_name = fmt::format("int_add{}_size.bristol", ENCRYPTO::bit_size_v<T>);
-  const auto &algo = circuit_loader_.load_circuit(circuit_name, CircuitFormat::Bristol);
+  const auto& algo = circuit_loader_.load_circuit(circuit_name, CircuitFormat::Bristol);
   auto sum_wires = make_circuit(*this, algo, cast_wires(in_a), cast_wires(in_b));
 
   // the output is given to the evaluator
@@ -669,7 +669,7 @@ WireVector YaoProvider::basic_make_convert_to_arithmetic_beavy_gate(YaoWireVecto
   return {std::dynamic_pointer_cast<NewWire>(output)};
 }
 
-WireVector YaoProvider::make_convert_to_arithmetic_beavy_gate(YaoWireVector &&in_a) {
+WireVector YaoProvider::make_convert_to_arithmetic_beavy_gate(YaoWireVector&& in_a) {
   auto bit_size = in_a.size();
   switch (bit_size) {
     case 8:
@@ -687,7 +687,7 @@ WireVector YaoProvider::make_convert_to_arithmetic_beavy_gate(YaoWireVector &&in
 }
 
 template <typename T>
-WireVector YaoProvider::basic_make_convert_from_arithmetic_beavy_gate(const WireVector &in) {
+WireVector YaoProvider::basic_make_convert_from_arithmetic_beavy_gate(const WireVector& in) {
   assert(in.size() == 1);
   auto num_wires = ENCRYPTO::bit_size_v<T>;
   auto arith_wire = std::dynamic_pointer_cast<beavy::ArithmeticBEAVYWire<T>>(in.at(0));
@@ -727,12 +727,12 @@ WireVector YaoProvider::basic_make_convert_from_arithmetic_beavy_gate(const Wire
 
   // sum up the additive shares in a Boolean circuit
   const auto circuit_name = fmt::format("int_add{}_size.bristol", ENCRYPTO::bit_size_v<T>);
-  const auto &algo = circuit_loader_.load_circuit(circuit_name, CircuitFormat::Bristol);
+  const auto& algo = circuit_loader_.load_circuit(circuit_name, CircuitFormat::Bristol);
   auto sum_wires = make_circuit(*this, algo, cast_wires(wires_0), cast_wires(wires_1));
   return sum_wires;
 }
 
-WireVector YaoProvider::make_convert_from_arithmetic_beavy_gate(const WireVector &in) {
+WireVector YaoProvider::make_convert_from_arithmetic_beavy_gate(const WireVector& in) {
   assert(in.size() == 1);
   auto bit_size = in.at(0)->get_bit_size();
   switch (bit_size) {
@@ -750,7 +750,7 @@ WireVector YaoProvider::make_convert_from_arithmetic_beavy_gate(const WireVector
   }
 }
 
-WireVector YaoProvider::convert_to(MPCProtocol proto, const WireVector &in) {
+WireVector YaoProvider::convert_to(MPCProtocol proto, const WireVector& in) {
   auto input = cast_wires(in);
 
   switch (proto) {
@@ -767,7 +767,7 @@ WireVector YaoProvider::convert_to(MPCProtocol proto, const WireVector &in) {
   }
 }
 
-WireVector YaoProvider::convert_from(MPCProtocol proto, const WireVector &in) {
+WireVector YaoProvider::convert_from(MPCProtocol proto, const WireVector& in) {
   switch (proto) {
     case MPCProtocol::ArithmeticBEAVY:
       return make_convert_from_arithmetic_beavy_gate(in);
@@ -796,8 +796,8 @@ tensor::TensorCP YaoProvider::basic_make_convert_from_arithmetic_gmw_tensor(
     output = tensor_op->get_output_tensor();
     gate_register_.register_gate(std::move(tensor_op));
   } else {
-    auto tensor_op = std::make_unique<ArithmeticGMWToYaoTensorConversionEvaluator<T>>(gate_id, *this,
-                                                                                    input_tensor);
+    auto tensor_op = std::make_unique<ArithmeticGMWToYaoTensorConversionEvaluator<T>>(
+        gate_id, *this, input_tensor);
     output = tensor_op->get_output_tensor();
     gate_register_.register_gate(std::move(tensor_op));
   }
