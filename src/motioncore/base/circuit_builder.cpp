@@ -53,6 +53,12 @@ WireVector CircuitBuilder::make_binary_gate(ENCRYPTO::PrimitiveOperationType op,
   if (proto_a == proto_b) {
     auto& gate_factory = get_gate_factory(proto_a);
     return gate_factory.make_binary_gate(op, wires_a, wires_b);
+  } else if (proto_a == MPCProtocol::ArithmeticPlain || proto_a == MPCProtocol::BooleanPlain) {
+    auto& gate_factory = get_gate_factory(proto_b);
+    return gate_factory.make_binary_gate(op, wires_a, wires_b);
+  } else if (proto_b == MPCProtocol::ArithmeticPlain || proto_b == MPCProtocol::BooleanPlain) {
+    auto& gate_factory = get_gate_factory(proto_a);
+    return gate_factory.make_binary_gate(op, wires_a, wires_b);
   } else {
     throw std::logic_error("multi-protocol gates are not yet supported");
   }
