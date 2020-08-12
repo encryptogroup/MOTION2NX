@@ -71,22 +71,34 @@ WireVector CircuitBuilder::convert(MPCProtocol dst_proto, const WireVector& wire
       return {{}, false};
     }
   };
-  {
-    auto& factory = get_gate_factory(src_proto);
-    auto [output_wires, success] = convert_f(factory);
-    if (success) {
-      return output_wires;
+  auto via_protocol = convert_via(src_proto, dst_proto);
+  if (via_protocol.has_value()) {
+    // implicit conversion via third protocol
+    auto tmp = convert(*via_protocol, wires);
+    return convert(dst_proto, tmp);
+  } else {
+    // direct conversion
+    {
+      auto& factory = get_gate_factory(src_proto);
+      auto [output_wires, success] = convert_f(factory);
+      if (success) {
+        return output_wires;
+      }
+    }
+    {
+      auto& factory = get_gate_factory(dst_proto);
+      auto [output_wires, success] = convert_f(factory);
+      if (success) {
+        return output_wires;
+      }
     }
   }
-  {
-    auto& factory = get_gate_factory(dst_proto);
-    auto [output_wires, success] = convert_f(factory);
-    if (success) {
-      return output_wires;
-    }
-  }
-  throw std::runtime_error(fmt::format("no convertion from {} to {} supported", ToString(src_proto),
+  throw std::runtime_error(fmt::format("no conversion from {} to {} supported", ToString(src_proto),
                                        ToString(dst_proto)));
+}
+
+std::optional<MPCProtocol> CircuitBuilder::convert_via(MPCProtocol, MPCProtocol) {
+  return std::nullopt;
 }
 
 WireVector CircuitBuilder::make_circuit(const ENCRYPTO::AlgorithmDescription& algo,

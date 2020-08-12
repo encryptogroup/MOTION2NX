@@ -24,6 +24,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <vector>
 
 namespace ENCRYPTO {
@@ -46,6 +47,7 @@ class CircuitBuilder {
   WireVector make_circuit(const ENCRYPTO::AlgorithmDescription&, const WireVector&,
                           const WireVector&);
   WireVector convert(MPCProtocol, const WireVector&);
+  virtual std::optional<MPCProtocol> convert_via(MPCProtocol src, MPCProtocol dst);
   virtual GateFactory& get_gate_factory(MPCProtocol) = 0;
 };
 

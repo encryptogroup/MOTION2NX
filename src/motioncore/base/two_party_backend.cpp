@@ -115,6 +115,16 @@ void TwoPartyBackend::run() {
   std::cout << run_time_stats_.back().print_human_readable();
 }
 
+std::optional<MPCProtocol> TwoPartyBackend::convert_via(MPCProtocol src_proto,
+                                                        MPCProtocol dst_proto) {
+  if (src_proto == MPCProtocol::ArithmeticGMW && dst_proto == MPCProtocol::BooleanGMW) {
+    return MPCProtocol::Yao;
+  } else if (src_proto == MPCProtocol::ArithmeticBEAVY && dst_proto == MPCProtocol::BooleanBEAVY) {
+    return MPCProtocol::Yao;
+  }
+  return std::nullopt;
+}
+
 GateFactory& TwoPartyBackend::get_gate_factory(MPCProtocol proto) {
   try {
     return gate_factories_.at(proto);
