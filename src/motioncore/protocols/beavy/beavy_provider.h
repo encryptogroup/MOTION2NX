@@ -182,7 +182,7 @@ class BEAVYProvider : public GateFactory,
   template <typename T>
   ENCRYPTO::ReusableFiberFuture<IntegerValues<T>> basic_make_arithmetic_output_gate_my(
       std::size_t output_owner, const WireVector& in);
-  template <typename BinaryGate>
+  template <typename BinaryGate, bool plain = false>
   WireVector make_boolean_binary_gate(const WireVector& in_a, const WireVector& in_b);
   WireVector make_inv_gate(const WireVector& in_a);
   WireVector make_xor_gate(const WireVector& in_a, const WireVector& in_b);
@@ -192,9 +192,9 @@ class BEAVYProvider : public GateFactory,
   WireVector make_arithmetic_unary_gate(const NewWireP& in_a);
   template <template <typename> class BinaryGate>
   WireVector make_arithmetic_unary_gate(const WireVector& in_a);
-  template <template <typename> class BinaryGate, typename T>
+  template <template <typename> class BinaryGate, typename T, bool plain>
   WireVector make_arithmetic_binary_gate(const NewWireP& in_a, const NewWireP& in_b);
-  template <template <typename> class BinaryGate>
+  template <template <typename> class BinaryGate, bool plain = false>
   WireVector make_arithmetic_binary_gate(const WireVector& in_a, const WireVector& in_b);
   WireVector make_neg_gate(const WireVector& in_a);
   WireVector make_add_gate(const WireVector& in_a, const WireVector& in_b);

@@ -33,7 +33,9 @@
 #include "conversion.h"
 #include "crypto/motion_base_provider.h"
 #include "gate.h"
+#include "plain.h"
 #include "protocols/gmw/wire.h"
+#include "protocols/plain/wire.h"
 #include "tensor_op.h"
 #include "utility/constants.h"
 #include "utility/logger.h"
@@ -88,6 +90,15 @@ static BooleanBEAVYWireVector cast_wires(std::vector<std::shared_ptr<NewWire>> w
   return result;
 }
 
+static plain::BooleanPlainWireVector cast_to_plain_wires(
+    std::vector<std::shared_ptr<NewWire>> wires) {
+  plain::BooleanPlainWireVector result(wires.size());
+  std::transform(std::begin(wires), std::end(wires), std::begin(result), [](auto& w) {
+    return std::dynamic_pointer_cast<proto::plain::BooleanPlainWire>(w);
+  });
+  return result;
+}
+
 static std::vector<std::shared_ptr<NewWire>> cast_wires(BooleanBEAVYWireVector&& wires) {
   return std::vector<std::shared_ptr<NewWire>>(std::begin(wires), std::end(wires));
 }
@@ -95,6 +106,13 @@ static std::vector<std::shared_ptr<NewWire>> cast_wires(BooleanBEAVYWireVector&&
 template <typename T>
 static ArithmeticBEAVYWireP<T> cast_arith_wire(std::shared_ptr<NewWire> wire) {
   auto ptr = std::dynamic_pointer_cast<ArithmeticBEAVYWire<T>>(wire);
+  assert(ptr);
+  return ptr;
+}
+
+template <typename T>
+static plain::ArithmeticPlainWireP<T> cast_arith_plain_wire(std::shared_ptr<NewWire> wire) {
+  auto ptr = std::dynamic_pointer_cast<proto::plain::ArithmeticPlainWire<T>>(wire);
   assert(ptr);
   return ptr;
 }
@@ -342,22 +360,47 @@ WireVector BEAVYProvider::make_inv_gate(const WireVector& in_a) {
   return cast_wires(std::move(output));
 }
 
-template <typename BinaryGate>
+template <typename BinaryGate, bool plain>
 WireVector BEAVYProvider::make_boolean_binary_gate(const WireVector& in_a, const WireVector& in_b) {
   BooleanBEAVYWireVector output;
   auto gate_id = gate_register_.get_next_gate_id();
-  auto gate = std::make_unique<BinaryGate>(gate_id, *this, cast_wires(in_a), cast_wires(in_b));
-  output = gate->get_output_wires();
-  gate_register_.register_gate(std::move(gate));
+  if constexpr (plain) {
+    auto gate =
+        std::make_unique<BinaryGate>(gate_id, *this, cast_wires(in_a), cast_to_plain_wires(in_b));
+    output = gate->get_output_wires();
+    gate_register_.register_gate(std::move(gate));
+  } else {
+    auto gate = std::make_unique<BinaryGate>(gate_id, *this, cast_wires(in_a), cast_wires(in_b));
+    output = gate->get_output_wires();
+    gate_register_.register_gate(std::move(gate));
+  }
   return cast_wires(std::move(output));
 }
 
 WireVector BEAVYProvider::make_xor_gate(const WireVector& in_a, const WireVector& in_b) {
-  return make_boolean_binary_gate<BooleanBEAVYXORGate>(in_a, in_b);
+  // assume, at most one of the inputs is a plain wire
+  if (in_a.at(0)->get_protocol() == MPCProtocol::BooleanPlain) {
+    return make_xor_gate(in_b, in_a);
+  }
+  assert(in_a.at(0)->get_protocol() == MPCProtocol::BooleanBEAVY);
+  if (in_b.at(0)->get_protocol() == MPCProtocol::BooleanPlain) {
+    return make_boolean_binary_gate<BooleanBEAVYXORPlainGate, true>(in_a, in_b);
+  } else {
+    return make_boolean_binary_gate<BooleanBEAVYXORGate>(in_a, in_b);
+  }
 }
 
 WireVector BEAVYProvider::make_and_gate(const WireVector& in_a, const WireVector& in_b) {
-  return make_boolean_binary_gate<BooleanBEAVYANDGate>(in_a, in_b);
+  // assume, at most one of the inputs is a plain wire
+  if (in_a.at(0)->get_protocol() == MPCProtocol::BooleanPlain) {
+    return make_xor_gate(in_b, in_a);
+  }
+  assert(in_a.at(0)->get_protocol() == MPCProtocol::BooleanBEAVY);
+  if (in_b.at(0)->get_protocol() == MPCProtocol::BooleanPlain) {
+    return make_boolean_binary_gate<BooleanBEAVYANDPlainGate, true>(in_a, in_b);
+  } else {
+    return make_boolean_binary_gate<BooleanBEAVYANDGate>(in_a, in_b);
+  }
 }
 
 static std::size_t check_arithmetic_wire(const WireVector& in) {
@@ -404,29 +447,37 @@ static std::size_t check_arithmetic_wires(const WireVector& in_a, const WireVect
   return bit_size;
 }
 
-template <template <typename> class BinaryGate, typename T>
+template <template <typename> class BinaryGate, typename T, bool plain>
 WireVector BEAVYProvider::make_arithmetic_binary_gate(const NewWireP& in_a, const NewWireP& in_b) {
   auto gate_id = gate_register_.get_next_gate_id();
-  auto gate = std::make_unique<BinaryGate<T>>(gate_id, *this, cast_arith_wire<T>(in_a),
-                                              cast_arith_wire<T>(in_b));
-  auto output = {cast_arith_wire(gate->get_output_wire())};
-  gate_register_.register_gate(std::move(gate));
+  WireVector output;
+  if constexpr (plain) {
+    auto gate = std::make_unique<BinaryGate<T>>(gate_id, *this, cast_arith_wire<T>(in_a),
+                                                cast_arith_plain_wire<T>(in_b));
+    output = {cast_arith_wire(gate->get_output_wire())};
+    gate_register_.register_gate(std::move(gate));
+  } else {
+    auto gate = std::make_unique<BinaryGate<T>>(gate_id, *this, cast_arith_wire<T>(in_a),
+                                                cast_arith_wire<T>(in_b));
+    output = {cast_arith_wire(gate->get_output_wire())};
+    gate_register_.register_gate(std::move(gate));
+  }
   return output;
 }
 
-template <template <typename> class BinaryGate>
+template <template <typename> class BinaryGate, bool plain>
 WireVector BEAVYProvider::make_arithmetic_binary_gate(const WireVector& in_a,
                                                       const WireVector& in_b) {
   auto bit_size = check_arithmetic_wires(in_a, in_b);
   switch (bit_size) {
     case 8:
-      return make_arithmetic_binary_gate<BinaryGate, std::uint8_t>(in_a[0], in_b[0]);
+      return make_arithmetic_binary_gate<BinaryGate, std::uint8_t, plain>(in_a[0], in_b[0]);
     case 16:
-      return make_arithmetic_binary_gate<BinaryGate, std::uint16_t>(in_a[0], in_b[0]);
+      return make_arithmetic_binary_gate<BinaryGate, std::uint16_t, plain>(in_a[0], in_b[0]);
     case 32:
-      return make_arithmetic_binary_gate<BinaryGate, std::uint32_t>(in_a[0], in_b[0]);
+      return make_arithmetic_binary_gate<BinaryGate, std::uint32_t, plain>(in_a[0], in_b[0]);
     case 64:
-      return make_arithmetic_binary_gate<BinaryGate, std::uint64_t>(in_a[0], in_b[0]);
+      return make_arithmetic_binary_gate<BinaryGate, std::uint64_t, plain>(in_a[0], in_b[0]);
     default:
       throw std::logic_error(fmt::format("unexpected bit size {}", bit_size));
   }
@@ -437,11 +488,29 @@ WireVector BEAVYProvider::make_neg_gate(const WireVector& in) {
 }
 
 WireVector BEAVYProvider::make_add_gate(const WireVector& in_a, const WireVector& in_b) {
-  return make_arithmetic_binary_gate<ArithmeticBEAVYADDGate>(in_a, in_b);
+  // assume, at most one of the inputs is a plain wire
+  if (in_a.at(0)->get_protocol() == MPCProtocol::ArithmeticPlain) {
+    return make_add_gate(in_b, in_a);
+  }
+  assert(in_a.at(0)->get_protocol() == MPCProtocol::ArithmeticBEAVY);
+  if (in_b.at(0)->get_protocol() == MPCProtocol::ArithmeticPlain) {
+    return make_arithmetic_binary_gate<ArithmeticBEAVYADDPlainGate, true>(in_a, in_b);
+  } else {
+    return make_arithmetic_binary_gate<ArithmeticBEAVYADDGate>(in_a, in_b);
+  }
 }
 
 WireVector BEAVYProvider::make_mul_gate(const WireVector& in_a, const WireVector& in_b) {
-  return make_arithmetic_binary_gate<ArithmeticBEAVYMULGate>(in_a, in_b);
+  // assume, at most one of the inputs is a plain wire
+  if (in_a.at(0)->get_protocol() == MPCProtocol::ArithmeticPlain) {
+    return make_mul_gate(in_b, in_a);
+  }
+  assert(in_a.at(0)->get_protocol() == MPCProtocol::ArithmeticBEAVY);
+  if (in_b.at(0)->get_protocol() == MPCProtocol::ArithmeticPlain) {
+    return make_arithmetic_binary_gate<ArithmeticBEAVYMULPlainGate, true>(in_a, in_b);
+  } else {
+    return make_arithmetic_binary_gate<ArithmeticBEAVYMULGate>(in_a, in_b);
+  }
 }
 
 WireVector BEAVYProvider::make_sqr_gate(const WireVector& in) {
