@@ -511,10 +511,8 @@ WireVector GMWProvider::convert_boolean(MPCProtocol proto, const WireVector &in)
 }
 
 WireVector GMWProvider::convert(MPCProtocol dst_proto, const WireVector &in) {
-  auto input = cast_wires(in);
-  assert(input.size() > 0);
-  auto src_proto = input.at(0)->get_protocol();
-
+  assert(in.size() > 0);
+  auto src_proto = in.at(0)->get_protocol();
   switch (src_proto) {
     case MPCProtocol::ArithmeticGMW:
       throw std::logic_error("not implemented");
