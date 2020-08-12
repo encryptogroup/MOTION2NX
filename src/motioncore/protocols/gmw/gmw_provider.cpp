@@ -35,6 +35,8 @@
 #include "crypto/multiplication_triple/mt_provider.h"
 #include "crypto/multiplication_triple/sp_provider.h"
 #include "gate.h"
+#include "plain.h"
+#include "protocols/plain/wire.h"
 #include "tensor_op.h"
 #include "utility/constants.h"
 #include "utility/logger.h"
@@ -86,6 +88,15 @@ static BooleanGMWWireVector cast_wires(std::vector<std::shared_ptr<NewWire>> wir
   return result;
 }
 
+static plain::BooleanPlainWireVector cast_to_plain_wires(
+    std::vector<std::shared_ptr<NewWire>> wires) {
+  plain::BooleanPlainWireVector result(wires.size());
+  std::transform(std::begin(wires), std::end(wires), std::begin(result), [](auto& w) {
+    return std::dynamic_pointer_cast<proto::plain::BooleanPlainWire>(w);
+  });
+  return result;
+}
+
 static std::vector<std::shared_ptr<NewWire>> cast_wires(BooleanGMWWireVector&& wires) {
   return std::vector<std::shared_ptr<NewWire>>(std::begin(wires), std::end(wires));
 }
@@ -93,6 +104,13 @@ static std::vector<std::shared_ptr<NewWire>> cast_wires(BooleanGMWWireVector&& w
 template <typename T>
 static ArithmeticGMWWireP<T> cast_arith_wire(std::shared_ptr<NewWire> wire) {
   auto ptr = std::dynamic_pointer_cast<ArithmeticGMWWire<T>>(wire);
+  assert(ptr);
+  return ptr;
+}
+
+template <typename T>
+static plain::ArithmeticPlainWireP<T> cast_arith_plain_wire(std::shared_ptr<NewWire> wire) {
+  auto ptr = std::dynamic_pointer_cast<proto::plain::ArithmeticPlainWire<T>>(wire);
   assert(ptr);
   return ptr;
 }
@@ -339,23 +357,46 @@ WireVector GMWProvider::make_inv_gate(const WireVector& in_a) {
   return cast_wires(std::move(output));
 }
 
-WireVector GMWProvider::make_xor_gate(const WireVector&in_a,
-                                                const WireVector& in_b) {
+WireVector GMWProvider::make_xor_gate(const WireVector& in_a, const WireVector& in_b) {
+  // assume, at most one of the inputs is a plain wire
+  if (in_a.at(0)->get_protocol() == MPCProtocol::BooleanPlain) {
+    return make_xor_gate(in_b, in_a);
+  }
+  assert(in_a.at(0)->get_protocol() == MPCProtocol::BooleanGMW);
   BooleanGMWWireVector output;
   auto gate_id = gate_register_.get_next_gate_id();
-  auto gate = std::make_unique<BooleanGMWXORGate>(gate_id, cast_wires(in_a), cast_wires(in_b));
-  output = gate->get_output_wires();
-  gate_register_.register_gate(std::move(gate));
+  if (in_b.at(0)->get_protocol() == MPCProtocol::BooleanPlain) {
+    auto gate = std::make_unique<BooleanGMWXORPlainGate>(gate_id, *this, cast_wires(in_a),
+                                                         cast_to_plain_wires(in_b));
+    output = gate->get_output_wires();
+    gate_register_.register_gate(std::move(gate));
+  } else {
+    auto gate = std::make_unique<BooleanGMWXORGate>(gate_id, cast_wires(in_a), cast_wires(in_b));
+    output = gate->get_output_wires();
+    gate_register_.register_gate(std::move(gate));
+  }
   return cast_wires(std::move(output));
 }
 
-WireVector GMWProvider::make_and_gate(const WireVector& in_a,
-                                                const WireVector& in_b) {
+WireVector GMWProvider::make_and_gate(const WireVector& in_a, const WireVector& in_b) {
+  // assume, at most one of the inputs is a plain wire
+  if (in_a.at(0)->get_protocol() == MPCProtocol::BooleanPlain) {
+    return make_and_gate(in_b, in_a);
+  }
+  assert(in_a.at(0)->get_protocol() == MPCProtocol::BooleanGMW);
   BooleanGMWWireVector output;
   auto gate_id = gate_register_.get_next_gate_id();
-  auto gate = std::make_unique<BooleanGMWANDGate>(gate_id, *this, cast_wires(in_a), cast_wires(in_b));
-  output = gate->get_output_wires();
-  gate_register_.register_gate(std::move(gate));
+  if (in_b.at(0)->get_protocol() == MPCProtocol::BooleanPlain) {
+    auto gate = std::make_unique<BooleanGMWANDPlainGate>(gate_id, *this, cast_wires(in_a),
+                                                         cast_to_plain_wires(in_b));
+    output = gate->get_output_wires();
+    gate_register_.register_gate(std::move(gate));
+  } else {
+    auto gate =
+        std::make_unique<BooleanGMWANDGate>(gate_id, *this, cast_wires(in_a), cast_wires(in_b));
+    output = gate->get_output_wires();
+    gate_register_.register_gate(std::move(gate));
+  }
   return cast_wires(std::move(output));
 }
 
@@ -428,29 +469,37 @@ static std::size_t check_arithmetic_wires(const WireVector& in_a, const WireVect
   return bit_size;
 }
 
-template <template <typename> class BinaryGate, typename T>
+template <template <typename> class BinaryGate, typename T, bool plain>
 WireVector GMWProvider::make_arithmetic_binary_gate(const NewWireP& in_a, const NewWireP& in_b) {
   auto gate_id = gate_register_.get_next_gate_id();
-  auto gate = std::make_unique<BinaryGate<T>>(
-      gate_id, *this, cast_arith_wire<T>(in_a), cast_arith_wire<T>(in_b));
-  auto output = {cast_arith_wire(gate->get_output_wire())};
-  gate_register_.register_gate(std::move(gate));
+  WireVector output;
+  if constexpr (plain) {
+    auto gate = std::make_unique<BinaryGate<T>>(gate_id, *this, cast_arith_wire<T>(in_a),
+                                                cast_arith_plain_wire<T>(in_b));
+    output = {cast_arith_wire(gate->get_output_wire())};
+    gate_register_.register_gate(std::move(gate));
+  } else {
+    auto gate = std::make_unique<BinaryGate<T>>(gate_id, *this, cast_arith_wire<T>(in_a),
+                                                cast_arith_wire<T>(in_b));
+    output = {cast_arith_wire(gate->get_output_wire())};
+    gate_register_.register_gate(std::move(gate));
+  }
   return output;
 }
 
-template <template <typename> class BinaryGate>
+template <template <typename> class BinaryGate, bool plain>
 WireVector GMWProvider::make_arithmetic_binary_gate(const WireVector& in_a,
                                                     const WireVector& in_b) {
   auto bit_size = check_arithmetic_wires(in_a, in_b);
   switch (bit_size) {
     case 8:
-      return make_arithmetic_binary_gate<BinaryGate, std::uint8_t>(in_a[0], in_b[0]);
+      return make_arithmetic_binary_gate<BinaryGate, std::uint8_t, plain>(in_a[0], in_b[0]);
     case 16:
-      return make_arithmetic_binary_gate<BinaryGate, std::uint16_t>(in_a[0], in_b[0]);
+      return make_arithmetic_binary_gate<BinaryGate, std::uint16_t, plain>(in_a[0], in_b[0]);
     case 32:
-      return make_arithmetic_binary_gate<BinaryGate, std::uint32_t>(in_a[0], in_b[0]);
+      return make_arithmetic_binary_gate<BinaryGate, std::uint32_t, plain>(in_a[0], in_b[0]);
     case 64:
-      return make_arithmetic_binary_gate<BinaryGate, std::uint64_t>(in_a[0], in_b[0]);
+      return make_arithmetic_binary_gate<BinaryGate, std::uint64_t, plain>(in_a[0], in_b[0]);
     default:
       throw std::logic_error(fmt::format("unexpected bit size {}", bit_size));
   }
@@ -461,11 +510,29 @@ WireVector GMWProvider::make_neg_gate(const WireVector& in) {
 }
 
 WireVector GMWProvider::make_add_gate(const WireVector& in_a, const WireVector& in_b) {
-  return make_arithmetic_binary_gate<ArithmeticGMWADDGate>(in_a, in_b);
+  // assume, at most one of the inputs is a plain wire
+  if (in_a.at(0)->get_protocol() == MPCProtocol::ArithmeticPlain) {
+    return make_add_gate(in_b, in_a);
+  }
+  assert(in_a.at(0)->get_protocol() == MPCProtocol::ArithmeticGMW);
+  if (in_b.at(0)->get_protocol() == MPCProtocol::ArithmeticPlain) {
+    return make_arithmetic_binary_gate<ArithmeticGMWADDPlainGate, true>(in_a, in_b);
+  } else {
+    return make_arithmetic_binary_gate<ArithmeticGMWADDGate>(in_a, in_b);
+  }
 }
 
 WireVector GMWProvider::make_mul_gate(const WireVector& in_a, const WireVector& in_b) {
-  return make_arithmetic_binary_gate<ArithmeticGMWMULGate>(in_a, in_b);
+  // assume, at most one of the inputs is a plain wire
+  if (in_a.at(0)->get_protocol() == MPCProtocol::ArithmeticPlain) {
+    return make_mul_gate(in_b, in_a);
+  }
+  assert(in_a.at(0)->get_protocol() == MPCProtocol::ArithmeticGMW);
+  if (in_b.at(0)->get_protocol() == MPCProtocol::ArithmeticPlain) {
+    return make_arithmetic_binary_gate<ArithmeticGMWMULPlainGate, true>(in_a, in_b);
+  } else {
+    return make_arithmetic_binary_gate<ArithmeticGMWMULGate>(in_a, in_b);
+  }
 }
 
 WireVector GMWProvider::make_sqr_gate(const WireVector& in) {

@@ -191,9 +191,9 @@ class GMWProvider : public GateFactory,
   WireVector make_arithmetic_unary_gate(const NewWireP& in_a);
   template <template <typename> class BinaryGate>
   WireVector make_arithmetic_unary_gate(const WireVector& in_a);
-  template <template <typename> class BinaryGate, typename T>
+  template <template <typename> class BinaryGate, typename T, bool plain>
   WireVector make_arithmetic_binary_gate(const NewWireP& in_a, const NewWireP& in_b);
-  template <template <typename> class BinaryGate>
+  template <template <typename> class BinaryGate, bool plain = false>
   WireVector make_arithmetic_binary_gate(const WireVector& in_a, const WireVector& in_b);
   WireVector make_neg_gate(const WireVector& in_a);
   WireVector make_add_gate(const WireVector& in_a, const WireVector& in_b);
