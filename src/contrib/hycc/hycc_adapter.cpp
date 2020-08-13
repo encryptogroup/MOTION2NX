@@ -281,10 +281,10 @@ void HyCCAdapter::HyCCAdapterImpl::process_circuit_inputs(const simple_circuitt&
     const auto& label = input_var->name;
     const auto input_owner = static_cast<std::size_t>(input_var->owner);
     auto& gates = input_var->gates;
-    std::cerr << "processing input:\n";
-    std::cerr << fmt::format("- label = {}\n", label);
-    std::cerr << fmt::format("- owner = {}\n", input_owner);
-    std::cerr << fmt::format("- gates: {}\n", gates.size());
+    // std::cerr << "processing input:\n";
+    // std::cerr << fmt::format("- label = {}\n", label);
+    // std::cerr << fmt::format("- owner = {}\n", input_owner);
+    // std::cerr << fmt::format("- gates: {}\n", gates.size());
     // - assume all gates have the same width: 1 (Boolean) or 8/16/32/64 (arithmetic)
     // - assume all gates have protocol
     // TODO
@@ -292,9 +292,9 @@ void HyCCAdapter::HyCCAdapterImpl::process_circuit_inputs(const simple_circuitt&
     // - create single/multiple input gates (Boolean/arithmetic), split wires
     const auto num_gates = gates.size();
     for (std::size_t i = 0; i < num_gates; ++i) {
-      std::cerr << fmt::format("  + gate {} of width {}\n", (void*)gates[i], gates[i]->get_width());
-      std::cerr << fmt::format("    assigned protocol: {}\n",
-                               ToString(get_protocol_from_gate(*gates[i])));
+      // std::cerr << fmt::format("  + gate {} of width {}\n", (void*)gates[i], gates[i]->get_width());
+      // std::cerr << fmt::format("    assigned protocol: {}\n",
+      //                          ToString(get_protocol_from_gate(*gates[i])));
       create_input_gate(input_owner, label, i, gates[i]);
     }
   }
@@ -303,7 +303,7 @@ void HyCCAdapter::HyCCAdapterImpl::process_circuit_inputs(const simple_circuitt&
 void HyCCAdapter::HyCCAdapterImpl::create_input_gate(std::size_t input_owner,
                                                      const std::string& label, std::size_t index,
                                                      simple_circuitt::gatet* gate) {
-  std::cerr << fmt::format("creating input gate {} ...", (const void*)gate);
+  // std::cerr << fmt::format("creating input gate {} ...", (const void*)gate);
   const auto protocol = get_protocol_from_gate(*gate);
   const auto input_label = fmt::format("{}-{}", label, index);
   const auto my_input = input_owner == my_id_;
@@ -391,10 +391,10 @@ void HyCCAdapter::HyCCAdapterImpl::process_circuit_outputs(const simple_circuitt
     const auto& label = input_var->name;
     const std::size_t output_owner = 1;  // assume P_1 gets the output
     auto& gates = input_var->gates;
-    std::cerr << "processing output:\n";
-    std::cerr << fmt::format("- label = {}\n", label);
-    std::cerr << fmt::format("- owner = {}\n", output_owner);
-    std::cerr << fmt::format("- gates: {}\n", gates.size());
+    // std::cerr << "processing output:\n";
+    // std::cerr << fmt::format("- label = {}\n", label);
+    // std::cerr << fmt::format("- owner = {}\n", output_owner);
+    // std::cerr << fmt::format("- gates: {}\n", gates.size());
     // - assume all gates have the same width: 1 (Boolean) or 8/16/32/64 (arithmetic)
     // - assume all gates have protocol
     // TODO
@@ -402,9 +402,9 @@ void HyCCAdapter::HyCCAdapterImpl::process_circuit_outputs(const simple_circuitt
     // - create single/multiple input gates (Boolean/arithmetic), split wires
     const auto num_gates = gates.size();
     for (std::size_t i = 0; i < num_gates; ++i) {
-      std::cerr << fmt::format("  + gate {} of width {}\n", (void*)gates[i], gates[i]->get_width());
-      std::cerr << fmt::format("    assigned protocol: {}\n",
-                               ToString(get_protocol_from_gate(*gates[i])));
+      // std::cerr << fmt::format("  + gate {} of width {}\n", (void*)gates[i], gates[i]->get_width());
+      // std::cerr << fmt::format("    assigned protocol: {}\n",
+      //                          ToString(get_protocol_from_gate(*gates[i])));
       create_output_gate(output_owner, label, i, gates[i]);
     }
   }
@@ -413,7 +413,7 @@ void HyCCAdapter::HyCCAdapterImpl::process_circuit_outputs(const simple_circuitt
 void HyCCAdapter::HyCCAdapterImpl::create_output_gate(std::size_t output_owner,
                                                       const std::string& label, std::size_t index,
                                                       const simple_circuitt::gatet* gate) {
-  std::cerr << fmt::format("creating output gate {} ...", (const void*)gate);
+  // std::cerr << fmt::format("creating output gate {} ...", (const void*)gate);
   if (gate->num_fanins() != 1) {
     throw hycc_error(fmt::format("unexpected number of inputs: {}", gate->num_fanins()));
   }
