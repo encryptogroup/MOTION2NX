@@ -382,7 +382,7 @@ void HyCCAdapter::HyCCAdapterImpl::create_input_gate(std::size_t input_owner,
   }
   store_wires(primary_output(const_cast<simple_circuitt::gatet*>(gate)), protocol,
               std::move(wires));
-  std::cerr << " done\n";
+  // std::cerr << " done\n";
 }
 
 void HyCCAdapter::HyCCAdapterImpl::process_circuit_outputs(const simple_circuitt& circuit) {
@@ -478,7 +478,7 @@ void HyCCAdapter::HyCCAdapterImpl::create_output_gate(std::size_t output_owner,
   } else {
     throw hycc_error(fmt::format("unexpected protocol {}", protocol));
   }
-  std::cerr << " done\n";
+  // std::cerr << " done\n";
 }
 
 const WireVector& HyCCAdapter::HyCCAdapterImpl::get_or_create_wires(
