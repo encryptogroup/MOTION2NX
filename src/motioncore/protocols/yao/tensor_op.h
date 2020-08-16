@@ -140,6 +140,42 @@ class YaoToArithmeticGMWTensorConversionEvaluator : public NewGate {
   const ENCRYPTO::AlgorithmDescription& addition_algo_;
 };
 
+class YaoToBooleanGMWTensorConversionGarbler : public NewGate {
+ public:
+  YaoToBooleanGMWTensorConversionGarbler(std::size_t gate_id, YaoProvider&,
+                                            const YaoTensorCP input);
+  bool need_setup() const noexcept override { return true; }
+  bool need_online() const noexcept override { return false; }
+  void evaluate_setup() override;
+  void evaluate_online() override {}
+  gmw::BooleanGMWTensorCP get_output_tensor() const noexcept { return output_; }
+
+ private:
+  YaoProvider& yao_provider_;
+  const std::size_t bit_size_;
+  const std::size_t data_size_;
+  const YaoTensorCP input_;
+  gmw::BooleanGMWTensorP output_;
+};
+
+class YaoToBooleanGMWTensorConversionEvaluator : public NewGate {
+ public:
+  YaoToBooleanGMWTensorConversionEvaluator(std::size_t gate_id, YaoProvider&,
+                                              const YaoTensorCP input);
+  bool need_setup() const noexcept override { return false; }
+  bool need_online() const noexcept override { return true; }
+  void evaluate_setup() override {}
+  void evaluate_online() override;
+  gmw::BooleanGMWTensorCP get_output_tensor() const noexcept { return output_; }
+
+ private:
+  YaoProvider& yao_provider_;
+  const std::size_t bit_size_;
+  const std::size_t data_size_;
+  const YaoTensorCP input_;
+  gmw::BooleanGMWTensorP output_;
+};
+
 template <typename T>
 class ArithmeticBEAVYToYaoTensorConversionGarbler : public NewGate {
  public:

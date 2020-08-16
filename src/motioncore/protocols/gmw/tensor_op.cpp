@@ -27,6 +27,7 @@
 #include "crypto/motion_base_provider.h"
 #include "crypto/multiplication_triple/linalg_triple_provider.h"
 #include "crypto/multiplication_triple/sp_provider.h"
+#include "crypto/multiplication_triple/sb_provider.h"
 #include "crypto/sharing_randomness_generator.h"
 #include "gmw_provider.h"
 #include "utility/constants.h"
@@ -479,5 +480,90 @@ void ArithmeticGMWTensorSqr<T>::evaluate_online() {
 }
 
 template class ArithmeticGMWTensorSqr<std::uint64_t>;
+
+template <typename T>
+BooleanToArithmeticGMWTensorConversion<T>::BooleanToArithmeticGMWTensorConversion(
+    std::size_t gate_id, GMWProvider& gmw_provider, const BooleanGMWTensorCP input)
+    : NewGate(gate_id),
+      gmw_provider_(gmw_provider),
+      data_size_(input->get_dimensions().get_data_size()),
+      input_(std::move(input)),
+      output_(std::make_shared<ArithmeticGMWTensor<T>>(input_->get_dimensions())) {
+  const auto my_id = gmw_provider_.get_my_id();
+  auto& sb_provider = gmw_provider_.get_sb_provider();
+  sb_offset_ = sb_provider.RequestSBs<T>(bit_size_ * data_size_);
+  t_share_future_ =
+      gmw_provider_.register_for_bits_message(1 - my_id, gate_id_, bit_size_ * data_size_);
+  output_->get_share().resize(data_size_);
+}
+
+template <typename T>
+void BooleanToArithmeticGMWTensorConversion<T>::evaluate_online() {
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = gmw_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(fmt::format(
+          "Gate {}: BooleanToArithmeticGMWTensorConversion<T>::evaluate_online start", gate_id_));
+    }
+  }
+
+  // let `sbs` point to our SBs
+  const auto& all_sbs = gmw_provider_.get_sb_provider().GetSBsAll<T>();
+  const auto* sbs = &all_sbs[sb_offset_];
+
+  ENCRYPTO::BitVector<> t;
+  t.Reserve(Helpers::Convert::BitsToBytes(bit_size_ * data_size_));
+
+  // collect all shares into a single buffer
+  const auto& input_share = input_->get_share();
+  for (std::size_t bit_j = 0; bit_j < bit_size_; ++bit_j) {
+    const auto& share = input_share[bit_j];
+    t.Append(share);
+  }
+
+  // indexing function
+  const auto idx = [this](auto bit_j, auto int_i) { return bit_j * data_size_ + int_i; };
+
+  // mask them with the shared bits
+  for (std::size_t bit_j = 0; bit_j < bit_size_; ++bit_j) {
+    for (std::size_t int_i = 0; int_i < data_size_; ++int_i) {
+      auto x = t.Get(idx(bit_j, int_i));
+      auto r = bool(sbs[idx(bit_j, int_i)] & 1);
+      t.Set(x ^ r, idx(bit_j, int_i));
+    }
+  }
+
+  // reconstruct masked values
+  gmw_provider_.broadcast_bits_message(gate_id_, t);
+  t ^= t_share_future_.get();
+
+  const auto is_my_job = gmw_provider_.is_my_job(gate_id_);
+
+  // remove mask in arithmetic sharing
+  auto& output = output_->get_share();
+  for (std::size_t bit_j = 0; bit_j < bit_size_; ++bit_j) {
+    for (std::size_t int_i = 0; int_i < data_size_; ++int_i) {
+      auto t_ij = T(t.Get(idx(bit_j, int_i)));
+      auto r_ij = sbs[idx(bit_j, int_i)];
+      T value = r_ij - 2 * t_ij * r_ij;
+      if (is_my_job) {
+        value += t_ij;
+      }
+      output[int_i] += value << bit_j;
+    }
+  }
+
+  output_->set_online_ready();
+
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = gmw_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(fmt::format(
+          "Gate {}: BooleanToArithmeticGMWTensorConversion<T>::evaluate_online end", gate_id_));
+    }
+  }
+}
+
+template class BooleanToArithmeticGMWTensorConversion<std::uint64_t>;
 
 }  // namespace MOTION::proto::gmw

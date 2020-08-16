@@ -29,6 +29,14 @@
 
 namespace MOTION::proto::yao {
 
+void get_lsbs_from_keys(ENCRYPTO::BitVector<>& dst, const ENCRYPTO::block128_t* src,
+                        std::size_t num_bits) {
+  dst.Resize(num_bits);
+  for (std::size_t bit_j = 0; bit_j < num_bits; ++bit_j) {
+    dst.Set(bool(*src[bit_j].data() & std::byte(0x01)), bit_j);
+  }
+}
+
 void transpose_keys(ENCRYPTO::block128_vector& dst, const ENCRYPTO::block128_vector& src,
                     std::size_t bit_size, std::size_t num) {
   if (bit_size * num != src.size()) {

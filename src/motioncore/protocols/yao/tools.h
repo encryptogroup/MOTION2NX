@@ -24,6 +24,7 @@
 
 #include <cstddef>
 
+#include "utility/bit_vector.h"
 #include "utility/block.h"
 
 namespace MOTION::tensor {
@@ -31,6 +32,9 @@ struct MaxPoolOp;
 }
 
 namespace MOTION::proto::yao {
+
+void get_lsbs_from_keys(ENCRYPTO::BitVector<>& dst, const ENCRYPTO::block128_t* src,
+                        std::size_t num_bits);
 
 void transpose_keys(ENCRYPTO::block128_vector& dst, const ENCRYPTO::block128_vector& src,
                     std::size_t bit_size, std::size_t num);

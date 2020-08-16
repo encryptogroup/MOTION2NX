@@ -430,6 +430,90 @@ void YaoToArithmeticGMWTensorConversionEvaluator<T>::evaluate_online() {
 
 template class YaoToArithmeticGMWTensorConversionEvaluator<std::uint64_t>;
 
+// Y -> B Garbler side
+YaoToBooleanGMWTensorConversionGarbler::YaoToBooleanGMWTensorConversionGarbler(
+    std::size_t gate_id, YaoProvider& yao_provider, const YaoTensorCP input)
+    : NewGate(gate_id),
+      yao_provider_(yao_provider),
+      bit_size_(input->get_bit_size()),
+      data_size_(input->get_dimensions().get_data_size()),
+      input_(std::move(input)) {
+  const auto& tensor_dims = input_->get_dimensions();
+  output_ = std::make_shared<gmw::BooleanGMWTensor>(tensor_dims, bit_size_);
+  auto& shares = output_->get_share();
+  for (std::size_t bit_j = 0; bit_j < bit_size_; ++bit_j) {
+    shares.at(bit_j) = ENCRYPTO::BitVector<>(data_size_);
+  }
+}
+
+void YaoToBooleanGMWTensorConversionGarbler::evaluate_setup() {
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = yao_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(fmt::format(
+          "Gate {}: YaoToBooleanGMWTensorConversionGarbler::evaluate_setup start", gate_id_));
+    }
+  }
+
+  input_->wait_setup();
+  auto& input_keys = input_->get_keys();
+  auto& output_share = output_->get_share();
+  for (std::size_t bit_j = 0; bit_j < bit_size_; ++bit_j) {
+    get_lsbs_from_keys(output_share[bit_j], input_keys.data() + bit_j * data_size_, data_size_);
+  }
+  output_->set_online_ready();
+
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = yao_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(fmt::format(
+          "Gate {}: YaoToBooleanGMWTensorConversionGarbler::evaluate_setup end", gate_id_));
+    }
+  }
+}
+
+// Y -> B Evaluator side
+YaoToBooleanGMWTensorConversionEvaluator::YaoToBooleanGMWTensorConversionEvaluator(
+    std::size_t gate_id, YaoProvider& yao_provider, const YaoTensorCP input)
+    : NewGate(gate_id),
+      yao_provider_(yao_provider),
+      bit_size_(input->get_bit_size()),
+      data_size_(input->get_dimensions().get_data_size()),
+      input_(std::move(input)) {
+  const auto& tensor_dims = input_->get_dimensions();
+  output_ = std::make_shared<gmw::BooleanGMWTensor>(tensor_dims, bit_size_);
+  auto& shares = output_->get_share();
+  for (std::size_t bit_j = 0; bit_j < bit_size_; ++bit_j) {
+    shares.at(bit_j) = ENCRYPTO::BitVector<>(data_size_);
+  }
+}
+
+void YaoToBooleanGMWTensorConversionEvaluator::evaluate_online() {
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = yao_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(fmt::format(
+          "Gate {}: YaoToBooleanGMWTensorConversionEvaluator::evaluate_online start", gate_id_));
+    }
+  }
+
+  input_->wait_online();
+  auto& input_keys = input_->get_keys();
+  auto& output_share = output_->get_share();
+  for (std::size_t bit_j = 0; bit_j < bit_size_; ++bit_j) {
+    get_lsbs_from_keys(output_share[bit_j], input_keys.data() + bit_j * data_size_, data_size_);
+  }
+  output_->set_online_ready();
+
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = yao_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(fmt::format(
+          "Gate {}: YaoToBooleanGMWTensorConversionEvaluator::evaluate_online end", gate_id_));
+    }
+  }
+}
+
 // BEAVY A -> Y Garbler side
 
 template <typename T>

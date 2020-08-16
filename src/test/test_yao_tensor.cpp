@@ -297,6 +297,89 @@ TYPED_TEST(YaoArithmeticGMWTensorTest, ConversionBoth) {
   ASSERT_EQ(input, output);
 }
 
+TYPED_TEST(YaoArithmeticGMWTensorTest, ConversionToBooleanGMW) {
+  MOTION::tensor::TensorDimensions dims = {
+      .batch_size_ = 1, .num_channels_ = 1, .height_ = 28, .width_ = 28};
+  const auto input = this->generate_inputs(dims);
+
+  auto [input_promise, tensor_in_0] = this->make_arithmetic_T_tensor_input_my(0, dims);
+  auto tensor_in_1 = this->make_arithmetic_T_tensor_input_other(1, dims);
+
+  auto tensor_yao_0 = this->yao_providers_[0]->make_convert_from_arithmetic_gmw_tensor(tensor_in_0);
+  auto tensor_yao_1 = this->yao_providers_[1]->make_convert_from_arithmetic_gmw_tensor(tensor_in_1);
+  auto tensor_0 = this->yao_providers_[0]->make_convert_to_boolean_gmw_tensor(tensor_yao_0);
+  auto tensor_1 = this->yao_providers_[1]->make_convert_to_boolean_gmw_tensor(tensor_yao_1);
+
+  this->run_setup();
+  this->run_gates_setup();
+  input_promise.set_value(input);
+  this->run_gates_online();
+
+  const auto bgmw_tensor_0 = std::dynamic_pointer_cast<const BooleanGMWTensor>(tensor_0);
+  const auto bgmw_tensor_1 = std::dynamic_pointer_cast<const BooleanGMWTensor>(tensor_1);
+  ASSERT_NE(bgmw_tensor_0, nullptr);
+  ASSERT_NE(bgmw_tensor_1, nullptr);
+  bgmw_tensor_0->wait_online();
+  bgmw_tensor_1->wait_online();
+
+  constexpr auto bit_size = ENCRYPTO::bit_size_v<TypeParam>;
+  const auto data_size = input.size();
+  const auto& share_0 = bgmw_tensor_0->get_share();
+  const auto& share_1 = bgmw_tensor_1->get_share();
+  ASSERT_EQ(share_0.size(), bit_size);
+  ASSERT_EQ(share_1.size(), bit_size);
+  for (std::size_t bit_j = 0; bit_j < ENCRYPTO::bit_size_v<TypeParam>; ++bit_j) {
+    ASSERT_EQ(share_0.at(bit_j).GetSize(), data_size);
+    ASSERT_EQ(share_1.at(bit_j).GetSize(), data_size);
+  }
+  std::vector<ENCRYPTO::BitVector<>> plain_bits;
+  plain_bits.reserve(bit_size);
+  std::transform(std::begin(share_0), std::end(share_0), std::begin(share_1),
+                 std::back_inserter(plain_bits),
+                 [](const auto& bv0, const auto& bv1) { return bv0 ^ bv1; });
+  for (std::size_t int_i = 0; int_i < data_size; ++int_i) {
+    const auto value = input.at(int_i);
+    for (std::size_t bit_j = 0; bit_j < ENCRYPTO::bit_size_v<TypeParam>; ++bit_j) {
+      const auto bit = plain_bits.at(bit_j).Get(int_i);
+      const auto expected_bit = bool(value & (TypeParam(1) << bit_j));
+      EXPECT_EQ(bit, expected_bit);
+    }
+  }
+}
+
+TYPED_TEST(YaoArithmeticGMWTensorTest, ConversionToBooleanGMWAndBack) {
+  MOTION::tensor::TensorDimensions dims = {
+      .batch_size_ = 1, .num_channels_ = 1, .height_ = 28, .width_ = 28};
+  const auto input = this->generate_inputs(dims);
+
+  auto [input_promise, tensor_in_0] = this->make_arithmetic_T_tensor_input_my(0, dims);
+  auto tensor_in_1 = this->make_arithmetic_T_tensor_input_other(1, dims);
+
+  auto yao_tensor_0 = this->yao_providers_[0]->make_convert_from_arithmetic_gmw_tensor(tensor_in_0);
+  auto yao_tensor_1 = this->yao_providers_[1]->make_convert_from_arithmetic_gmw_tensor(tensor_in_1);
+
+  auto bgmw_tensor_0 = this->yao_providers_[0]->make_convert_to_boolean_gmw_tensor(yao_tensor_0);
+  auto bgmw_tensor_1 = this->yao_providers_[1]->make_convert_to_boolean_gmw_tensor(yao_tensor_1);
+
+  auto agmw_tensor_0 =
+      this->gmw_providers_[0]->make_convert_boolean_to_arithmetic_gmw_tensor(bgmw_tensor_0);
+  auto agmw_tensor_1 =
+      this->gmw_providers_[1]->make_convert_boolean_to_arithmetic_gmw_tensor(bgmw_tensor_1);
+
+  this->gmw_providers_[0]->make_arithmetic_tensor_output_other(agmw_tensor_0);
+  auto output_future = this->make_arithmetic_T_tensor_output_my(1, agmw_tensor_1);
+
+  this->run_setup();
+  this->run_gates_setup();
+  input_promise.set_value(input);
+  this->run_gates_online();
+
+  auto output = output_future.get();
+
+  ASSERT_EQ(output.size(), dims.get_data_size());
+  ASSERT_EQ(input, output);
+}
+
 TYPED_TEST(YaoArithmeticGMWTensorTest, ReLU) {
   MOTION::tensor::TensorDimensions dims = {
       .batch_size_ = 1, .num_channels_ = 1, .height_ = 28, .width_ = 28};

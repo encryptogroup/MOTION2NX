@@ -187,6 +187,7 @@ class YaoProvider : public GateFactory,
   template <typename T>
   tensor::TensorCP basic_make_convert_to_arithmetic_gmw_tensor(const tensor::TensorCP);
   tensor::TensorCP make_convert_to_arithmetic_gmw_tensor(const tensor::TensorCP);
+  tensor::TensorCP make_convert_to_boolean_gmw_tensor(const tensor::TensorCP);
   template <typename T>
   tensor::TensorCP basic_make_convert_to_arithmetic_beavy_tensor(const tensor::TensorCP);
   tensor::TensorCP make_convert_to_arithmetic_beavy_tensor(const tensor::TensorCP);

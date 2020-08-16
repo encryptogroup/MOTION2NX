@@ -23,6 +23,7 @@
 #pragma once
 
 #include "tensor/tensor.h"
+#include "utility/bit_vector.h"
 #include "utility/enable_wait.h"
 #include "utility/type_traits.hpp"
 #include "utility/typedefs.h"
@@ -48,5 +49,23 @@ using ArithmeticGMWTensorP = std::shared_ptr<ArithmeticGMWTensor<T>>;
 
 template <typename T>
 using ArithmeticGMWTensorCP = std::shared_ptr<const ArithmeticGMWTensor<T>>;
+
+class BooleanGMWTensor : public tensor::Tensor {
+ public:
+  BooleanGMWTensor(const tensor::TensorDimensions& dims, std::size_t bit_size)
+      : Tensor(dims), bit_size_(bit_size), data_(bit_size) {}
+  MPCProtocol get_protocol() const noexcept override { return MPCProtocol::BooleanGMW; }
+  std::size_t get_bit_size() const noexcept override { return bit_size_; }
+  std::vector<ENCRYPTO::BitVector<>>& get_share() noexcept { return data_; }
+  const std::vector<ENCRYPTO::BitVector<>>& get_share() const noexcept { return data_; }
+
+ private:
+  std::size_t bit_size_;
+  std::vector<ENCRYPTO::BitVector<>> data_;
+};
+
+using BooleanGMWTensorP = std::shared_ptr<BooleanGMWTensor>;
+
+using BooleanGMWTensorCP = std::shared_ptr<const BooleanGMWTensor>;
 
 }  // namespace MOTION::proto::gmw

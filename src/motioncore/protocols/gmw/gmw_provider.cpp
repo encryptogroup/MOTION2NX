@@ -811,4 +811,34 @@ tensor::TensorCP GMWProvider::make_tensor_sqr_op(const tensor::TensorCP input) {
   return output;
 }
 
+template <typename T>
+tensor::TensorCP GMWProvider::basic_make_convert_boolean_to_arithmetic_gmw_tensor(
+    const tensor::TensorCP in) {
+  const auto input_tensor = std::dynamic_pointer_cast<const BooleanGMWTensor>(in);
+  assert(input_tensor != nullptr);
+  auto gate_id = gate_register_.get_next_gate_id();
+  auto tensor_op =
+      std::make_unique<BooleanToArithmeticGMWTensorConversion<T>>(gate_id, *this, input_tensor);
+  auto output = tensor_op->get_output_tensor();
+  gate_register_.register_gate(std::move(tensor_op));
+  return output;
+}
+
+template tensor::TensorCP GMWProvider::basic_make_convert_boolean_to_arithmetic_gmw_tensor<
+    std::uint64_t>(const tensor::TensorCP);
+
+tensor::TensorCP GMWProvider::make_convert_boolean_to_arithmetic_gmw_tensor(
+    const tensor::TensorCP in) {
+  switch (in->get_bit_size()) {
+    case 64: {
+      return basic_make_convert_boolean_to_arithmetic_gmw_tensor<std::uint64_t>(std::move(in));
+      break;
+    }
+    default: {
+      throw std::logic_error("unsupported bit size");
+    }
+  }
+}
+
+
 }  // namespace MOTION::proto::gmw
