@@ -400,5 +400,85 @@ class GOTBitReceiver : public BasicOTReceiver {
   bool outputs_computed_ = false;
 };
 
+class ROTSender : public BasicOTSender {
+ public:
+  ROTSender(std::size_t ot_id, std::size_t num_ots, std::size_t vector_size, bool random_choice,
+            MOTION::OTExtensionSenderData& data,
+            const std::function<void(flatbuffers::FlatBufferBuilder&&)>& Send);
+
+  // compute the sender's outputs
+  void ComputeOutputs();
+
+  // get the sender's outputs
+  BitVector<>& GetOutputs() {
+    assert(outputs_computed_);
+    return outputs_;
+  }
+
+  // clear stored data s.t. this handle can be used again
+  void clear() noexcept {
+    outputs_ = {};
+    outputs_computed_ = false;
+  }
+
+ private:
+  // dimension of each sender-input/output
+  const std::size_t vector_size_;
+
+  // if the receiver selects its choice bit
+  const bool random_choice_;
+
+  // the senders outputs, first the "0 outputs", then the "1 outputs"
+  BitVector<> outputs_;
+
+  // if the sender outputs have been computed
+  bool outputs_computed_ = false;
+};
+
+// receiver implementation of batched additive-correlated ots
+class ROTReceiver : public BasicOTReceiver {
+ public:
+  ROTReceiver(std::size_t ot_id, std::size_t num_ots, std::size_t vector_size, bool random_choice,
+              MOTION::OTExtensionReceiverData& data,
+              const std::function<void(flatbuffers::FlatBufferBuilder&&)>& Send);
+
+  // compute the receiver's outputs
+  void ComputeOutputs();
+
+  // get the receiver's outputs
+  BitVector<>& GetOutputs() {
+    assert(outputs_computed_);
+    return outputs_;
+  }
+
+  // get the receiver's choices
+  BitVector<>& GetChoices() {
+    assert(!random_choice_ || outputs_computed_);
+    return choices_;
+  }
+
+  // clear stored data s.t. this handle can be used again
+  void clear() noexcept {
+    outputs_ = {};
+    outputs_computed_ = false;
+  }
+
+ private:
+  // dimension of each sender-input/output
+  const std::size_t vector_size_;
+
+  // if the receiver selects its choice bit
+  const bool random_choice_;
+
+  // the choices of the receiver
+  BitVector<> choices_;
+
+  // the output for the receiver
+  BitVector<> outputs_;
+
+  // if the sender outputs have been computed
+  bool outputs_computed_ = false;
+};
+
 }  // namespace ObliviousTransfer
 }  // namespace ENCRYPTO

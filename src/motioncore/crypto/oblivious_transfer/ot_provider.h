@@ -84,6 +84,8 @@ class GOT128Sender;
 class GOT128Receiver;
 class GOTBitSender;
 class GOTBitReceiver;
+class ROTSender;
+class ROTReceiver;
 
 class OTVector {
  public:
@@ -291,6 +293,9 @@ class OTProviderSender {
   std::unique_ptr<GOTBitSender> RegisterGOTBit(
       const std::size_t num_ots,
       const std::function<void(flatbuffers::FlatBufferBuilder &&)> &Send);
+  std::unique_ptr<ROTSender> RegisterROT(
+      std::size_t num_ots, std::size_t vector_size, bool random_choice,
+      const std::function<void(flatbuffers::FlatBufferBuilder &&)> &Send);
 
   auto GetNumOTs() const { return total_ots_count_; }
 
@@ -341,6 +346,9 @@ class OTProviderReceiver {
   std::unique_ptr<GOTBitReceiver> RegisterGOTBit(
       const std::size_t num_ots,
       const std::function<void(flatbuffers::FlatBufferBuilder &&)> &Send);
+  std::unique_ptr<ROTReceiver> RegisterROT(
+      std::size_t num_ots, std::size_t vector_size, bool random_choice,
+      const std::function<void(flatbuffers::FlatBufferBuilder &&)> &Send);
 
   std::size_t GetNumOTs() const { return total_ots_count_; }
 
@@ -389,6 +397,10 @@ class OTProvider {
 
   [[nodiscard]] std::unique_ptr<GOTBitSender> RegisterSendGOTBit(std::size_t num_ots = 1);
 
+  [[nodiscard]] std::unique_ptr<ROTSender> RegisterSendROT(std::size_t num_ots = 1,
+                                                           std::size_t vector_size = 1,
+                                                           bool random_choice = true);
+
   /// @param bitlen Bit-length of the messages
   /// @param num_ots Number of OTs
   /// @param p OT protocol from {General OT (GOT), Correlated OT (COT), Random OT (ROT)}
@@ -411,6 +423,10 @@ class OTProvider {
   [[nodiscard]] std::unique_ptr<GOT128Receiver> RegisterReceiveGOT128(std::size_t num_ots = 1);
 
   [[nodiscard]] std::unique_ptr<GOTBitReceiver> RegisterReceiveGOTBit(std::size_t num_ots = 1);
+
+  [[nodiscard]] std::unique_ptr<ROTReceiver> RegisterReceiveROT(std::size_t num_ots = 1,
+                                                                std::size_t vector_size = 1,
+                                                                bool random_choice = true);
 
   [[nodiscard]] std::size_t GetNumOTsReceiver() const { return receiver_provider_.GetNumOTs(); }
 

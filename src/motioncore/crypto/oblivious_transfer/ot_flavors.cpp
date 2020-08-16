@@ -524,5 +524,73 @@ void GOTBitReceiver::ComputeOutputs() {
   outputs_computed_ = true;
 }
 
+// ---------- ROTSender ----------
+
+ROTSender::ROTSender(const std::size_t ot_id, const std::size_t num_ots, std::size_t vector_size,
+                     bool random_choice, MOTION::OTExtensionSenderData& data,
+                     const std::function<void(flatbuffers::FlatBufferBuilder&&)>& Send)
+    : BasicOTSender(ot_id, num_ots, vector_size, ROT, Send, data),
+      vector_size_(vector_size),
+      random_choice_(random_choice) {
+  if (random_choice == false) {
+    throw std::logic_error("ROT with choice not yet implemented");
+  }
+}
+
+void ROTSender::ComputeOutputs() {
+  if (outputs_computed_) {
+    // the work was already done
+    return;
+  }
+
+  // setup phase needs to be finished
+  WaitSetup();
+
+  // make space for all the OTs
+  outputs_.Reserve(MOTION::Helpers::Convert::BitsToBytes(2 * num_ots_ * vector_size_));
+
+  // take one of the precomputed outputs
+  for (std::size_t i = 0; i < num_ots_; ++i) {
+    outputs_.Append(data_.y0_.at(ot_id_ + i));
+    outputs_.Append(data_.y1_.at(ot_id_ + i));
+  }
+
+  // remember that we have done this
+  outputs_computed_ = true;
+}
+
+// ---------- ROTReceiver ----------
+
+ROTReceiver::ROTReceiver(const std::size_t ot_id, const std::size_t num_ots,
+                         std::size_t vector_size, bool random_choice,
+                         MOTION::OTExtensionReceiverData& data,
+                         const std::function<void(flatbuffers::FlatBufferBuilder&&)>& Send)
+    : BasicOTReceiver(ot_id, num_ots, vector_size, ROT, Send, data),
+      vector_size_(vector_size),
+      random_choice_(random_choice) {
+  if (random_choice == false) {
+    throw std::logic_error("ROT with choice not yet implemented");
+  }
+}
+
+void ROTReceiver::ComputeOutputs() {
+  if (outputs_computed_) {
+    // already done
+    return;
+  }
+
+  if (random_choice_) {
+    choices_ = data_.random_choices_->Subset(ot_id_, ot_id_ + num_ots_);
+  }
+
+  outputs_.Reserve(MOTION::Helpers::Convert::BitsToBytes(num_ots_ * vector_size_));
+
+  for (std::size_t i = 0; i < num_ots_; ++i) {
+    assert(data_.outputs_.at(ot_id_ + i).GetSize() == vector_size_);
+    outputs_.Append(data_.outputs_.at(ot_id_ + i));
+  }
+  outputs_computed_ = true;
+}
+
 }  // namespace ObliviousTransfer
 }  // namespace ENCRYPTO

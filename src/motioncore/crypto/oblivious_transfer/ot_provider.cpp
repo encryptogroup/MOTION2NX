@@ -90,6 +90,12 @@ template std::unique_ptr<ACOTSender<__uint128_t>> OTProvider::RegisterSendACOT(
   return sender_provider_.RegisterGOTBit(num_ots, Send_);
 }
 
+[[nodiscard]] std::unique_ptr<ROTSender> OTProvider::RegisterSendROT(std::size_t num_ots,
+                                                                     std::size_t vector_size,
+                                                                     bool random_choice) {
+  return sender_provider_.RegisterROT(num_ots, vector_size, random_choice, Send_);
+}
+
 [[nodiscard]] std::unique_ptr<FixedXCOT128Receiver> OTProvider::RegisterReceiveFixedXCOT128(
     std::size_t num_ots) {
   return receiver_provider_.RegisterFixedXCOT128s(num_ots, Send_);
@@ -125,6 +131,12 @@ template std::unique_ptr<ACOTReceiver<__uint128_t>> OTProvider::RegisterReceiveA
 [[nodiscard]] std::unique_ptr<GOTBitReceiver> OTProvider::RegisterReceiveGOTBit(
     std::size_t num_ots) {
   return receiver_provider_.RegisterGOTBit(num_ots, Send_);
+}
+
+[[nodiscard]] std::unique_ptr<ROTReceiver> OTProvider::RegisterReceiveROT(std::size_t num_ots,
+                                                                          std::size_t vector_size,
+                                                                          bool random_choice) {
+  return receiver_provider_.RegisterROT(num_ots, vector_size, random_choice, Send_);
 }
 
 OTProviderFromOTExtension::OTProviderFromOTExtension(
@@ -1037,6 +1049,21 @@ std::unique_ptr<GOTBitSender> OTProviderSender::RegisterGOTBit(
   return ot;
 }
 
+std::unique_ptr<ROTSender> OTProviderSender::RegisterROT(
+    std::size_t num_ots, std::size_t vector_size, bool random_choice,
+    const std::function<void(flatbuffers::FlatBufferBuilder&&)>& Send) {
+  const auto i = total_ots_count_;
+  total_ots_count_ += num_ots;
+  auto ot = std::make_unique<ROTSender>(i, num_ots, vector_size, random_choice, data_, Send);
+  if constexpr (MOTION::MOTION_DEBUG) {
+    if (logger_) {
+      logger_->LogDebug(fmt::format("Party#{}: registered {} parallel {}-bit sender RCOTs",
+                                    party_id_, num_ots, vector_size));
+    }
+  }
+  return ot;
+}
+
 void OTProviderSender::Clear() {
   {
     std::scoped_lock lock(data_.setup_finished_cond_->GetMutex());
@@ -1229,6 +1256,21 @@ std::unique_ptr<GOTBitReceiver> OTProviderReceiver::RegisterGOTBit(
     if (logger_) {
       logger_->LogDebug(fmt::format("Party#{}: registered {} parallel {}-bit receiver GOTBits",
                                     party_id_, num_ots, 1));
+    }
+  }
+  return ot;
+}
+
+std::unique_ptr<ROTReceiver> OTProviderReceiver::RegisterROT(
+    std::size_t num_ots, std::size_t vector_size, bool random_choice,
+    const std::function<void(flatbuffers::FlatBufferBuilder&&)>& Send) {
+  const auto i = total_ots_count_.load();
+  total_ots_count_ += num_ots;
+  auto ot = std::make_unique<ROTReceiver>(i, num_ots, vector_size, random_choice, data_, Send);
+  if constexpr (MOTION::MOTION_DEBUG) {
+    if (logger_) {
+      logger_->LogDebug(fmt::format("Party#{}: registered {} parallel {}-bit receiver ROTs",
+                                    party_id_, num_ots, vector_size));
     }
   }
   return ot;
