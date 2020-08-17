@@ -29,8 +29,16 @@
 #include <vector>
 
 #include "tensor/tensor_op.h"
+#include "utility/bit_vector.h"
 #include "utility/enable_wait.h"
+#include "utility/hash.h"
 #include "utility/type_traits.hpp"
+
+namespace ENCRYPTO::ObliviousTransfer {
+class OTProvider;
+class ROTReceiver;
+class ROTSender;
+}  // namespace ENCRYPTO::ObliviousTransfer
 
 namespace MOTION {
 
@@ -55,6 +63,11 @@ class LinAlgTripleProvider : public ENCRYPTO::enable_wait_setup {
     std::vector<T> c_;
     using is_enabled_ = ENCRYPTO::is_unsigned_int_t<T>;
   };
+  struct BooleanTriple {
+    ENCRYPTO::BitVector<> a_;
+    std::vector<ENCRYPTO::BitVector<>> b_;
+    std::vector<ENCRYPTO::BitVector<>> c_;
+  };
 
   template <typename T>
   std::size_t register_for_gemm_triple(const tensor::GemmOp&);
@@ -68,11 +81,17 @@ class LinAlgTripleProvider : public ENCRYPTO::enable_wait_setup {
   template <typename T>
   [[nodiscard]] LinAlgTriple<T> get_conv2d_triple(const tensor::Conv2DOp&, std::size_t);
 
+  std::size_t register_for_relu_triple(std::size_t num_triples, std::size_t bit_size);
+
+  [[nodiscard]] BooleanTriple get_relu_triple(std::size_t num_triples, std::size_t bit_size,
+                                              std::size_t index);
+
   virtual void setup() = 0;
 
  protected:
   virtual void registration_hook(const tensor::GemmOp&, std::size_t bit_size) = 0;
   virtual void registration_hook(const tensor::Conv2DOp&, std::size_t bit_size) = 0;
+  virtual void registration_hook_boolean(std::size_t num_triples, std::size_t bit_size) = 0;
 
   std::unordered_map<tensor::GemmOp, std::size_t> gemm_counts_8_;
   std::unordered_map<tensor::GemmOp, std::size_t> gemm_counts_16_;
@@ -97,11 +116,18 @@ class LinAlgTripleProvider : public ENCRYPTO::enable_wait_setup {
   std::unordered_map<tensor::Conv2DOp, std::vector<LinAlgTriple<std::uint32_t>>> conv2d_triples_32_;
   std::unordered_map<tensor::Conv2DOp, std::vector<LinAlgTriple<std::uint64_t>>> conv2d_triples_64_;
   std::unordered_map<tensor::Conv2DOp, std::vector<LinAlgTriple<__uint128_t>>> conv2d_triples_128_;
+
+  std::unordered_map<std::pair<std::size_t, std::size_t>, std::size_t, utils::size_t_pair_hash>
+      relu_counts_;
+  std::unordered_map<std::pair<std::size_t, std::size_t>, std::vector<BooleanTriple>,
+                     utils::size_t_pair_hash>
+      relu_triples_;
 };
 
 class LinAlgTriplesFromAP : public LinAlgTripleProvider {
  public:
-  LinAlgTriplesFromAP(ArithmeticProvider&, std::shared_ptr<Logger>);
+  LinAlgTriplesFromAP(ArithmeticProvider&, ENCRYPTO::ObliviousTransfer::OTProvider&,
+                      std::shared_ptr<Logger>);
   ~LinAlgTriplesFromAP();
 
   void setup() override;
@@ -109,9 +135,11 @@ class LinAlgTriplesFromAP : public LinAlgTripleProvider {
  protected:
   void registration_hook(const tensor::GemmOp&, std::size_t bit_size) override;
   void registration_hook(const tensor::Conv2DOp&, std::size_t bit_size) override;
+  void registration_hook_boolean(std::size_t num_triples, std::size_t bit_size) override;
 
  private:
   ArithmeticProvider& arith_provider_;
+  ENCRYPTO::ObliviousTransfer::OTProvider& ot_provider_;
   std::shared_ptr<Logger> logger_;
 
   template <typename T>
@@ -131,6 +159,12 @@ class LinAlgTriplesFromAP : public LinAlgTripleProvider {
   std::unordered_map<tensor::Conv2DOp, conv_value_type<std::uint32_t>> conv2d_handles_32_;
   std::unordered_map<tensor::Conv2DOp, conv_value_type<std::uint64_t>> conv2d_handles_64_;
   std::unordered_map<tensor::Conv2DOp, conv_value_type<__uint128_t>> conv2d_handles_128_;
+
+  using relu_value_type =
+      std::vector<std::pair<std::unique_ptr<ENCRYPTO::ObliviousTransfer::ROTSender>,
+                            std::unique_ptr<ENCRYPTO::ObliviousTransfer::ROTReceiver>>>;
+  std::unordered_map<std::pair<std::size_t, std::size_t>, relu_value_type, utils::size_t_pair_hash>
+      relu_handles_;
 };
 
 // Generator of fake triples which just consists of random data.
@@ -141,6 +175,7 @@ class FakeLinAlgTripleProvider : public LinAlgTripleProvider {
  protected:
   void registration_hook(const tensor::GemmOp&, std::size_t bit_size) override;
   void registration_hook(const tensor::Conv2DOp&, std::size_t bit_size) override;
+  void registration_hook_boolean(std::size_t num_triples, std::size_t bit_size) override;
 };
 
 }  // namespace MOTION

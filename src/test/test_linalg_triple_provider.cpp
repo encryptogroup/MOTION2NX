@@ -54,7 +54,8 @@ class LinAlgTripleProviderTest : public ::testing::Test {
       arithmetic_provider_managers_[i] = std::make_unique<MOTION::ArithmeticProviderManager>(
           *comm_layers_[i], *ot_provider_managers_[i], nullptr);
       linalg_triple_providers_[i] = std::make_unique<MOTION::LinAlgTriplesFromAP>(
-          arithmetic_provider_managers_[i]->get_provider(1 - i), nullptr);
+          arithmetic_provider_managers_[i]->get_provider(1 - i),
+          ot_provider_managers_[i]->get_provider(1 - i), nullptr);
     }
 
     std::vector<std::future<void>> futs;
@@ -182,5 +183,48 @@ TYPED_TEST(LinAlgTripleProviderTest, Convolution) {
   plain_triple.c_ = MOTION::Helpers::AddVectors(triple_0.c_, triple_1.c_);
 
   auto expected_c = MOTION::convolution(conv_op, plain_triple.a_, plain_triple.b_);
+  ASSERT_EQ(plain_triple.c_, expected_c);
+}
+
+TYPED_TEST(LinAlgTripleProviderTest, ReLU) {
+  std::size_t num_triples = 100;
+  constexpr auto bit_size = ENCRYPTO::bit_size_v<TypeParam>;
+
+  auto index_0 = this->linalg_triple_providers_[0]->register_for_relu_triple(num_triples, bit_size);
+  auto index_1 = this->linalg_triple_providers_[1]->register_for_relu_triple(num_triples, bit_size);
+
+  this->run_setup();
+
+  auto triple_0 =
+      this->linalg_triple_providers_[0]->get_relu_triple(num_triples, bit_size, index_0);
+  auto triple_1 =
+      this->linalg_triple_providers_[1]->get_relu_triple(num_triples, bit_size, index_1);
+
+  ASSERT_EQ(triple_0.a_.GetSize(), num_triples);
+  ASSERT_EQ(triple_0.b_.size(), bit_size - 1);
+  ASSERT_EQ(triple_0.c_.size(), bit_size - 1);
+  ASSERT_EQ(triple_0.a_.GetSize(), triple_1.a_.GetSize());
+  ASSERT_EQ(triple_0.b_.size(), triple_1.b_.size());
+  ASSERT_EQ(triple_0.c_.size(), triple_1.c_.size());
+  for (std::size_t bit_j = 0; bit_j < bit_size - 1; ++bit_j) {
+    ASSERT_EQ(triple_0.b_.at(bit_j).GetSize(), num_triples);
+    ASSERT_EQ(triple_0.c_.at(bit_j).GetSize(), num_triples);
+    ASSERT_EQ(triple_0.b_.at(bit_j).GetSize(), triple_1.b_.at(bit_j).GetSize());
+    ASSERT_EQ(triple_0.c_.at(bit_j).GetSize(), triple_1.c_.at(bit_j).GetSize());
+  }
+
+  MOTION::LinAlgTripleProvider::BooleanTriple plain_triple;
+  plain_triple.a_ = triple_0.a_ ^ triple_1.a_;
+  plain_triple.b_.resize(bit_size - 1);
+  plain_triple.c_.resize(bit_size - 1);
+  for (std::size_t bit_j = 0; bit_j < bit_size - 1; ++bit_j) {
+    plain_triple.b_.at(bit_j) = triple_0.b_.at(bit_j) ^ triple_1.b_.at(bit_j);
+    plain_triple.c_.at(bit_j) = triple_0.c_.at(bit_j) ^ triple_1.c_.at(bit_j);
+  }
+
+  std::vector<ENCRYPTO::BitVector<>> expected_c(bit_size - 1);
+  for (std::size_t bit_j = 0; bit_j < bit_size - 1; ++bit_j) {
+    expected_c.at(bit_j) = plain_triple.a_ & plain_triple.b_.at(bit_j);
+  }
   ASSERT_EQ(plain_triple.c_, expected_c);
 }
