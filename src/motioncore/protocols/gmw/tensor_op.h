@@ -195,4 +195,23 @@ class BooleanToArithmeticGMWTensorConversion : public NewGate {
   ENCRYPTO::ReusableFiberFuture<ENCRYPTO::BitVector<>> t_share_future_;
 };
 
+class BooleanGMWTensorRelu : public NewGate {
+ public:
+  BooleanGMWTensorRelu(std::size_t gate_id, GMWProvider&, const BooleanGMWTensorCP input);
+  bool need_setup() const noexcept override { return false; }
+  bool need_online() const noexcept override { return true; }
+  void evaluate_setup() override {}
+  void evaluate_online() override;
+  const BooleanGMWTensorP& get_output_tensor() const { return output_; }
+
+ private:
+  GMWProvider& gmw_provider_;
+  const std::size_t bit_size_;
+  const std::size_t data_size_;
+  const BooleanGMWTensorCP input_;
+  BooleanGMWTensorP output_;
+  const std::size_t triple_index_;
+  ENCRYPTO::ReusableFiberFuture<ENCRYPTO::BitVector<>> share_future_;
+};
+
 }  // namespace MOTION::proto::gmw

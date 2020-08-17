@@ -566,4 +566,100 @@ void BooleanToArithmeticGMWTensorConversion<T>::evaluate_online() {
 
 template class BooleanToArithmeticGMWTensorConversion<std::uint64_t>;
 
+BooleanGMWTensorRelu::BooleanGMWTensorRelu(std::size_t gate_id, GMWProvider& gmw_provider,
+                                           const BooleanGMWTensorCP input)
+    : NewGate(gate_id),
+      gmw_provider_(gmw_provider),
+      bit_size_(input->get_bit_size()),
+      data_size_(input->get_dimensions().get_data_size()),
+      input_(std::move(input)),
+      output_(std::make_shared<BooleanGMWTensor>(input_->get_dimensions(), bit_size_)),
+      triple_index_(gmw_provider_.get_linalg_triple_provider().register_for_relu_triple(
+          data_size_, bit_size_)) {
+  const auto my_id = gmw_provider_.get_my_id();
+  share_future_ =
+      gmw_provider_.register_for_bits_message(1 - my_id, gate_id_, data_size_ * bit_size_);
+}
+
+void BooleanGMWTensorRelu::evaluate_online() {
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = gmw_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(
+          fmt::format("Gate {}: BooleanGMWTensorRelu::evaluate_online start", gate_id_));
+    }
+  }
+
+  auto triple = gmw_provider_.get_linalg_triple_provider().get_relu_triple(data_size_, bit_size_,
+                                                                           triple_index_);
+  assert(triple.a_.GetSize() == data_size_);
+  assert(triple.b_.size() == bit_size_ - 1);
+  assert(triple.c_.size() == bit_size_ - 1);
+  assert(std::all_of(std::begin(triple.b_), std::end(triple.b_),
+                     [this](const auto& bv) { return bv.GetSize() == data_size_; }));
+  assert(std::all_of(std::begin(triple.c_), std::end(triple.c_),
+                     [this](const auto& bv) { return bv.GetSize() == data_size_; }));
+
+  input_->wait_online();
+  const auto& input_share = input_->get_share();
+  assert(input_share.size() == bit_size_);
+  assert(std::all_of(std::begin(input_share), std::end(input_share),
+                     [this](const auto& bv) { return bv.GetSize() == data_size_; }));
+
+  // we compute a scalar x vector product of the inverted msb with the remaining bits
+  // using Beaver multiplication
+
+  // get the inverted msb
+  auto inv_msb_share = input_share[bit_size_ - 1];
+  if (gmw_provider_.is_my_job(gate_id_)) {
+    inv_msb_share.Invert();
+  }
+
+  // masked x, y: d || e == x ^ a || y ^ b
+  ENCRYPTO::BitVector<> de;
+  de.Reserve(Helpers::Convert::BitsToBytes(bit_size_ * data_size_));
+
+  // mask with x, y with a, b to get d, e
+  for (std::size_t bit_j = 0; bit_j < bit_size_ - 1; ++bit_j) {
+    de.Append(input_share[bit_j] ^ triple.b_[bit_j]);
+  }
+  de.Append(inv_msb_share ^ triple.a_);
+
+  // reconstruct d, e
+  const auto my_id = gmw_provider_.get_my_id();
+  gmw_provider_.send_bits_message(1 - my_id, gate_id_, de);
+  de ^= share_future_.get();
+  assert(de.GetSize() == bit_size_ * data_size_);
+
+  auto& output_share = output_->get_share();
+  assert(output_share.size() == bit_size_);
+
+  // helper function to get the ith subvector of size data_size_ from de
+  const auto get_de_subset = [this, de](auto i) {
+    return de.Subset(i * data_size_, (i + 1) * data_size_);
+  };
+
+  auto masked_inv_msb = get_de_subset(bit_size_ - 1);
+  for (std::size_t bit_j = 0; bit_j < bit_size_ - 1; ++bit_j) {
+    output_share[bit_j] = triple.c_[bit_j];
+    output_share[bit_j] ^= inv_msb_share & get_de_subset(bit_j);
+    output_share[bit_j] ^= masked_inv_msb & input_share[bit_j];
+  }
+  if (gmw_provider_.is_my_job(gate_id_)) {
+    for (std::size_t bit_j = 0; bit_j < bit_size_ - 1; ++bit_j) {
+      output_share[bit_j] ^= masked_inv_msb & get_de_subset(bit_j);
+    }
+  }
+  // set the share of the msb to 0 since the plain value is always 0
+  output_share[bit_size_ - 1] = ENCRYPTO::BitVector<>(data_size_, false);
+  output_->set_online_ready();
+
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = gmw_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(fmt::format("Gate {}: BooleanGMWTensorRelu::evaluate_online end", gate_id_));
+    }
+  }
+}
+
 }  // namespace MOTION::proto::gmw

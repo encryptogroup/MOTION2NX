@@ -436,6 +436,59 @@ TYPED_TEST(YaoArithmeticGMWTensorTest, ReLU) {
   }
 }
 
+TYPED_TEST(YaoArithmeticGMWTensorTest, ReLUInBooleanGMW) {
+  MOTION::tensor::TensorDimensions dims = {
+      .batch_size_ = 1, .num_channels_ = 1, .height_ = 28, .width_ = 28};
+  const auto input = this->generate_inputs(dims);
+
+  auto [input_promise, tensor_in_0] = this->make_arithmetic_T_tensor_input_my(0, dims);
+  auto tensor_in_1 = this->make_arithmetic_T_tensor_input_other(1, dims);
+
+  auto tensor_yao_0 = this->yao_providers_[0]->make_convert_from_arithmetic_gmw_tensor(tensor_in_0);
+  auto tensor_yao_1 = this->yao_providers_[1]->make_convert_from_arithmetic_gmw_tensor(tensor_in_1);
+  auto tensor_gmw_0 = this->yao_providers_[0]->make_convert_to_boolean_gmw_tensor(tensor_yao_0);
+  auto tensor_gmw_1 = this->yao_providers_[1]->make_convert_to_boolean_gmw_tensor(tensor_yao_1);
+  auto output_tensor_0 = this->gmw_providers_[0]->make_tensor_relu_op(tensor_gmw_0);
+  auto output_tensor_1 = this->gmw_providers_[1]->make_tensor_relu_op(tensor_gmw_1);
+
+  this->run_setup();
+  this->run_gates_setup();
+  input_promise.set_value(input);
+  this->run_gates_online();
+
+  const auto gmw_tensor_0 = std::dynamic_pointer_cast<const BooleanGMWTensor>(output_tensor_0);
+  const auto gmw_tensor_1 = std::dynamic_pointer_cast<const BooleanGMWTensor>(output_tensor_1);
+  ASSERT_NE(gmw_tensor_0, nullptr);
+  ASSERT_NE(gmw_tensor_1, nullptr);
+  gmw_tensor_0->wait_online();
+  gmw_tensor_1->wait_online();
+
+  const auto& share_0 = gmw_tensor_0->get_share();
+  const auto& share_1 = gmw_tensor_1->get_share();
+  constexpr auto bit_size = ENCRYPTO::bit_size_v<TypeParam>;
+  const auto data_size = input.size();
+  ASSERT_EQ(share_0.size(), bit_size);
+  ASSERT_EQ(share_1.size(), bit_size);
+  ASSERT_TRUE(std::all_of(std::begin(share_0), std::end(share_0),
+                          [data_size](const auto& bv) { return bv.GetSize() == data_size; }));
+  ASSERT_TRUE(std::all_of(std::begin(share_1), std::end(share_1),
+                          [data_size](const auto& bv) { return bv.GetSize() == data_size; }));
+  std::vector<ENCRYPTO::BitVector<>> plain_bits;
+  std::transform(std::begin(share_0), std::end(share_0), std::begin(share_1),
+                 std::back_inserter(plain_bits),
+                 [](const auto& x, const auto& y) { return x ^ y; });
+  const auto plain_ints = ENCRYPTO::ToVectorOutput<TypeParam>(plain_bits);
+  for (std::size_t int_i = 0; int_i < data_size; ++int_i) {
+    const auto value = input.at(int_i);
+    const auto msb = bool(value >> (ENCRYPTO::bit_size_v<TypeParam> - 1));
+    if (msb) {
+      EXPECT_EQ(plain_ints.at(int_i), 0);
+    } else {
+      EXPECT_EQ(plain_ints.at(int_i), value);
+    }
+  }
+}
+
 TYPED_TEST(YaoArithmeticGMWTensorTest, MaxPoolSimple) {
   const MOTION::tensor::TensorDimensions dims = {
       .batch_size_ = 1, .num_channels_ = 1, .height_ = 2, .width_ = 2};
