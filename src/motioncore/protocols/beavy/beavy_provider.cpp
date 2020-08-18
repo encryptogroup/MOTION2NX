@@ -930,6 +930,16 @@ tensor::TensorCP BEAVYProvider::make_tensor_sqr_op(const tensor::TensorCP input)
   return output;
 }
 
+tensor::TensorCP BEAVYProvider::make_tensor_relu_op(const tensor::TensorCP in) {
+  const auto input_tensor = std::dynamic_pointer_cast<const BooleanBEAVYTensor>(in);
+  assert(input_tensor != nullptr);
+  auto gate_id = gate_register_.get_next_gate_id();
+  auto tensor_op = std::make_unique<BooleanBEAVYTensorRelu>(gate_id, *this, input_tensor);
+  auto output = tensor_op->get_output_tensor();
+  gate_register_.register_gate(std::move(tensor_op));
+  return output;
+}
+
 template <typename T>
 tensor::TensorCP BEAVYProvider::basic_make_convert_boolean_to_arithmetic_beavy_tensor(
     const tensor::TensorCP in) {

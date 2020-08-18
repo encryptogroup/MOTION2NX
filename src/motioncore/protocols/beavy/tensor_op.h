@@ -32,6 +32,8 @@ template <typename T>
 class ACOTSender;
 template <typename T>
 class ACOTReceiver;
+class XCOTBitSender;
+class XCOTBitReceiver;
 }  // namespace ENCRYPTO::ObliviousTransfer
 
 namespace MOTION {
@@ -234,6 +236,28 @@ class BooleanToArithmeticBEAVYTensorConversion : public NewGate {
   std::unique_ptr<ENCRYPTO::ObliviousTransfer::ACOTReceiver<T>> ot_receiver_;
   std::vector<T> arithmetized_secret_share_;
   ENCRYPTO::ReusableFiberFuture<std::vector<T>> share_future_;
+};
+
+class BooleanBEAVYTensorRelu : public NewGate {
+ public:
+  BooleanBEAVYTensorRelu(std::size_t gate_id, BEAVYProvider&, const BooleanBEAVYTensorCP input);
+  ~BooleanBEAVYTensorRelu();
+  bool need_setup() const noexcept override { return true; }
+  bool need_online() const noexcept override { return true; }
+  void evaluate_setup() override;
+  void evaluate_online() override;
+  const BooleanBEAVYTensorP& get_output_tensor() const { return output_; }
+
+ private:
+  BEAVYProvider& beavy_provider_;
+  const std::size_t bit_size_;
+  const std::size_t data_size_;
+  const BooleanBEAVYTensorCP input_;
+  BooleanBEAVYTensorP output_;
+  std::unique_ptr<ENCRYPTO::ObliviousTransfer::XCOTBitSender> ot_sender_;
+  std::unique_ptr<ENCRYPTO::ObliviousTransfer::XCOTBitReceiver> ot_receiver_;
+  ENCRYPTO::BitVector<> Delta_y_share_;
+  ENCRYPTO::ReusableFiberFuture<ENCRYPTO::BitVector<>> share_future_;
 };
 
 }  // namespace MOTION::proto::beavy
