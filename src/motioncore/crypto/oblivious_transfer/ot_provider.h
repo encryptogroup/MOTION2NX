@@ -280,7 +280,8 @@ class OTProviderSender {
   std::unique_ptr<FixedXCOT128Sender> RegisterFixedXCOT128s(
       const std::size_t num_ots, const std::function<void(flatbuffers::FlatBufferBuilder&&)>& Send);
   std::unique_ptr<XCOTBitSender> RegisterXCOTBits(
-      const std::size_t num_ots, const std::function<void(flatbuffers::FlatBufferBuilder&&)>& Send);
+      std::size_t num_ots, std::size_t vector_size,
+      const std::function<void(flatbuffers::FlatBufferBuilder&&)>& Send);
   template <typename T>
   std::unique_ptr<ACOTSender<T>> RegisterACOT(
       std::size_t num_ots, std::size_t vector_size,
@@ -329,7 +330,8 @@ class OTProviderReceiver {
   std::unique_ptr<FixedXCOT128Receiver> RegisterFixedXCOT128s(
       const std::size_t num_ots, const std::function<void(flatbuffers::FlatBufferBuilder&&)>& Send);
   std::unique_ptr<XCOTBitReceiver> RegisterXCOTBits(
-      const std::size_t num_ots, const std::function<void(flatbuffers::FlatBufferBuilder&&)>& Send);
+      std::size_t num_ots, std::size_t vector_size,
+      const std::function<void(flatbuffers::FlatBufferBuilder&&)>& Send);
   template <typename T>
   std::unique_ptr<ACOTReceiver<T>> RegisterACOT(
       std::size_t num_ots, std::size_t vector_size,
@@ -379,7 +381,8 @@ class OTProvider {
   [[nodiscard]] std::unique_ptr<FixedXCOT128Sender> RegisterSendFixedXCOT128(
       std::size_t num_ots = 1);
 
-  [[nodiscard]] std::unique_ptr<XCOTBitSender> RegisterSendXCOTBit(std::size_t num_ots = 1);
+  [[nodiscard]] std::unique_ptr<XCOTBitSender> RegisterSendXCOTBit(std::size_t num_ots = 1,
+                                                                   std::size_t vector_size = 1);
 
   template <typename T>
   [[nodiscard]] std::unique_ptr<ACOTSender<T>> RegisterSendACOT(std::size_t num_ots = 1,
@@ -406,7 +409,8 @@ class OTProvider {
   [[nodiscard]] std::unique_ptr<FixedXCOT128Receiver> RegisterReceiveFixedXCOT128(
       std::size_t num_ots = 1);
 
-  [[nodiscard]] std::unique_ptr<XCOTBitReceiver> RegisterReceiveXCOTBit(std::size_t num_ots = 1);
+  [[nodiscard]] std::unique_ptr<XCOTBitReceiver> RegisterReceiveXCOTBit(
+      std::size_t num_ots = 1, std::size_t vector_size = 1);
 
   template <typename T>
   [[nodiscard]] std::unique_ptr<ACOTReceiver<T>> RegisterReceiveACOT(std::size_t num_ots = 1,

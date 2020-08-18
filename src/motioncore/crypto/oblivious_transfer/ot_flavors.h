@@ -145,27 +145,28 @@ class FixedXCOT128Receiver : public BasicOTReceiver {
 // sender implementation of batched xor-correlated bit ots
 class XCOTBitSender : public BasicOTSender {
  public:
-  XCOTBitSender(std::size_t ot_id, std::size_t num_ots, MOTION::OTExtensionSenderData &data,
-                const std::function<void(flatbuffers::FlatBufferBuilder &&)> &Send);
+  XCOTBitSender(std::size_t ot_id, std::size_t num_ots, std::size_t vector_size,
+                MOTION::OTExtensionSenderData& data,
+                const std::function<void(flatbuffers::FlatBufferBuilder&&)>& Send);
 
   // set the correlations for the OTs in this batch
-  void SetCorrelations(BitVector<> &&correlations) {
-    assert(correlations.GetSize() == num_ots_);
+  void SetCorrelations(BitVector<>&& correlations) {
+    assert(correlations.GetSize() == num_ots_ * vector_size_);
     correlations_ = std::move(correlations);
   }
-  void SetCorrelations(const BitVector<> &correlations) {
-    assert(correlations.GetSize() == num_ots_);
+  void SetCorrelations(const BitVector<>& correlations) {
+    assert(correlations.GetSize() == num_ots_ * vector_size_);
     correlations_ = correlations;
   }
 
   // get the correlations for the OTs in this batch
-  const BitVector<> &GetCorrelations() const { return correlations_; }
+  const BitVector<>& GetCorrelations() const { return correlations_; }
 
   // compute the sender's outputs
   void ComputeOutputs();
 
   // get the sender's outputs
-  BitVector<> &GetOutputs() {
+  BitVector<>& GetOutputs() {
     assert(outputs_computed_);
     return outputs_;
   }
@@ -174,6 +175,9 @@ class XCOTBitSender : public BasicOTSender {
   void SendMessages() const;
 
  private:
+  // dimension of each sender-input/output
+  const std::size_t vector_size_;
+
   // the correlation vector
   BitVector<> correlations_;
 
@@ -187,19 +191,23 @@ class XCOTBitSender : public BasicOTSender {
 // receiver implementation of batched xor-correlated bit ots
 class XCOTBitReceiver : public BasicOTReceiver {
  public:
-  XCOTBitReceiver(std::size_t ot_id, std::size_t num_ots, MOTION::OTExtensionReceiverData &data,
-                  const std::function<void(flatbuffers::FlatBufferBuilder &&)> &Send);
+  XCOTBitReceiver(std::size_t ot_id, std::size_t num_ots, std::size_t vector_size,
+                  MOTION::OTExtensionReceiverData& data,
+                  const std::function<void(flatbuffers::FlatBufferBuilder&&)>& Send);
 
   // compute the receiver's outputs
   void ComputeOutputs();
 
   // get the receiver's outputs
-  BitVector<> &GetOutputs() {
+  BitVector<>& GetOutputs() {
     assert(outputs_computed_);
     return outputs_;
   }
 
  private:
+  // dimension of each sender-input/output
+  const std::size_t vector_size_;
+
   // future for the sender's message
   ReusableFiberFuture<BitVector<>> sender_message_future_;
 

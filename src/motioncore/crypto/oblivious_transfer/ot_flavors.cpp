@@ -162,9 +162,9 @@ void FixedXCOT128Receiver::ComputeOutputs() {
 // ---------- XCOTBitSender ----------
 
 XCOTBitSender::XCOTBitSender(const std::size_t ot_id, const std::size_t num_ots,
-                             MOTION::OTExtensionSenderData &data,
-                             const std::function<void(flatbuffers::FlatBufferBuilder &&)> &Send)
-    : BasicOTSender(ot_id, num_ots, 1, XCOTBit, Send, data) {}
+                             const std::size_t vector_size, MOTION::OTExtensionSenderData& data,
+                             const std::function<void(flatbuffers::FlatBufferBuilder&&)>& Send)
+    : BasicOTSender(ot_id, num_ots, vector_size, XCOTBit, Send, data), vector_size_(vector_size) {}
 
 void XCOTBitSender::ComputeOutputs() {
   if (outputs_computed_) {
@@ -178,21 +178,36 @@ void XCOTBitSender::ComputeOutputs() {
   // wait until the receiver has sent its correction bits
   data_.received_correction_offsets_cond_.at(ot_id_)->Wait();
 
-  // make space for all the OTs
-  outputs_.Resize(num_ots_);
-
   // get the corrections bits
   std::unique_lock lock(data_.corrections_mutex_);
   const auto corrections = data_.corrections_.Subset(ot_id_, ot_id_ + num_ots_);
   lock.unlock();
 
-  // take one of the precomputed outputs
-  for (std::size_t i = 0; i < num_ots_; ++i) {
-    if (corrections[i]) {
-      // if the correction bit is 1, we need to swap
-      outputs_.Set(bool(data_.y1_.at(ot_id_ + i).GetData()[0] & SET_BIT_MASK[0]), i);
-    } else {
-      outputs_.Set(bool(data_.y0_.at(ot_id_ + i).GetData()[0] & SET_BIT_MASK[0]), i);
+  if (vector_size_ == 1) {
+    // make space for all the OTs
+    outputs_.Resize(num_ots_);
+
+    // take one of the precomputed outputs
+    for (std::size_t i = 0; i < num_ots_; ++i) {
+      if (corrections[i]) {
+        // if the correction bit is 1, we need to swap
+        outputs_.Set(bool(data_.y1_.at(ot_id_ + i).GetData()[0] & SET_BIT_MASK[0]), i);
+      } else {
+        outputs_.Set(bool(data_.y0_.at(ot_id_ + i).GetData()[0] & SET_BIT_MASK[0]), i);
+      }
+    }
+  } else {
+    // make space for all the OTs
+    outputs_.Reserve(MOTION::Helpers::Convert::BitsToBytes(num_ots_ * vector_size_));
+
+    // take one of the precomputed outputs
+    for (std::size_t i = 0; i < num_ots_; ++i) {
+      if (corrections[i]) {
+        // if the correction bit is 1, we need to swap
+        outputs_.Append(data_.y1_.at(ot_id_ + i));
+      } else {
+        outputs_.Append(data_.y0_.at(ot_id_ + i));
+      }
     }
   }
 
@@ -201,13 +216,25 @@ void XCOTBitSender::ComputeOutputs() {
 }
 
 void XCOTBitSender::SendMessages() const {
-  auto buffer = correlations_;
-  for (std::size_t i = 0; i < num_ots_; ++i) {
-    auto tmp = buffer[i];
-    tmp ^= bool(data_.y0_.at(ot_id_ + i).GetData()[0] & SET_BIT_MASK[0]);
-    tmp ^= bool(data_.y1_.at(ot_id_ + i).GetData()[0] & SET_BIT_MASK[0]);
-    buffer.Set(tmp, i);
+  ENCRYPTO::BitVector<> buffer = correlations_;
+  if (vector_size_ == 1) {
+    for (std::size_t i = 0; i < num_ots_; ++i) {
+      auto tmp = buffer[i];
+      tmp ^= bool(data_.y0_.at(ot_id_ + i).GetData()[0] & SET_BIT_MASK[0]);
+      tmp ^= bool(data_.y1_.at(ot_id_ + i).GetData()[0] & SET_BIT_MASK[0]);
+      buffer.Set(tmp, i);
+    }
+  } else {
+    ENCRYPTO::BitVector<> tmp;
+    tmp.Reserve(MOTION::Helpers::Convert::BitsToBytes(num_ots_ * vector_size_));
+    for (std::size_t ot_i = 0; ot_i < num_ots_; ++ot_i) {
+      const auto& y0_p = data_.y0_.at(ot_id_ + ot_i);
+      const auto& y1_p = data_.y1_.at(ot_id_ + ot_i);
+      tmp.Append(y0_p ^ y1_p);
+    }
+    buffer ^= tmp;
   }
+  assert(buffer.GetSize() == num_ots_ * vector_size_);
   Send_(MOTION::Communication::BuildOTExtensionMessageSender(buffer.GetData().data(),
                                                              buffer.GetData().size(), ot_id_));
 }
@@ -215,11 +242,12 @@ void XCOTBitSender::SendMessages() const {
 // ---------- XCOTBitReceiver ----------
 
 XCOTBitReceiver::XCOTBitReceiver(const std::size_t ot_id, const std::size_t num_ots,
-                                 MOTION::OTExtensionReceiverData &data,
-                                 const std::function<void(flatbuffers::FlatBufferBuilder &&)> &Send)
-    : BasicOTReceiver(ot_id, num_ots, 1, XCOTBit, Send, data), outputs_(num_ots) {
+                                 const std::size_t vector_size,
+                                 MOTION::OTExtensionReceiverData& data,
+                                 const std::function<void(flatbuffers::FlatBufferBuilder&&)>& Send)
+    : BasicOTReceiver(ot_id, num_ots, vector_size, XCOTBit, Send, data), vector_size_(vector_size) {
   data_.msg_type_.emplace(ot_id, MOTION::OTMsgType::bit);
-  sender_message_future_ = data_.RegisterForBitSenderMessage(ot_id, num_ots);
+  sender_message_future_ = data_.RegisterForBitSenderMessage(ot_id, num_ots * vector_size_);
 }
 
 void XCOTBitReceiver::ComputeOutputs() {
@@ -232,13 +260,26 @@ void XCOTBitReceiver::ComputeOutputs() {
     throw std::runtime_error("Choices in COT must be se(n)t before calling ComputeOutputs()");
   }
 
-  outputs_ = sender_message_future_.get();
-  outputs_ &= choices_;
+  if (vector_size_ == 1) {
+    outputs_ = sender_message_future_.get();
+    outputs_ &= choices_;
 
-  for (std::size_t i = 0; i < num_ots_; ++i) {
-    auto tmp = outputs_[i];
-    outputs_.Set(tmp ^ bool(data_.outputs_.at(ot_id_ + i).GetData()[0] & SET_BIT_MASK[0]), i);
+    for (std::size_t i = 0; i < num_ots_; ++i) {
+      auto tmp = outputs_[i];
+      outputs_.Set(tmp ^ bool(data_.outputs_.at(ot_id_ + i).GetData()[0] & SET_BIT_MASK[0]), i);
+    }
+  } else {
+    outputs_.Reserve(MOTION::Helpers::Convert::BitsToBytes(num_ots_ * vector_size_));
+    const auto sender_message = sender_message_future_.get();
+    for (std::size_t ot_i = 0; ot_i < num_ots_; ++ot_i) {
+      auto ot_data = std::move(data_.outputs_.at(ot_id_ + ot_i));
+      if (choices_[ot_i]) {
+        ot_data ^= sender_message.Subset(ot_i * vector_size_, (ot_i + 1) * vector_size_);
+      }
+      outputs_.Append(std::move(ot_data));
+    }
   }
+
   outputs_computed_ = true;
 }
 

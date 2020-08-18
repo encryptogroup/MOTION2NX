@@ -145,7 +145,44 @@ TEST_F(OTFlavorTest, XCOTBit) {
   const auto sender_output = ot_sender->GetOutputs();
   const auto receiver_output = ot_receiver->GetOutputs();
 
+  ASSERT_EQ(sender_output.GetSize(), num_ots);
+  ASSERT_EQ(receiver_output.GetSize(), num_ots);
   ASSERT_EQ(receiver_output, sender_output ^ (choice_bits & correlations));
+}
+
+TEST_F(OTFlavorTest, VectorXCOTBit) {
+  const std::size_t num_ots = 1000;
+  const std::size_t vector_size = 31;
+  const auto correlations = ENCRYPTO::BitVector<>::Random(num_ots * vector_size);
+  const auto choice_bits = ENCRYPTO::BitVector<>::Random(num_ots);
+  auto ot_sender = get_sender_provider().RegisterSendXCOTBit(num_ots, vector_size);
+  auto ot_receiver = get_receiver_provider().RegisterReceiveXCOTBit(num_ots, vector_size);
+
+  run_ot_extension_setup();
+
+  ot_sender->SetCorrelations(correlations);
+  ot_sender->SendMessages();
+
+  ot_receiver->SetChoices(choice_bits);
+  ot_receiver->SendCorrections();
+
+  ot_sender->ComputeOutputs();
+  ot_receiver->ComputeOutputs();
+  const auto sender_output = ot_sender->GetOutputs();
+  const auto receiver_output = ot_receiver->GetOutputs();
+
+  ASSERT_EQ(sender_output.GetSize(), num_ots * vector_size);
+  ASSERT_EQ(receiver_output.GetSize(), num_ots * vector_size);
+  for (std::size_t ot_i = 0; ot_i < num_ots; ++ot_i) {
+    if (choice_bits.Get(ot_i)) {
+      ASSERT_EQ(receiver_output.Subset(ot_i * vector_size, (ot_i + 1) * vector_size),
+                sender_output.Subset(ot_i * vector_size, (ot_i + 1) * vector_size) ^
+                    correlations.Subset(ot_i * vector_size, (ot_i + 1) * vector_size));
+    } else {
+      ASSERT_EQ(receiver_output.Subset(ot_i * vector_size, (ot_i + 1) * vector_size),
+                sender_output.Subset(ot_i * vector_size, (ot_i + 1) * vector_size));
+    }
+  }
 }
 
 template <typename T>

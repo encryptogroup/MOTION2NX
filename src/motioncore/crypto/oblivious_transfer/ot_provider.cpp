@@ -61,8 +61,9 @@ void OTProvider::WaitSetup() const {
   return sender_provider_.RegisterFixedXCOT128s(num_ots, Send_);
 }
 
-[[nodiscard]] std::unique_ptr<XCOTBitSender> OTProvider::RegisterSendXCOTBit(std::size_t num_ots) {
-  return sender_provider_.RegisterXCOTBits(num_ots, Send_);
+[[nodiscard]] std::unique_ptr<XCOTBitSender> OTProvider::RegisterSendXCOTBit(
+    std::size_t num_ots, std::size_t vector_size) {
+  return sender_provider_.RegisterXCOTBits(num_ots, vector_size, Send_);
 }
 
 template <typename T>
@@ -102,8 +103,8 @@ template std::unique_ptr<ACOTSender<__uint128_t>> OTProvider::RegisterSendACOT(
 }
 
 [[nodiscard]] std::unique_ptr<XCOTBitReceiver> OTProvider::RegisterReceiveXCOTBit(
-    std::size_t num_ots) {
-  return receiver_provider_.RegisterXCOTBits(num_ots, Send_);
+    std::size_t num_ots, std::size_t vector_size) {
+  return receiver_provider_.RegisterXCOTBits(num_ots, vector_size, Send_);
 }
 
 template <typename T>
@@ -976,14 +977,15 @@ std::unique_ptr<FixedXCOT128Sender> OTProviderSender::RegisterFixedXCOT128s(
 }
 
 std::unique_ptr<XCOTBitSender> OTProviderSender::RegisterXCOTBits(
-    const std::size_t num_ots, const std::function<void(flatbuffers::FlatBufferBuilder &&)> &Send) {
+    std::size_t num_ots, std::size_t vector_size,
+    const std::function<void(flatbuffers::FlatBufferBuilder&&)>& Send) {
   const auto i = total_ots_count_;
   total_ots_count_ += num_ots;
-  auto ot = std::make_unique<XCOTBitSender>(i, num_ots, data_, Send);
+  auto ot = std::make_unique<XCOTBitSender>(i, num_ots, vector_size, data_, Send);
   if constexpr (MOTION::MOTION_DEBUG) {
     if (logger_) {
       logger_->LogDebug(fmt::format("Party#{}: registered {} parallel {}-bit sender XCOTBits",
-                                    party_id_, num_ots, 1));
+                                    party_id_, num_ots, vector_size));
     }
   }
   return ot;
@@ -1188,14 +1190,15 @@ std::unique_ptr<FixedXCOT128Receiver> OTProviderReceiver::RegisterFixedXCOT128s(
 }
 
 std::unique_ptr<XCOTBitReceiver> OTProviderReceiver::RegisterXCOTBits(
-    const std::size_t num_ots, const std::function<void(flatbuffers::FlatBufferBuilder &&)> &Send) {
+    std::size_t num_ots, std::size_t vector_size,
+    const std::function<void(flatbuffers::FlatBufferBuilder&&)>& Send) {
   const auto i = total_ots_count_.load();
   total_ots_count_ += num_ots;
-  auto ot = std::make_unique<XCOTBitReceiver>(i, num_ots, data_, Send);
+  auto ot = std::make_unique<XCOTBitReceiver>(i, num_ots, vector_size, data_, Send);
   if constexpr (MOTION::MOTION_DEBUG) {
     if (logger_) {
       logger_->LogDebug(fmt::format("Party#{}: registered {} parallel {}-bit receiver XCOTBits",
-                                    party_id_, num_ots, 1));
+                                    party_id_, num_ots, vector_size));
     }
   }
   return ot;
