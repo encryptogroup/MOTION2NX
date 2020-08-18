@@ -23,6 +23,7 @@
 #pragma once
 
 #include "tensor/tensor.h"
+#include "utility/bit_vector.h"
 #include "utility/enable_wait.h"
 #include "utility/type_traits.hpp"
 #include "utility/typedefs.h"
@@ -51,5 +52,30 @@ using ArithmeticBEAVYTensorP = std::shared_ptr<ArithmeticBEAVYTensor<T>>;
 
 template <typename T>
 using ArithmeticBEAVYTensorCP = std::shared_ptr<const ArithmeticBEAVYTensor<T>>;
+
+class BooleanBEAVYTensor : public tensor::Tensor, public ENCRYPTO::enable_wait_setup {
+ public:
+  BooleanBEAVYTensor(const tensor::TensorDimensions& dims, std::size_t bit_size)
+      : Tensor(dims), bit_size_(bit_size), public_share_(bit_size), secret_share_(bit_size) {}
+  MPCProtocol get_protocol() const noexcept override { return MPCProtocol::BooleanBEAVY; }
+  std::size_t get_bit_size() const noexcept override { return bit_size_; }
+  std::vector<ENCRYPTO::BitVector<>>& get_public_share() noexcept { return public_share_; }
+  const std::vector<ENCRYPTO::BitVector<>>& get_public_share() const noexcept {
+    return public_share_;
+  }
+  std::vector<ENCRYPTO::BitVector<>>& get_secret_share() noexcept { return secret_share_; }
+  const std::vector<ENCRYPTO::BitVector<>>& get_secret_share() const noexcept {
+    return secret_share_;
+  }
+
+ private:
+  std::size_t bit_size_;
+  std::vector<ENCRYPTO::BitVector<>> public_share_;
+  std::vector<ENCRYPTO::BitVector<>> secret_share_;
+};
+
+using BooleanBEAVYTensorP = std::shared_ptr<BooleanBEAVYTensor>;
+
+using BooleanBEAVYTensorCP = std::shared_ptr<const BooleanBEAVYTensor>;
 
 }  // namespace MOTION::proto::beavy
