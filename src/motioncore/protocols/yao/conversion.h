@@ -194,7 +194,6 @@ class YaoToBooleanBEAVYGateEvaluator : public NewGate {
   YaoProvider& yao_provider_;
   const YaoWireVector inputs_;
   beavy::BooleanBEAVYWireVector outputs_;
-  ENCRYPTO::BitVector<> public_share_;
 };
 
 class BooleanBEAVYToYaoGateGarbler : public NewGate {
