@@ -987,6 +987,10 @@ tensor::TensorCP YaoProvider::make_tensor_conversion(MPCProtocol proto_to,
       return make_convert_to_arithmetic_beavy_tensor(in);
     } else if (proto_to == MPCProtocol::ArithmeticGMW) {
       return make_convert_to_arithmetic_gmw_tensor(in);
+    } else if (proto_to == MPCProtocol::BooleanBEAVY) {
+      return make_convert_to_boolean_beavy_tensor(in);
+    } else if (proto_to == MPCProtocol::BooleanGMW) {
+      return make_convert_to_boolean_gmw_tensor(in);
     }
   } else if (proto_to == MPCProtocol::Yao) {
     if (proto_from == MPCProtocol::ArithmeticBEAVY) {
