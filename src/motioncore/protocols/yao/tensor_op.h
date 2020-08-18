@@ -277,6 +277,43 @@ class YaoToArithmeticBEAVYTensorConversionEvaluator : public NewGate {
   const ENCRYPTO::AlgorithmDescription& addition_algo_;
 };
 
+class YaoToBooleanBEAVYTensorConversionGarbler : public NewGate {
+ public:
+  YaoToBooleanBEAVYTensorConversionGarbler(std::size_t gate_id, YaoProvider&,
+                                            const YaoTensorCP input);
+  bool need_setup() const noexcept override { return true; }
+  bool need_online() const noexcept override { return true; }
+  void evaluate_setup() override;
+  void evaluate_online() override;
+  beavy::BooleanBEAVYTensorCP get_output_tensor() const noexcept { return output_; }
+
+ private:
+  YaoProvider& yao_provider_;
+  const std::size_t bit_size_;
+  const std::size_t data_size_;
+  const YaoTensorCP input_;
+  beavy::BooleanBEAVYTensorP output_;
+  ENCRYPTO::ReusableFiberFuture<ENCRYPTO::BitVector<>> public_share_future_;
+};
+
+class YaoToBooleanBEAVYTensorConversionEvaluator : public NewGate {
+ public:
+  YaoToBooleanBEAVYTensorConversionEvaluator(std::size_t gate_id, YaoProvider&,
+                                              const YaoTensorCP input);
+  bool need_setup() const noexcept override { return true; }
+  bool need_online() const noexcept override { return true; }
+  void evaluate_setup() override;
+  void evaluate_online() override;
+  beavy::BooleanBEAVYTensorCP get_output_tensor() const noexcept { return output_; }
+
+ private:
+  YaoProvider& yao_provider_;
+  const std::size_t bit_size_;
+  const std::size_t data_size_;
+  const YaoTensorCP input_;
+  beavy::BooleanBEAVYTensorP output_;
+};
+
 class YaoTensorReluGarbler : public NewGate {
  public:
   YaoTensorReluGarbler(std::size_t gate_id, YaoProvider&, const YaoTensorCP input);

@@ -191,6 +191,7 @@ class YaoProvider : public GateFactory,
   template <typename T>
   tensor::TensorCP basic_make_convert_to_arithmetic_beavy_tensor(const tensor::TensorCP);
   tensor::TensorCP make_convert_to_arithmetic_beavy_tensor(const tensor::TensorCP);
+  tensor::TensorCP make_convert_to_boolean_beavy_tensor(const tensor::TensorCP);
   tensor::TensorCP make_tensor_conversion(MPCProtocol, const tensor::TensorCP) override;
   tensor::TensorCP make_tensor_relu_op(const tensor::TensorCP) override;
   tensor::TensorCP make_tensor_maxpool_op(const tensor::MaxPoolOp&,

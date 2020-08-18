@@ -735,3 +735,59 @@ TYPED_TEST(YaoArithmeticBEAVYTensorTest, ConversionBoth) {
   ASSERT_EQ(output.size(), dims.get_data_size());
   ASSERT_EQ(input, output);
 }
+
+TYPED_TEST(YaoArithmeticBEAVYTensorTest, ConversionToBooleanBEAVY) {
+  MOTION::tensor::TensorDimensions dims = {
+      .batch_size_ = 1, .num_channels_ = 1, .height_ = 28, .width_ = 28};
+  const auto input = this->generate_inputs(dims);
+
+  auto [input_promise, tensor_in_0] = this->make_arithmetic_T_tensor_input_my(0, dims);
+  auto tensor_in_1 = this->make_arithmetic_T_tensor_input_other(1, dims);
+
+  auto tensor_yao_0 =
+      this->yao_providers_[0]->make_convert_from_arithmetic_beavy_tensor(tensor_in_0);
+  auto tensor_yao_1 =
+      this->yao_providers_[1]->make_convert_from_arithmetic_beavy_tensor(tensor_in_1);
+  auto tensor_0 = this->yao_providers_[0]->make_convert_to_boolean_beavy_tensor(tensor_yao_0);
+  auto tensor_1 = this->yao_providers_[1]->make_convert_to_boolean_beavy_tensor(tensor_yao_1);
+
+  this->run_setup();
+  this->run_gates_setup();
+  input_promise.set_value(input);
+  this->run_gates_online();
+
+  const auto bbeavy_tensor_0 = std::dynamic_pointer_cast<const BooleanBEAVYTensor>(tensor_0);
+  const auto bbeavy_tensor_1 = std::dynamic_pointer_cast<const BooleanBEAVYTensor>(tensor_1);
+  ASSERT_NE(bbeavy_tensor_0, nullptr);
+  ASSERT_NE(bbeavy_tensor_1, nullptr);
+  bbeavy_tensor_0->wait_online();
+  bbeavy_tensor_1->wait_online();
+
+  constexpr auto bit_size = ENCRYPTO::bit_size_v<TypeParam>;
+  const auto data_size = input.size();
+  const auto& pshare_0 = bbeavy_tensor_0->get_public_share();
+  const auto& pshare_1 = bbeavy_tensor_1->get_public_share();
+  const auto& sshare_0 = bbeavy_tensor_0->get_secret_share();
+  const auto& sshare_1 = bbeavy_tensor_1->get_secret_share();
+  ASSERT_EQ(pshare_0.size(), bit_size);
+  ASSERT_EQ(pshare_0, pshare_1);
+  ASSERT_EQ(sshare_0.size(), bit_size);
+  ASSERT_EQ(sshare_1.size(), bit_size);
+  for (std::size_t bit_j = 0; bit_j < ENCRYPTO::bit_size_v<TypeParam>; ++bit_j) {
+    ASSERT_EQ(pshare_0.at(bit_j).GetSize(), data_size);
+    ASSERT_EQ(sshare_0.at(bit_j).GetSize(), data_size);
+    ASSERT_EQ(sshare_1.at(bit_j).GetSize(), data_size);
+  }
+  std::vector<ENCRYPTO::BitVector<>> plain_bits(bit_size);
+  for (std::size_t bit_j = 0; bit_j < bit_size; ++bit_j) {
+    plain_bits.at(bit_j) = pshare_0.at(bit_j) ^ sshare_0.at(bit_j) ^ sshare_1.at(bit_j);
+  }
+  for (std::size_t int_i = 0; int_i < data_size; ++int_i) {
+    const auto value = input.at(int_i);
+    for (std::size_t bit_j = 0; bit_j < ENCRYPTO::bit_size_v<TypeParam>; ++bit_j) {
+      const auto bit = plain_bits.at(bit_j).Get(int_i);
+      const auto expected_bit = bool(value & (TypeParam(1) << bit_j));
+      EXPECT_EQ(bit, expected_bit);
+    }
+  }
+}

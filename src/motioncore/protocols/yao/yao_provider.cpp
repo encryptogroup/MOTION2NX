@@ -960,6 +960,25 @@ tensor::TensorCP YaoProvider::make_convert_to_arithmetic_beavy_tensor(const tens
   }
 }
 
+tensor::TensorCP YaoProvider::make_convert_to_boolean_beavy_tensor(const tensor::TensorCP in) {
+  const auto input_tensor = std::dynamic_pointer_cast<const YaoTensor>(in);
+  assert(input_tensor != nullptr);
+  auto gate_id = gate_register_.get_next_gate_id();
+  tensor::TensorCP output;
+  if (role_ == Role::garbler) {
+    auto tensor_op =
+        std::make_unique<YaoToBooleanBEAVYTensorConversionGarbler>(gate_id, *this, input_tensor);
+    output = tensor_op->get_output_tensor();
+    gate_register_.register_gate(std::move(tensor_op));
+  } else {
+    auto tensor_op =
+        std::make_unique<YaoToBooleanBEAVYTensorConversionEvaluator>(gate_id, *this, input_tensor);
+    output = tensor_op->get_output_tensor();
+    gate_register_.register_gate(std::move(tensor_op));
+  }
+  return output;
+}
+
 tensor::TensorCP YaoProvider::make_tensor_conversion(MPCProtocol proto_to,
                                                      const tensor::TensorCP in) {
   auto proto_from = in->get_protocol();

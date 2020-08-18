@@ -996,6 +996,145 @@ void YaoToArithmeticBEAVYTensorConversionEvaluator<T>::evaluate_online() {
 
 template class YaoToArithmeticBEAVYTensorConversionEvaluator<std::uint64_t>;
 
+// Y -> beta Garbler side
+
+YaoToBooleanBEAVYTensorConversionGarbler::YaoToBooleanBEAVYTensorConversionGarbler(
+    std::size_t gate_id, YaoProvider& yao_provider, const YaoTensorCP input)
+    : NewGate(gate_id),
+      yao_provider_(yao_provider),
+      bit_size_(input->get_bit_size()),
+      data_size_(input->get_dimensions().get_data_size()),
+      input_(std::move(input)) {
+  const auto& tensor_dims = input_->get_dimensions();
+  output_ = std::make_shared<beavy::BooleanBEAVYTensor>(tensor_dims, bit_size_);
+  public_share_future_ = yao_provider_.register_for_bits_message(gate_id, bit_size_ * data_size_);
+}
+
+void YaoToBooleanBEAVYTensorConversionGarbler::evaluate_setup() {
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = yao_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(fmt::format(
+          "Gate {}: YaoToBooleanBEAVYTensorConversionGarbler::evaluate_setup start", gate_id_));
+    }
+  }
+
+  input_->wait_setup();
+  const auto& keys = input_->get_keys();
+  auto& sshares = output_->get_secret_share();
+  assert(sshares.size() == bit_size_);
+  for (std::size_t bit_j = 0; bit_j < bit_size_; ++bit_j) {
+    ENCRYPTO::BitVector<> lsbs;
+    get_lsbs_from_keys(lsbs, keys.data() + bit_j * data_size_, data_size_);
+    sshares[bit_j] = std::move(lsbs);
+  }
+  output_->set_setup_ready();
+
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = yao_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(fmt::format(
+          "Gate {}: YaoToBooleanBEAVYTensorConversionGarbler::evaluate_setup end", gate_id_));
+    }
+  }
+}
+
+void YaoToBooleanBEAVYTensorConversionGarbler::evaluate_online() {
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = yao_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(fmt::format(
+          "Gate {}: YaoToBooleanBEAVYTensorConversionGarbler::evaluate_online start", gate_id_));
+    }
+  }
+
+  const auto public_share = public_share_future_.get();
+  auto& pshares = output_->get_public_share();
+  assert(pshares.size() == bit_size_);
+  for (std::size_t bit_j = 0; bit_j < bit_size_; ++bit_j) {
+    pshares[bit_j] = public_share.Subset(bit_j * data_size_, (bit_j + 1) * data_size_);
+  }
+  output_->set_online_ready();
+
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = yao_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(fmt::format(
+          "Gate {}: YaoToBooleanBEAVYTensorConversionGarbler::evaluate_online end", gate_id_));
+    }
+  }
+}
+
+// Y -> beta Evaluator side
+
+YaoToBooleanBEAVYTensorConversionEvaluator::YaoToBooleanBEAVYTensorConversionEvaluator(
+    std::size_t gate_id, YaoProvider& yao_provider, const YaoTensorCP input)
+    : NewGate(gate_id),
+      yao_provider_(yao_provider),
+      bit_size_(input->get_bit_size()),
+      data_size_(input->get_dimensions().get_data_size()),
+      input_(std::move(input)) {
+  const auto& tensor_dims = input_->get_dimensions();
+  output_ = std::make_shared<beavy::BooleanBEAVYTensor>(tensor_dims, bit_size_);
+}
+
+void YaoToBooleanBEAVYTensorConversionEvaluator::evaluate_setup() {
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = yao_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(fmt::format(
+          "Gate {}: YaoToBooleanBEAVYTensorConversionEvaluator::evaluate_setup start", gate_id_));
+    }
+  }
+
+  for (auto& sshare : output_->get_secret_share()) {
+    sshare = ENCRYPTO::BitVector<>::Random(data_size_);
+  }
+  output_->set_setup_ready();
+
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = yao_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(fmt::format(
+          "Gate {}: YaoToBooleanBEAVYTensorConversionEvaluator::evaluate_setup end", gate_id_));
+    }
+  }
+}
+
+void YaoToBooleanBEAVYTensorConversionEvaluator::evaluate_online() {
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = yao_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(fmt::format(
+          "Gate {}: YaoToBooleanBEAVYTensorConversionEvaluator::evaluate_online start", gate_id_));
+    }
+  }
+
+  input_->wait_online();
+  auto& keys = input_->get_keys();
+  auto& pshares = output_->get_public_share();
+  const auto& sshares = output_->get_secret_share();
+  ENCRYPTO::BitVector<> public_share;
+  public_share.Reserve(Helpers::Convert::BitsToBytes(bit_size_ * data_size_));
+  for (std::size_t bit_j = 0; bit_j < bit_size_; ++bit_j) {
+    ENCRYPTO::BitVector<> tmp;
+    get_lsbs_from_keys(tmp, keys.data() + bit_j * data_size_, data_size_);
+    tmp ^= sshares[bit_j];
+    public_share.Append(tmp);
+    pshares[bit_j] = std::move(tmp);
+  }
+  output_->set_online_ready();
+  yao_provider_.send_bits_message(gate_id_, std::move(public_share));
+
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = yao_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(fmt::format(
+          "Gate {}: YaoToBooleanBEAVYTensorConversionEvaluator::evaluate_online end", gate_id_));
+    }
+  }
+}
+
 // Relu
 
 YaoTensorReluGarbler::YaoTensorReluGarbler(std::size_t gate_id, YaoProvider& yao_provider,
