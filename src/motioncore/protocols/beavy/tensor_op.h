@@ -27,6 +27,13 @@
 #include "tensor/tensor_op.h"
 #include "utility/reusable_future.h"
 
+namespace ENCRYPTO::ObliviousTransfer {
+template <typename T>
+class ACOTSender;
+template <typename T>
+class ACOTReceiver;
+}  // namespace ENCRYPTO::ObliviousTransfer
+
 namespace MOTION {
 template <typename T>
 class ConvolutionInputSide;
@@ -202,6 +209,31 @@ class ArithmeticBEAVYTensorMul : public NewGate {
   std::vector<T> Delta_y_share_;
   std::unique_ptr<MOTION::IntegerMultiplicationSender<T>> mult_sender_;
   std::unique_ptr<MOTION::IntegerMultiplicationReceiver<T>> mult_receiver_;
+};
+
+template <typename T>
+class BooleanToArithmeticBEAVYTensorConversion : public NewGate {
+ public:
+  BooleanToArithmeticBEAVYTensorConversion(std::size_t gate_id, BEAVYProvider&,
+                                           const BooleanBEAVYTensorCP input);
+  ~BooleanToArithmeticBEAVYTensorConversion();
+  bool need_setup() const noexcept override { return true; }
+  bool need_online() const noexcept override { return true; }
+  void evaluate_setup() override;
+  void evaluate_online() override;
+  ArithmeticBEAVYTensorCP<T> get_output_tensor() const noexcept { return output_; }
+
+ private:
+  BEAVYProvider& beavy_provider_;
+  static constexpr auto bit_size_ = ENCRYPTO::bit_size_v<T>;
+  const std::size_t data_size_;
+  const BooleanBEAVYTensorCP input_;
+  ArithmeticBEAVYTensorP<T> output_;
+  ENCRYPTO::ReusableFiberFuture<ENCRYPTO::BitVector<>> t_share_future_;
+  std::unique_ptr<ENCRYPTO::ObliviousTransfer::ACOTSender<T>> ot_sender_;
+  std::unique_ptr<ENCRYPTO::ObliviousTransfer::ACOTReceiver<T>> ot_receiver_;
+  std::vector<T> arithmetized_secret_share_;
+  ENCRYPTO::ReusableFiberFuture<std::vector<T>> share_future_;
 };
 
 }  // namespace MOTION::proto::beavy
