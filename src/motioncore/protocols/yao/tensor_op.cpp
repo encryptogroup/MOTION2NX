@@ -1184,7 +1184,7 @@ YaoTensorReluEvaluator::YaoTensorReluEvaluator(std::size_t gate_id, YaoProvider&
       relu_algo_(yao_provider_.get_circuit_loader().load_relu_circuit(bit_size_)) {
   garbled_tables_future_ =
       yao_provider_.register_for_blocks_message(gate_id, 2 * (bit_size_ - 1) * data_size_);
-  output_->get_keys().resize(bit_size_);
+  output_->get_keys().resize(bit_size_ * data_size_);
 }
 
 void YaoTensorReluEvaluator::evaluate_online() {
