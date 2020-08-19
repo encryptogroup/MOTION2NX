@@ -260,4 +260,27 @@ class BooleanBEAVYTensorRelu : public NewGate {
   ENCRYPTO::ReusableFiberFuture<ENCRYPTO::BitVector<>> share_future_;
 };
 
+template <typename T>
+class BooleanXArithmeticBEAVYTensorRelu : public NewGate {
+ public:
+  BooleanXArithmeticBEAVYTensorRelu(std::size_t gate_id, BEAVYProvider&, const BooleanBEAVYTensorCP,
+                                    const ArithmeticBEAVYTensorCP<T>);
+  ~BooleanXArithmeticBEAVYTensorRelu();
+  bool need_setup() const noexcept override { return true; }
+  bool need_online() const noexcept override { return true; }
+  void evaluate_setup() override;
+  void evaluate_online() override;
+  const ArithmeticBEAVYTensorP<T>& get_output_tensor() const { return output_; }
+
+ private:
+  BEAVYProvider& beavy_provider_;
+  static constexpr auto bit_size_ = ENCRYPTO::bit_size_v<T>;
+  const std::size_t data_size_;
+  const BooleanBEAVYTensorCP input_bool_;
+  const ArithmeticBEAVYTensorCP<T> input_arith_;
+  ArithmeticBEAVYTensorP<T> output_;
+  std::unique_ptr<ENCRYPTO::ObliviousTransfer::ACOTSender<T>> ot_sender_;
+  std::unique_ptr<ENCRYPTO::ObliviousTransfer::ACOTReceiver<T>> ot_receiver_;
+};
+
 }  // namespace MOTION::proto::beavy

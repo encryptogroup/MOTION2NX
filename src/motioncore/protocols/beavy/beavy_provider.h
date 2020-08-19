@@ -173,6 +173,7 @@ class BEAVYProvider : public GateFactory,
                                        const tensor::TensorCP input_B) override;
   tensor::TensorCP make_tensor_sqr_op(const tensor::TensorCP input) override;
   tensor::TensorCP make_tensor_relu_op(const tensor::TensorCP) override;
+  using TensorOpFactory::make_tensor_relu_op;
   template <typename T>
   tensor::TensorCP basic_make_convert_boolean_to_arithmetic_beavy_tensor(const tensor::TensorCP);
   tensor::TensorCP make_convert_boolean_to_arithmetic_beavy_tensor(const tensor::TensorCP);

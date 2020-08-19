@@ -27,6 +27,13 @@
 #include "tensor/tensor_op.h"
 #include "utility/reusable_future.h"
 
+namespace ENCRYPTO::ObliviousTransfer {
+template <typename T>
+class ACOTSender;
+template <typename T>
+class ACOTReceiver;
+}
+
 namespace MOTION::proto::gmw {
 
 class GMWProvider;
@@ -212,6 +219,29 @@ class BooleanGMWTensorRelu : public NewGate {
   BooleanGMWTensorP output_;
   const std::size_t triple_index_;
   ENCRYPTO::ReusableFiberFuture<ENCRYPTO::BitVector<>> share_future_;
+};
+
+template <typename T>
+class BooleanXArithmeticGMWTensorRelu : public NewGate {
+ public:
+  BooleanXArithmeticGMWTensorRelu(std::size_t gate_id, GMWProvider&, const BooleanGMWTensorCP,
+                                  const ArithmeticGMWTensorCP<T>);
+  ~BooleanXArithmeticGMWTensorRelu();
+  bool need_setup() const noexcept override { return false; }
+  bool need_online() const noexcept override { return true; }
+  void evaluate_setup() override {}
+  void evaluate_online() override;
+  const ArithmeticGMWTensorP<T>& get_output_tensor() const { return output_; }
+
+ private:
+  GMWProvider& gmw_provider_;
+  static constexpr auto bit_size_ = ENCRYPTO::bit_size_v<T>;
+  const std::size_t data_size_;
+  const BooleanGMWTensorCP input_bool_;
+  const ArithmeticGMWTensorCP<T> input_arith_;
+  ArithmeticGMWTensorP<T> output_;
+  std::unique_ptr<ENCRYPTO::ObliviousTransfer::ACOTSender<T>> ot_sender_;
+  std::unique_ptr<ENCRYPTO::ObliviousTransfer::ACOTReceiver<T>> ot_receiver_;
 };
 
 }  // namespace MOTION::proto::gmw

@@ -181,6 +181,9 @@ class GMWProvider : public GateFactory,
   tensor::TensorCP make_tensor_sqr_op(const tensor::TensorCP input) override;
   tensor::TensorCP make_tensor_relu_op(const tensor::TensorCP) override;
   template <typename T>
+  tensor::TensorCP basic_make_tensor_relu_op(const tensor::TensorCP, const tensor::TensorCP);
+  tensor::TensorCP make_tensor_relu_op(const tensor::TensorCP, const tensor::TensorCP) override;
+  template <typename T>
   tensor::TensorCP basic_make_convert_boolean_to_arithmetic_gmw_tensor(const tensor::TensorCP);
   tensor::TensorCP make_convert_boolean_to_arithmetic_gmw_tensor(const tensor::TensorCP);
 

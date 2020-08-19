@@ -1025,4 +1025,75 @@ void BooleanBEAVYTensorRelu::evaluate_online() {
   }
 }
 
+template <typename T>
+BooleanXArithmeticBEAVYTensorRelu<T>::BooleanXArithmeticBEAVYTensorRelu(
+    std::size_t gate_id, BEAVYProvider& beavy_provider, const BooleanBEAVYTensorCP input_bool,
+    const ArithmeticBEAVYTensorCP<T> input_arith)
+    : NewGate(gate_id),
+      beavy_provider_(beavy_provider),
+      data_size_(input_bool->get_dimensions().get_data_size()),
+      input_bool_(std::move(input_bool)),
+      input_arith_(std::move(input_arith)),
+      output_(std::make_shared<ArithmeticBEAVYTensor<T>>(input_arith_->get_dimensions())) {
+  if (input_bool_->get_dimensions() != input_arith_->get_dimensions()) {
+    throw std::invalid_argument("dimension mismatch");
+  }
+  if (input_bool_->get_bit_size() != input_arith_->get_bit_size()) {
+    throw std::invalid_argument("bit size mismatch");
+  }
+  const auto my_id = beavy_provider_.get_my_id();
+  auto& otp = beavy_provider_.get_ot_manager().get_provider(1 - my_id);
+  ot_sender_ = otp.RegisterSendACOT<T>(data_size_);
+  ot_receiver_ = otp.RegisterReceiveACOT<T>(data_size_);
+}
+
+template <typename T>
+BooleanXArithmeticBEAVYTensorRelu<T>::~BooleanXArithmeticBEAVYTensorRelu() = default;
+
+template <typename T>
+void BooleanXArithmeticBEAVYTensorRelu<T>::evaluate_setup() {
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = beavy_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(
+          fmt::format("Gate {}: BooleanXArithmeticBEAVYTensorRelu::evaluate_setup start", gate_id_));
+    }
+  }
+
+  // TODO
+  throw std::logic_error("not yet implemented");
+
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = beavy_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(
+          fmt::format("Gate {}: BooleanXArithmeticBEAVYTensorRelu::evaluate_setup end", gate_id_));
+    }
+  }
+}
+
+template <typename T>
+void BooleanXArithmeticBEAVYTensorRelu<T>::evaluate_online() {
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = beavy_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(
+          fmt::format("Gate {}: BooleanXArithmeticBEAVYTensorRelu::evaluate_online start", gate_id_));
+    }
+  }
+
+  // TODO
+  throw std::logic_error("not yet implemented");
+
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = beavy_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(
+          fmt::format("Gate {}: BooleanXArithmeticBEAVYTensorRelu::evaluate_online end", gate_id_));
+    }
+  }
+}
+
+template class BooleanXArithmeticBEAVYTensorRelu<std::uint64_t>;
+
 }  // namespace MOTION::proto::beavy

@@ -89,6 +89,12 @@ tensor::TensorCP TensorOpFactory::make_tensor_relu_op(const tensor::TensorCP) {
       fmt::format("{} does not support the ReLU operation", get_provider_name()));
 }
 
+tensor::TensorCP TensorOpFactory::make_tensor_relu_op(const tensor::TensorCP,
+                                                      const tensor::TensorCP) {
+  throw std::logic_error(
+      fmt::format("{} does not support the ReLU (arith x Bool) operation", get_provider_name()));
+}
+
 tensor::TensorCP TensorOpFactory::make_tensor_maxpool_op(const tensor::MaxPoolOp&,
                                                          const tensor::TensorCP) {
   throw std::logic_error(

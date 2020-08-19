@@ -74,6 +74,8 @@ class TensorOpFactory {
                                                const tensor::TensorCP input_B);
   virtual tensor::TensorCP make_tensor_sqr_op(const tensor::TensorCP input);
   virtual tensor::TensorCP make_tensor_relu_op(const tensor::TensorCP input);
+  virtual tensor::TensorCP make_tensor_relu_op(const tensor::TensorCP input_bool,
+                                               const tensor::TensorCP input_arith);
   virtual tensor::TensorCP make_tensor_maxpool_op(const tensor::MaxPoolOp& maxpool_op,
                                                   const tensor::TensorCP input);
 };

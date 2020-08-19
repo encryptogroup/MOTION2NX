@@ -28,6 +28,8 @@
 #include "crypto/multiplication_triple/linalg_triple_provider.h"
 #include "crypto/multiplication_triple/sp_provider.h"
 #include "crypto/multiplication_triple/sb_provider.h"
+#include "crypto/oblivious_transfer/ot_flavors.h"
+#include "crypto/oblivious_transfer/ot_provider.h"
 #include "crypto/sharing_randomness_generator.h"
 #include "gmw_provider.h"
 #include "utility/constants.h"
@@ -661,5 +663,88 @@ void BooleanGMWTensorRelu::evaluate_online() {
     }
   }
 }
+
+template <typename T>
+BooleanXArithmeticGMWTensorRelu<T>::BooleanXArithmeticGMWTensorRelu(
+    std::size_t gate_id, GMWProvider& gmw_provider, const BooleanGMWTensorCP input_bool,
+    const ArithmeticGMWTensorCP<T> input_arith)
+    : NewGate(gate_id),
+      gmw_provider_(gmw_provider),
+      data_size_(input_bool->get_dimensions().get_data_size()),
+      input_bool_(std::move(input_bool)),
+      input_arith_(std::move(input_arith)),
+      output_(std::make_shared<ArithmeticGMWTensor<T>>(input_arith_->get_dimensions())) {
+  if (input_bool_->get_dimensions() != input_arith_->get_dimensions()) {
+    throw std::invalid_argument("dimension mismatch");
+  }
+  if (input_bool_->get_bit_size() != input_arith_->get_bit_size()) {
+    throw std::invalid_argument("bit size mismatch");
+  }
+  const auto my_id = gmw_provider_.get_my_id();
+  auto& otp = gmw_provider_.get_ot_manager().get_provider(1 - my_id);
+  ot_sender_ = otp.RegisterSendACOT<T>(data_size_);
+  ot_receiver_ = otp.RegisterReceiveACOT<T>(data_size_);
+}
+
+template <typename T>
+BooleanXArithmeticGMWTensorRelu<T>::~BooleanXArithmeticGMWTensorRelu() = default;
+
+template <typename T>
+void BooleanXArithmeticGMWTensorRelu<T>::evaluate_online() {
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = gmw_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(
+          fmt::format("Gate {}: BooleanXArithmeticGMWTensorRelu::evaluate_online start", gate_id_));
+    }
+  }
+
+  input_bool_->wait_online();
+  input_arith_->wait_online();
+  const auto& ashare = input_arith_->get_share();
+  auto inv_msb_share = input_bool_->get_share()[bit_size_ - 1];
+  auto& out_share = output_->get_share();
+
+  if (gmw_provider_.is_my_job(gate_id_)) {
+    inv_msb_share.Invert();
+  }
+
+  ot_receiver_->SetChoices(inv_msb_share);
+  ot_receiver_->SendCorrections();
+  {
+    std::vector<T> ot_inputs(data_size_);
+    for (std::size_t int_i = 0; int_i < data_size_; ++int_i) {
+      if (inv_msb_share.Get(int_i)) {
+        ot_inputs[int_i] = -ashare[int_i];
+      } else {
+        ot_inputs[int_i] = ashare[int_i];
+      }
+    }
+    ot_sender_->SetCorrelations(std::move(ot_inputs));
+  }
+  ot_sender_->SendMessages();
+
+  ot_receiver_->ComputeOutputs();
+  ot_sender_->ComputeOutputs();
+  out_share = ot_receiver_->GetOutputs();
+  const auto sender_outputs = ot_sender_->GetOutputs();
+  for (std::size_t int_i = 0; int_i < data_size_; ++int_i) {
+    out_share[int_i] -= sender_outputs[int_i];
+    if (inv_msb_share.Get(int_i)) {
+      out_share[int_i] += ashare[int_i];
+    }
+  }
+  output_->set_online_ready();
+
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = gmw_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(
+          fmt::format("Gate {}: BooleanXArithmeticGMWTensorRelu::evaluate_online end", gate_id_));
+    }
+  }
+}
+
+template class BooleanXArithmeticGMWTensorRelu<std::uint64_t>;
 
 }  // namespace MOTION::proto::gmw

@@ -490,6 +490,53 @@ TYPED_TEST(YaoArithmeticGMWTensorTest, ReLUInBooleanGMW) {
   }
 }
 
+TYPED_TEST(YaoArithmeticGMWTensorTest, ReLUInBooleanXArithmeticGMW) {
+  MOTION::tensor::TensorDimensions dims = {
+      .batch_size_ = 1, .num_channels_ = 1, .height_ = 28, .width_ = 28};
+  const auto input = this->generate_inputs(dims);
+
+  auto [input_promise, tensor_in_0] = this->make_arithmetic_T_tensor_input_my(0, dims);
+  auto tensor_in_1 = this->make_arithmetic_T_tensor_input_other(1, dims);
+
+  auto tensor_yao_0 = this->yao_providers_[0]->make_convert_from_arithmetic_gmw_tensor(tensor_in_0);
+  auto tensor_yao_1 = this->yao_providers_[1]->make_convert_from_arithmetic_gmw_tensor(tensor_in_1);
+  auto tensor_gmw_0 = this->yao_providers_[0]->make_convert_to_boolean_gmw_tensor(tensor_yao_0);
+  auto tensor_gmw_1 = this->yao_providers_[1]->make_convert_to_boolean_gmw_tensor(tensor_yao_1);
+  auto output_tensor_0 = this->gmw_providers_[0]->make_tensor_relu_op(tensor_gmw_0, tensor_in_0);
+  auto output_tensor_1 = this->gmw_providers_[1]->make_tensor_relu_op(tensor_gmw_1, tensor_in_1);
+
+  this->run_setup();
+  this->run_gates_setup();
+  input_promise.set_value(input);
+  this->run_gates_online();
+
+  const auto gmw_tensor_0 =
+      std::dynamic_pointer_cast<const ArithmeticGMWTensor<TypeParam>>(output_tensor_0);
+  const auto gmw_tensor_1 =
+      std::dynamic_pointer_cast<const ArithmeticGMWTensor<TypeParam>>(output_tensor_1);
+  ASSERT_NE(gmw_tensor_0, nullptr);
+  ASSERT_NE(gmw_tensor_1, nullptr);
+  gmw_tensor_0->wait_online();
+  gmw_tensor_1->wait_online();
+
+  const auto& share_0 = gmw_tensor_0->get_share();
+  const auto& share_1 = gmw_tensor_1->get_share();
+  constexpr auto bit_size = ENCRYPTO::bit_size_v<TypeParam>;
+  const auto data_size = input.size();
+  ASSERT_EQ(share_0.size(), data_size);
+  ASSERT_EQ(share_1.size(), data_size);
+  const auto plain_ints = MOTION::Helpers::AddVectors(share_0, share_1);
+  for (std::size_t int_i = 0; int_i < data_size; ++int_i) {
+    const auto value = input.at(int_i);
+    const auto msb = bool(value >> (ENCRYPTO::bit_size_v<TypeParam> - 1));
+    if (msb) {
+      EXPECT_EQ(plain_ints.at(int_i), 0);
+    } else {
+      EXPECT_EQ(plain_ints.at(int_i), value);
+    }
+  }
+}
+
 TYPED_TEST(YaoArithmeticGMWTensorTest, MaxPoolSimple) {
   const MOTION::tensor::TensorDimensions dims = {
       .batch_size_ = 1, .num_channels_ = 1, .height_ = 2, .width_ = 2};
@@ -878,6 +925,62 @@ TYPED_TEST(YaoArithmeticBEAVYTensorTest, ReLUInBooleanBEAVY) {
     plain_bits.at(bit_j) = pshare_0.at(bit_j) ^ sshare_0.at(bit_j) ^ sshare_1.at(bit_j);
   }
   const auto plain_ints = ENCRYPTO::ToVectorOutput<TypeParam>(plain_bits);
+  for (std::size_t int_i = 0; int_i < data_size; ++int_i) {
+    const auto value = input.at(int_i);
+    const auto msb = bool(value >> (ENCRYPTO::bit_size_v<TypeParam> - 1));
+    if (msb) {
+      EXPECT_EQ(plain_ints.at(int_i), 0);
+    } else {
+      EXPECT_EQ(plain_ints.at(int_i), value);
+    }
+  }
+}
+
+TYPED_TEST(YaoArithmeticBEAVYTensorTest, ReLUInBooleanXArithmeticBEAVY) {
+  MOTION::tensor::TensorDimensions dims = {
+      .batch_size_ = 1, .num_channels_ = 1, .height_ = 28, .width_ = 28};
+  const auto input = this->generate_inputs(dims);
+
+  auto [input_promise, tensor_in_0] = this->make_arithmetic_T_tensor_input_my(0, dims);
+  auto tensor_in_1 = this->make_arithmetic_T_tensor_input_other(1, dims);
+
+  auto tensor_yao_0 =
+      this->yao_providers_[0]->make_convert_from_arithmetic_beavy_tensor(tensor_in_0);
+  auto tensor_yao_1 =
+      this->yao_providers_[1]->make_convert_from_arithmetic_beavy_tensor(tensor_in_1);
+  auto tensor_beavy_0 = this->yao_providers_[0]->make_convert_to_boolean_beavy_tensor(tensor_yao_0);
+  auto tensor_beavy_1 = this->yao_providers_[1]->make_convert_to_boolean_beavy_tensor(tensor_yao_1);
+  auto output_tensor_0 =
+      this->beavy_providers_[0]->make_tensor_relu_op(tensor_beavy_0, tensor_in_0);
+  auto output_tensor_1 =
+      this->beavy_providers_[1]->make_tensor_relu_op(tensor_beavy_1, tensor_in_1);
+
+  this->run_setup();
+  this->run_gates_setup();
+  input_promise.set_value(input);
+  this->run_gates_online();
+
+  const auto beavy_tensor_0 =
+      std::dynamic_pointer_cast<const ArithmeticBEAVYTensor<TypeParam>>(output_tensor_0);
+  const auto beavy_tensor_1 =
+      std::dynamic_pointer_cast<const ArithmeticBEAVYTensor<TypeParam>>(output_tensor_1);
+  ASSERT_NE(beavy_tensor_0, nullptr);
+  ASSERT_NE(beavy_tensor_1, nullptr);
+  beavy_tensor_0->wait_online();
+  beavy_tensor_1->wait_online();
+
+  const auto& pshare_0 = beavy_tensor_0->get_public_share();
+  const auto& pshare_1 = beavy_tensor_1->get_public_share();
+  const auto& sshare_0 = beavy_tensor_0->get_secret_share();
+  const auto& sshare_1 = beavy_tensor_1->get_secret_share();
+  constexpr auto bit_size = ENCRYPTO::bit_size_v<TypeParam>;
+  const auto data_size = input.size();
+  ASSERT_EQ(pshare_0.size(), data_size);
+  ASSERT_EQ(pshare_0, pshare_1);
+  ASSERT_EQ(sshare_0.size(), data_size);
+  ASSERT_EQ(sshare_1.size(), data_size);
+  const auto plain_ints =
+      MOTION::Helpers::SubVectors(pshare_0, MOTION::Helpers::AddVectors(sshare_0, sshare_1));
   for (std::size_t int_i = 0; int_i < data_size; ++int_i) {
     const auto value = input.at(int_i);
     const auto msb = bool(value >> (ENCRYPTO::bit_size_v<TypeParam> - 1));
