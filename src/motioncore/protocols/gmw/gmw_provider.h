@@ -32,6 +32,10 @@
 #include "utility/enable_wait.h"
 #include "utility/type_traits.hpp"
 
+namespace ENCRYPTO::ObliviousTransfer {
+class OTProviderManager;
+}
+
 namespace MOTION {
 
 class GateRegister;
@@ -67,13 +71,15 @@ class GMWProvider : public GateFactory,
   struct my_input_t {};
 
   GMWProvider(Communication::CommunicationLayer&, GateRegister&, Crypto::MotionBaseProvider&,
-              MTProvider&, SPProvider&, SBProvider&, std::shared_ptr<Logger>);
+              ENCRYPTO::ObliviousTransfer::OTProviderManager&, MTProvider&, SPProvider&,
+              SBProvider&, std::shared_ptr<Logger>);
   ~GMWProvider();
 
   std::string get_provider_name() const noexcept override { return "GMWProvider"; }
 
   void setup();
   Crypto::MotionBaseProvider& get_motion_base_provider() noexcept { return motion_base_provider_; }
+  ENCRYPTO::ObliviousTransfer::OTProviderManager& get_ot_manager() noexcept { return ot_manager_; }
   MTProvider& get_mt_provider() noexcept { return mt_provider_; }
   SPProvider& get_sp_provider() noexcept { return sp_provider_; }
   SBProvider& get_sb_provider() noexcept { return sb_provider_; }
@@ -222,6 +228,7 @@ class GMWProvider : public GateFactory,
   Communication::CommunicationLayer& communication_layer_;
   GateRegister& gate_register_;
   Crypto::MotionBaseProvider& motion_base_provider_;
+  ENCRYPTO::ObliviousTransfer::OTProviderManager& ot_manager_;
   MTProvider& mt_provider_;
   SPProvider& sp_provider_;
   SBProvider& sb_provider_;

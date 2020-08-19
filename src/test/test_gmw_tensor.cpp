@@ -74,8 +74,9 @@ class GMWTensorTest : public ::testing::Test {
           *comm_layers_[i], ot_provider_managers_[i]->get_provider(1 - i), stats_[i], nullptr);
       gate_registers_[i] = std::make_unique<MOTION::GateRegister>();
       gmw_providers_[i] = std::make_unique<GMWProvider>(
-          *comm_layers_[i], *gate_registers_[i], *motion_base_providers_[i], *mt_providers_[i],
-          *sp_providers_[i], *sb_providers_[i], loggers_[i]);
+          *comm_layers_[i], *gate_registers_[i], *motion_base_providers_[i],
+          *ot_provider_managers_[i], *mt_providers_[i], *sp_providers_[i], *sb_providers_[i],
+          loggers_[i]);
       gmw_providers_[i]->set_linalg_triple_provider(linalg_triple_providers_[i]);
     }
   }
