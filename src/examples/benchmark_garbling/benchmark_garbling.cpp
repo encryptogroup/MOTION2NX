@@ -41,7 +41,7 @@ static void BM_garble_and(benchmark::State& state) {
       benchmark::Counter(state.iterations() * num_ands, benchmark::Counter::kIsRate);
   state.SetBytesProcessed(state.iterations() * 32 * num_ands);
 }
-BENCHMARK(BM_garble_and)->RangeMultiplier(1 << 5)->Range(1, 1 << 20);
+BENCHMARK(BM_garble_and)->RangeMultiplier(1 << 2)->Range(1, 1 << 20);
 
 static void BM_evaluate_and(benchmark::State& state) {
   MOTION::Crypto::garbling::HalfGateGarbler garbler;
@@ -62,7 +62,7 @@ static void BM_evaluate_and(benchmark::State& state) {
       benchmark::Counter(state.iterations() * num_ands, benchmark::Counter::kIsRate);
   state.SetBytesProcessed(state.iterations() * 32 * num_ands);
 }
-BENCHMARK(BM_evaluate_and)->RangeMultiplier(1 << 5)->Range(1, 1 << 20);
+BENCHMARK(BM_evaluate_and)->RangeMultiplier(1 << 2)->Range(1, 1 << 20);
 
 static void BM_garble_aes_128_circuit(benchmark::State& state) {
   MOTION::Crypto::garbling::HalfGateGarbler garbler;
