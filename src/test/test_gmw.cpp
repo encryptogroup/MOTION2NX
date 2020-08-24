@@ -62,7 +62,8 @@ class GMWTest : public ::testing::Test {
       arithmetic_provider_managers_[i] = std::make_unique<MOTION::ArithmeticProviderManager>(
           *comm_layers_[i], *ot_provider_managers_[i], nullptr);
       mt_providers_[i] = std::make_unique<MOTION::MTProviderFromOTs>(
-          i, 2, *arithmetic_provider_managers_[i], *ot_provider_managers_[i], stats_[i], nullptr);
+          i, 2, true, *arithmetic_provider_managers_[i], *ot_provider_managers_[i], stats_[i],
+          nullptr);
       sp_providers_[i] = std::make_unique<MOTION::SPProviderFromOTs>(
           ot_provider_managers_[i]->get_providers(), i, stats_[i], nullptr);
       sb_providers_[i] = std::make_unique<MOTION::TwoPartySBProvider>(

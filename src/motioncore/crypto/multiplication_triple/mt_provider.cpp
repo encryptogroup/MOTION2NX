@@ -99,6 +99,14 @@ void register_helper_bool(ENCRYPTO::ObliviousTransfer::OTProvider& ot_provider,
   ots_rcv->SetChoices(bit_mts.b);
 }
 
+void register_helper_bool_2pc(ENCRYPTO::ObliviousTransfer::OTProvider& ot_provider,
+                              std::unique_ptr<ENCRYPTO::ObliviousTransfer::ROTSender>& ots_snd,
+                              std::unique_ptr<ENCRYPTO::ObliviousTransfer::ROTReceiver>& ots_rcv,
+                              std::size_t num_bit_mts) {
+  ots_snd = ot_provider.RegisterSendROT(num_bit_mts);
+  ots_rcv = ot_provider.RegisterReceiveROT(num_bit_mts);
+}
+
 template <typename T>
 void register_multiplications_helper(
     ArithmeticProvider& arithmetic_provider,
@@ -172,11 +180,28 @@ void finish_mts_helper(std::list<std::unique_ptr<IntegerMultiplicationSender<T>>
   }
 }
 
+void compute_mts_helper_bool_2pc(ENCRYPTO::ObliviousTransfer::ROTSender& ot_sender,
+                                 ENCRYPTO::ObliviousTransfer::ROTReceiver& ot_receiver,
+                                 BinaryMTVector& bit_mts) {
+  ot_sender.ComputeOutputs();
+  ot_receiver.ComputeOutputs();
+  const auto [m_0, m_1] = ot_sender.GetOutputs();
+  const auto m_r = ot_receiver.GetOutputs();
+  bit_mts.a = ot_receiver.GetChoices();
+  bit_mts.b = std::move(m_1);
+  bit_mts.b ^= m_0;
+  bit_mts.c = bit_mts.a & bit_mts.b;
+  bit_mts.c ^= m_r;
+  bit_mts.c ^= m_0;
+}
+
 }  // namespace
 
 struct MTProviderFromOTs::MTProviderFromOTsImpl {
   MTProviderFromOTsImpl(std::size_t num_parties);
 
+  std::unique_ptr<ENCRYPTO::ObliviousTransfer::ROTSender> rots_sender_;
+  std::unique_ptr<ENCRYPTO::ObliviousTransfer::ROTReceiver> rots_receiver_;
   std::vector<std::unique_ptr<ENCRYPTO::ObliviousTransfer::XCOTBitSender>> bit_xcots_senders_;
   std::vector<std::unique_ptr<ENCRYPTO::ObliviousTransfer::XCOTBitReceiver>> bit_xcots_receivers_;
   std::vector<std::list<std::unique_ptr<IntegerMultiplicationSender<std::uint8_t>>>>
@@ -214,8 +239,17 @@ MTProviderFromOTs::MTProviderFromOTs(std::size_t my_id, std::size_t num_parties,
                                      ENCRYPTO::ObliviousTransfer::OTProviderManager& ot_manager,
                                      Statistics::RunTimeStats& run_time_stats,
                                      std::shared_ptr<Logger> logger)
+    : MTProviderFromOTs(my_id, num_parties, false, arithmetic_manager, ot_manager, run_time_stats,
+                        logger) {}
+
+MTProviderFromOTs::MTProviderFromOTs(std::size_t my_id, std::size_t num_parties, bool use_2pc,
+                                     ArithmeticProviderManager& arithmetic_manager,
+                                     ENCRYPTO::ObliviousTransfer::OTProviderManager& ot_manager,
+                                     Statistics::RunTimeStats& run_time_stats,
+                                     std::shared_ptr<Logger> logger)
     : MTProvider(my_id, num_parties),
       impl_(std::make_unique<MTProviderFromOTsImpl>(num_parties)),
+      use_2pc_(use_2pc && num_parties == 2),
       arithmetic_manager_(arithmetic_manager),
       ot_manager_(ot_manager),
       run_time_stats_(run_time_stats),
@@ -231,7 +265,9 @@ void MTProviderFromOTs::PreSetup() {
   }
   run_time_stats_.record_start<Statistics::RunTimeStats::StatID::mt_presetup>();
 
-  generate_random_triples_bool(bit_mts_, num_bit_mts_);
+  if (!use_2pc_) {
+    generate_random_triples_bool(bit_mts_, num_bit_mts_);
+  }
   generate_random_triples<std::uint8_t>(mts8_, num_mts_8_);
   generate_random_triples<std::uint16_t>(mts16_, num_mts_16_);
   generate_random_triples<std::uint32_t>(mts32_, num_mts_32_);
@@ -243,9 +279,15 @@ void MTProviderFromOTs::PreSetup() {
     }
 
     if (num_bit_mts_ > 0) {
-      register_helper_bool(ot_manager_.get_provider(party_id),
-                           impl_->bit_xcots_senders_.at(party_id),
-                           impl_->bit_xcots_receivers_.at(party_id), bit_mts_, num_bit_mts_);
+      if (use_2pc_) {
+        assert(party_id == 1 - my_id_);
+        register_helper_bool_2pc(ot_manager_.get_provider(party_id), impl_->rots_sender_,
+                                 impl_->rots_receiver_, num_bit_mts_);
+      } else {
+        register_helper_bool(ot_manager_.get_provider(party_id),
+                             impl_->bit_xcots_senders_.at(party_id),
+                             impl_->bit_xcots_receivers_.at(party_id), bit_mts_, num_bit_mts_);
+      }
     }
     register_multiplications_helper<std::uint8_t>(
         arithmetic_manager_.get_provider(party_id), impl_->mult_senders_8_.at(party_id),
@@ -286,7 +328,7 @@ void MTProviderFromOTs::Setup() {
     }
     futures.emplace_back(std::async(std::launch::async, [this, party_id] {
       // prepare and send messages
-      if (num_bit_mts_ > 0) {
+      if (num_bit_mts_ > 0 && !use_2pc_) {
         assert(impl_->bit_xcots_senders_.at(party_id) != nullptr);
         assert(impl_->bit_xcots_receivers_.at(party_id) != nullptr);
         impl_->bit_xcots_senders_.at(party_id)->SendMessages();
@@ -306,7 +348,7 @@ void MTProviderFromOTs::Setup() {
                                                   max_batch_size_, num_mts_64_, mts64_);
 
       // finish the OTs and multiplications
-      if (num_bit_mts_ > 0) {
+      if (num_bit_mts_ > 0 && !use_2pc_) {
         assert(impl_->bit_xcots_senders_.at(party_id) != nullptr);
         assert(impl_->bit_xcots_receivers_.at(party_id) != nullptr);
         impl_->bit_xcots_senders_.at(party_id)->ComputeOutputs();
@@ -323,6 +365,11 @@ void MTProviderFromOTs::Setup() {
     }));
   }
 
+  if (num_bit_mts_ > 0 && use_2pc_) {
+    assert(num_parties_ == 2);
+    compute_mts_helper_bool_2pc(*impl_->rots_sender_, *impl_->rots_receiver_, bit_mts_);
+  }
+
   std::for_each(std::begin(futures), std::end(futures), [](auto& f) { f.get(); });
 
   // finish computation of MTs (would need synchronization)
@@ -330,7 +377,7 @@ void MTProviderFromOTs::Setup() {
     if (party_id == my_id_) {
       continue;
     }
-    if (num_bit_mts_ > 0) {
+    if (num_bit_mts_ > 0 && !use_2pc_) {
       assert(impl_->bit_xcots_senders_.at(party_id) != nullptr);
       assert(impl_->bit_xcots_receivers_.at(party_id) != nullptr);
       finish_mts_helper_bool(*impl_->bit_xcots_senders_.at(party_id),

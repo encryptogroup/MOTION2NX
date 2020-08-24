@@ -176,6 +176,9 @@ class MTProviderFromOTs : public MTProvider {
   MTProviderFromOTs(std::size_t my_id, std::size_t num_parties, ArithmeticProviderManager&,
                     ENCRYPTO::ObliviousTransfer::OTProviderManager&, Statistics::RunTimeStats&,
                     std::shared_ptr<Logger>);
+  MTProviderFromOTs(std::size_t my_id, std::size_t num_parties, bool use_2pc, ArithmeticProviderManager&,
+                    ENCRYPTO::ObliviousTransfer::OTProviderManager&, Statistics::RunTimeStats&,
+                    std::shared_ptr<Logger>);
   ~MTProviderFromOTs();
 
   void PreSetup() final;
@@ -184,6 +187,9 @@ class MTProviderFromOTs : public MTProvider {
  private:
   struct MTProviderFromOTsImpl;
   std::unique_ptr<MTProviderFromOTsImpl> impl_;
+
+  // should more efficient two-party protocols be used?
+  bool use_2pc_;
 
   // divisible by 128
   static inline constexpr std::size_t max_batch_size_{16'384};
