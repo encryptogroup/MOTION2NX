@@ -588,12 +588,13 @@ void ROTSender::ComputeOutputs() {
   WaitSetup();
 
   // make space for all the OTs
-  outputs_.Reserve(MOTION::Helpers::Convert::BitsToBytes(2 * num_ots_ * vector_size_));
+  m0_outputs_.Reserve(MOTION::Helpers::Convert::BitsToBytes(num_ots_ * vector_size_));
+  m1_outputs_.Reserve(MOTION::Helpers::Convert::BitsToBytes(num_ots_ * vector_size_));
 
   // take one of the precomputed outputs
   for (std::size_t i = 0; i < num_ots_; ++i) {
-    outputs_.Append(data_.y0_.at(ot_id_ + i));
-    outputs_.Append(data_.y1_.at(ot_id_ + i));
+    m0_outputs_.Append(data_.y0_.at(ot_id_ + i));
+    m1_outputs_.Append(data_.y1_.at(ot_id_ + i));
   }
 
   // remember that we have done this

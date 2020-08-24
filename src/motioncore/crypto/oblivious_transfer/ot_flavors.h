@@ -418,14 +418,15 @@ class ROTSender : public BasicOTSender {
   void ComputeOutputs();
 
   // get the sender's outputs
-  BitVector<>& GetOutputs() {
+  std::pair<BitVector<>&, BitVector<>&> GetOutputs() {
     assert(outputs_computed_);
-    return outputs_;
+    return {m0_outputs_, m1_outputs_};
   }
 
   // clear stored data s.t. this handle can be used again
   void clear() noexcept {
-    outputs_ = {};
+    m0_outputs_ = {};
+    m1_outputs_ = {};
     outputs_computed_ = false;
   }
 
@@ -436,8 +437,9 @@ class ROTSender : public BasicOTSender {
   // if the receiver selects its choice bit
   const bool random_choice_;
 
-  // the senders outputs, first the "0 outputs", then the "1 outputs"
-  BitVector<> outputs_;
+  // the senders outputs
+  BitVector<> m0_outputs_;
+  BitVector<> m1_outputs_;
 
   // if the sender outputs have been computed
   bool outputs_computed_ = false;

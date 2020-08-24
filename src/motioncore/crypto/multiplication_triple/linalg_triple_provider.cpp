@@ -333,7 +333,7 @@ void LinAlgTriplesFromAP::setup() {
         auto r = handle_receiver->GetChoices();
         auto m_r = handle_receiver->GetOutputs();
         handle_sender->ComputeOutputs();
-        auto m_0_and_m_1 = handle_sender->GetOutputs();
+        auto [m_0, m_1] = handle_sender->GetOutputs();
         std::vector<ENCRYPTO::BitVector<>> m_0s(bit_size - 1);
         std::vector<ENCRYPTO::BitVector<>> m_1s(bit_size - 1);
         std::vector<ENCRYPTO::BitVector<>> m_rs(bit_size - 1);
@@ -346,8 +346,8 @@ void LinAlgTriplesFromAP::setup() {
         // probably horrible inefficient, but works ...
         for (std::size_t t_i = 0; t_i < num_triples; ++t_i) {
           for (std::size_t bit_j = 0; bit_j < bit_size - 1; ++bit_j) {
-            m_0s[bit_j].Append(m_0_and_m_1.Get(2 * t_i * (bit_size - 1) + bit_j));
-            m_1s[bit_j].Append(m_0_and_m_1.Get((2 * t_i + 1) * (bit_size - 1) + bit_j));
+            m_0s[bit_j].Append(m_0.Get(t_i * (bit_size - 1) + bit_j));
+            m_1s[bit_j].Append(m_1.Get(t_i * (bit_size - 1) + bit_j));
             m_rs[bit_j].Append(m_r.Get(t_i * (bit_size - 1) + bit_j));
           }
         }

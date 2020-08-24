@@ -335,19 +335,18 @@ TEST_F(OTFlavorTest, ROT) {
   const auto receiver_output = ot_receiver->GetOutputs();
   const auto choice_bits = ot_receiver->GetChoices();
   ot_sender->ComputeOutputs();
-  const auto sender_output = ot_sender->GetOutputs();
+  const auto [sender_output_m0, sender_output_m1] = ot_sender->GetOutputs();
 
   ASSERT_EQ(receiver_output.GetSize(), num_ots * vector_size);
   ASSERT_EQ(choice_bits.GetSize(), num_ots);
-  ASSERT_EQ(sender_output.GetSize(), 2 * num_ots * vector_size);
+  ASSERT_EQ(sender_output_m0.GetSize(), num_ots * vector_size);
+  ASSERT_EQ(sender_output_m1.GetSize(), num_ots * vector_size);
 
   for (std::size_t ot_i = 0; ot_i < num_ots; ++ot_i) {
-    // const auto r_bits =
-    //     receiver_output.Subset(2 * ot_i * vector_size, (2 * ot_i + 1) * vector_size);
     if (choice_bits.Get(ot_i)) {
-      ASSERT_EQ(receiver_output.Get(ot_i), sender_output.Get(2 * ot_i + 1));
+      ASSERT_EQ(receiver_output.Get(ot_i), sender_output_m1.Get(ot_i));
     } else {
-      ASSERT_EQ(receiver_output.Get(ot_i), sender_output.Get(2 * ot_i));
+      ASSERT_EQ(receiver_output.Get(ot_i), sender_output_m0.Get(ot_i));
     }
   }
 }
@@ -366,21 +365,20 @@ TEST_F(OTFlavorTest, VectorROT) {
   const auto receiver_output = ot_receiver->GetOutputs();
   const auto choice_bits = ot_receiver->GetChoices();
   ot_sender->ComputeOutputs();
-  const auto sender_output = ot_sender->GetOutputs();
+  const auto [sender_output_m0, sender_output_m1] = ot_sender->GetOutputs();
 
   ASSERT_EQ(receiver_output.GetSize(), num_ots * vector_size);
   ASSERT_EQ(choice_bits.GetSize(), num_ots);
-  ASSERT_EQ(sender_output.GetSize(), 2 * num_ots * vector_size);
+  ASSERT_EQ(sender_output_m0.GetSize(), num_ots * vector_size);
+  ASSERT_EQ(sender_output_m1.GetSize(), num_ots * vector_size);
 
   for (std::size_t ot_i = 0; ot_i < num_ots; ++ot_i) {
     const auto r_bits = receiver_output.Subset(ot_i * vector_size, (ot_i + 1) * vector_size);
     if (choice_bits.Get(ot_i)) {
-      const auto s_bits =
-          sender_output.Subset((2 * ot_i + 1) * vector_size, (2 * ot_i + 2) * vector_size);
+      const auto s_bits = sender_output_m1.Subset(ot_i * vector_size, (ot_i + 1) * vector_size);
       ASSERT_EQ(r_bits, s_bits);
     } else {
-      const auto s_bits =
-          sender_output.Subset(2 * ot_i * vector_size, (2 * ot_i + 1) * vector_size);
+      const auto s_bits = sender_output_m0.Subset(ot_i * vector_size, (ot_i + 1) * vector_size);
       ASSERT_EQ(r_bits, s_bits);
     }
   }
