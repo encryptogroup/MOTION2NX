@@ -65,7 +65,7 @@ TwoPartyBackend::TwoPartyBackend(Communication::CommunicationLayer& comm_layer,
           logger_)),
       arithmetic_manager_(
           std::make_unique<ArithmeticProviderManager>(comm_layer_, *ot_manager_, logger_)),
-      mt_provider_(std::make_unique<MTProviderFromOTs>(my_id_, comm_layer_.get_num_parties(),
+      mt_provider_(std::make_unique<MTProviderFromOTs>(my_id_, comm_layer_.get_num_parties(), true,
                                                        *arithmetic_manager_, *ot_manager_,
                                                        run_time_stats_.back(), logger_)),
       sp_provider_(std::make_unique<SPProviderFromOTs>(ot_manager_->get_providers(), my_id_,

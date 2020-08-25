@@ -74,7 +74,7 @@ TwoPartyTensorBackend::TwoPartyTensorBackend(Communication::CommunicationLayer& 
                                         std::make_shared<LinAlgTriplesFromAP>(
                                             arithmetic_manager_->get_provider(1 - my_id_),
                                             ot_manager_->get_provider(1 - my_id_), logger_)))),
-      mt_provider_(std::make_unique<MTProviderFromOTs>(my_id_, comm_layer_.get_num_parties(),
+      mt_provider_(std::make_unique<MTProviderFromOTs>(my_id_, comm_layer_.get_num_parties(), true,
                                                        *arithmetic_manager_, *ot_manager_,
                                                        run_time_stats_.back(), logger_)),
       sp_provider_(std::make_unique<SPProviderFromOTs>(ot_manager_->get_providers(), my_id_,
