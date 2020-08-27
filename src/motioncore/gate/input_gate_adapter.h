@@ -49,7 +49,7 @@ class ArithmeticInputAdapterGate : public InputGateClass {
                              ENCRYPTO::ReusableFiberFuture<std::vector<T>>&& int_vector_future_1,
                              ENCRYPTO::ReusableFiberFuture<std::vector<T>>&& int_vector_future_2,
                              std::function<T(T)> unary_op, std::function<T(T, T)> binary_op,
-                             std::shared_ptr<Logger> logger, Args&&... args)
+                             bool in_setup, std::shared_ptr<Logger> logger, Args&&... args)
       : InputGateClass(std::forward<Args>(args)...,
                        // ugly hack!
                        [this] {
@@ -63,6 +63,7 @@ class ArithmeticInputAdapterGate : public InputGateClass {
         int_vector_future_2_(std::move(int_vector_future_2)),
         unary_op_(unary_op),
         binary_op_(binary_op),
+        in_setup_(in_setup),
         logger_(logger) {
     if constexpr (MOTION_VERBOSE_DEBUG) {
       if (logger_) {
@@ -71,6 +72,23 @@ class ArithmeticInputAdapterGate : public InputGateClass {
       }
     }
   }
+  template <typename... Args>
+  ArithmeticInputAdapterGate(ENCRYPTO::ReusableFiberFuture<std::vector<T>>&& int_vector_future,
+                             std::function<T(T)> unary_op, bool in_setup,
+                             std::shared_ptr<Logger> logger, Args&&... args)
+      : ArithmeticInputAdapterGate(base_constructor_tag{}, std::move(int_vector_future),
+                                   ENCRYPTO::ReusableFiberFuture<std::vector<T>>{}, unary_op,
+                                   std::function<T(T, T)>{}, in_setup, logger,
+                                   std::forward<Args>(args)...) {}
+
+  template <typename... Args>
+  ArithmeticInputAdapterGate(ENCRYPTO::ReusableFiberFuture<std::vector<T>>&& int_vector_future_1,
+                             ENCRYPTO::ReusableFiberFuture<std::vector<T>>&& int_vector_future_2,
+                             std::function<T(T, T)> binary_op, bool in_setup,
+                             std::shared_ptr<Logger> logger, Args&&... args)
+      : ArithmeticInputAdapterGate(base_constructor_tag{}, std::move(int_vector_future_1),
+                                   std::move(int_vector_future_2), std::function<T(T)>{}, binary_op,
+                                   in_setup, logger, std::forward<Args>(args)...) {}
 
   template <typename... Args>
   ArithmeticInputAdapterGate(ENCRYPTO::ReusableFiberFuture<std::vector<T>>&& int_vector_future,
@@ -78,7 +96,8 @@ class ArithmeticInputAdapterGate : public InputGateClass {
                              Args&&... args)
       : ArithmeticInputAdapterGate(base_constructor_tag{}, std::move(int_vector_future),
                                    ENCRYPTO::ReusableFiberFuture<std::vector<T>>{}, unary_op,
-                                   std::function<T(T, T)>{}, logger, std::forward<Args>(args)...) {}
+                                   std::function<T(T, T)>{}, false, logger,
+                                   std::forward<Args>(args)...) {}
 
   template <typename... Args>
   ArithmeticInputAdapterGate(ENCRYPTO::ReusableFiberFuture<std::vector<T>>&& int_vector_future_1,
@@ -87,10 +106,26 @@ class ArithmeticInputAdapterGate : public InputGateClass {
                              Args&&... args)
       : ArithmeticInputAdapterGate(base_constructor_tag{}, std::move(int_vector_future_1),
                                    std::move(int_vector_future_2), std::function<T(T)>{}, binary_op,
-                                   logger, std::forward<Args>(args)...) {}
+                                   false, logger, std::forward<Args>(args)...) {}
 
   bool need_setup() const noexcept override { return InputGateClass::need_setup(); }
   bool need_online() const noexcept override { return InputGateClass::need_online(); }
+
+  void fulfill_promise() {
+    auto int_vector = int_vector_future_1_.get();
+    if (int_vector_future_2_.valid()) {
+      auto int_vector_2 = int_vector_future_2_.get();
+      if (int_vector.size() != int_vector_2.size()) {
+        throw std::logic_error("ArithmeticInputAdapterGate: expected int vectors of same size");
+      }
+      std::transform(std::begin(int_vector), std::end(int_vector), std::begin(int_vector_2),
+                     std::begin(int_vector), binary_op_);
+    } else {
+      std::transform(std::begin(int_vector), std::end(int_vector), std::begin(int_vector),
+                     unary_op_);
+    }
+    bit_vectors_promise_.set_value(ENCRYPTO::ToInput(int_vector));
+  }
 
   void evaluate_setup() override {
     if constexpr (MOTION_VERBOSE_DEBUG) {
@@ -100,6 +135,9 @@ class ArithmeticInputAdapterGate : public InputGateClass {
       }
     }
 
+    if (in_setup_) {
+      fulfill_promise();
+    }
     InputGateClass::evaluate_setup();
 
     if constexpr (MOTION_VERBOSE_DEBUG) {
@@ -118,19 +156,9 @@ class ArithmeticInputAdapterGate : public InputGateClass {
       }
     }
 
-    auto int_vector = int_vector_future_1_.get();
-    if (int_vector_future_2_.valid()) {
-      auto int_vector_2 = int_vector_future_2_.get();
-      if (int_vector.size() != int_vector_2.size()) {
-        throw std::logic_error("ArithmeticInputAdapterGate: expected int vectors of same size");
-      }
-      std::transform(std::begin(int_vector), std::end(int_vector), std::begin(int_vector_2),
-                     std::begin(int_vector), binary_op_);
-    } else {
-      std::transform(std::begin(int_vector), std::end(int_vector), std::begin(int_vector),
-                     unary_op_);
+    if (!in_setup_) {
+      fulfill_promise();
     }
-    bit_vectors_promise_.set_value(ENCRYPTO::ToInput(int_vector));
     InputGateClass::evaluate_online();
 
     if constexpr (MOTION_VERBOSE_DEBUG) {
@@ -147,6 +175,7 @@ class ArithmeticInputAdapterGate : public InputGateClass {
   ENCRYPTO::ReusableFiberFuture<std::vector<T>> int_vector_future_2_;
   std::function<T(T)> unary_op_;
   std::function<T(T, T)> binary_op_;
+  bool in_setup_;
   std::shared_ptr<Logger> logger_;
   // another ugly hack!
   static thread_local ENCRYPTO::ReusableFiberPromise<std::vector<ENCRYPTO::BitVector<>>>
