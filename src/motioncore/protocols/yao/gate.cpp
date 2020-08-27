@@ -129,10 +129,14 @@ static std::size_t count_bits(const YaoWireVector& wires) {
 }  // namespace detail
 
 YaoInputGateGarbler::YaoInputGateGarbler(std::size_t gate_id, YaoProvider& yao_provider,
-                                         std::size_t num_wires, std::size_t num_simd)
+                                         std::size_t num_wires, std::size_t num_simd, bool in_setup)
     : BasicYaoInputGate(gate_id, yao_provider, num_wires, num_simd) {
   auto& ot_provider = yao_provider_.get_ot_provider();
-  ot_sender_ = ot_provider.RegisterSendGOT128(num_wires * num_simd);
+  if (in_setup) {
+    ot_sender_ = ot_provider.RegisterSendFixedXCOT128(num_wires * num_simd);
+  } else {
+    ot_sender_ = ot_provider.RegisterSendGOT128(num_wires * num_simd);
+  }
 
   if constexpr (MOTION_VERBOSE_DEBUG) {
     auto logger = yao_provider_.get_logger();
@@ -143,11 +147,16 @@ YaoInputGateGarbler::YaoInputGateGarbler(std::size_t gate_id, YaoProvider& yao_p
   }
 }
 
+YaoInputGateGarbler::YaoInputGateGarbler(std::size_t gate_id, YaoProvider& yao_provider,
+                                         std::size_t num_wires, std::size_t num_simd)
+    : YaoInputGateGarbler(gate_id, yao_provider, num_wires, num_simd, false) {}
+
 YaoInputGateGarbler::YaoInputGateGarbler(
     std::size_t gate_id, YaoProvider& yao_provider, std::size_t num_wires, std::size_t num_simd,
-    ENCRYPTO::ReusableFiberFuture<std::vector<ENCRYPTO::BitVector<>>>&& input_future)
+    bool, ENCRYPTO::ReusableFiberFuture<std::vector<ENCRYPTO::BitVector<>>>&& input_future)
     : BasicYaoInputGate(gate_id, yao_provider, num_wires, num_simd, std::move(input_future)),
-      ot_sender_(nullptr) {
+      ot_sender_(false) {
+  assert(ot_sender_.index() == 0);
   if constexpr (MOTION_VERBOSE_DEBUG) {
     auto logger = yao_provider_.get_logger();
     if (logger) {
@@ -157,6 +166,12 @@ YaoInputGateGarbler::YaoInputGateGarbler(
   }
 }
 
+YaoInputGateGarbler::YaoInputGateGarbler(
+    std::size_t gate_id, YaoProvider& yao_provider, std::size_t num_wires, std::size_t num_simd,
+    ENCRYPTO::ReusableFiberFuture<std::vector<ENCRYPTO::BitVector<>>>&& input_future)
+    : YaoInputGateGarbler(gate_id, yao_provider, num_wires, num_simd, false,
+                          std::move(input_future)) {}
+
 void YaoInputGateGarbler::evaluate_setup() {
   if constexpr (MOTION_VERBOSE_DEBUG) {
     auto logger = yao_provider_.get_logger();
@@ -165,11 +180,29 @@ void YaoInputGateGarbler::evaluate_setup() {
     }
   }
 
-  // generate random keys for each wire
-  for (std::size_t wire_i = 0; wire_i < num_wires_; ++wire_i) {
-    auto& w_o = outputs_[wire_i];
-    w_o->get_keys().set_to_random();
-    w_o->set_setup_ready();
+  if (ot_sender_.index() == 2) {
+    // it's the sender's input and it's given during the setup phase
+    // => use XCOT
+    auto& xcot_sender = std::get<2>(ot_sender_);
+    assert(xcot_sender);
+    xcot_sender->SetCorrelation(yao_provider_.get_global_offset());
+    xcot_sender->SendMessages();
+    xcot_sender->ComputeOutputs();
+    const auto keys = xcot_sender->GetOutputs();
+    auto keys_ptr = keys.data();
+    for (std::size_t wire_i = 0; wire_i < num_wires_; ++wire_i) {
+      auto& w_o = outputs_[wire_i];
+      std::copy_n(keys_ptr, num_simd_, std::begin(w_o->get_keys()));
+      w_o->set_setup_ready();
+      keys_ptr += num_simd_;
+    }
+  } else {
+    // generate random keys for each wire
+    for (std::size_t wire_i = 0; wire_i < num_wires_; ++wire_i) {
+      auto& w_o = outputs_[wire_i];
+      w_o->get_keys().set_to_random();
+      w_o->set_setup_ready();
+    }
   }
 
   if constexpr (MOTION_VERBOSE_DEBUG) {
@@ -189,8 +222,19 @@ void YaoInputGateGarbler::evaluate_online() {
     }
   }
 
+  if (ot_sender_.index() == 2) {
+    if constexpr (MOTION_VERBOSE_DEBUG) {
+      auto logger = yao_provider_.get_logger();
+      if (logger) {
+        logger->LogTrace(fmt::format(
+            "Gate {}: YaoInputGateGarbler::evaluate_online end (nothing to do)", gate_id_));
+      }
+    }
+    return;
+  }
+
   const auto global_offset = yao_provider_.get_global_offset();
-  if (ot_sender_) {
+  if (ot_sender_.index() == 1) {
     // evaluator's input
     ENCRYPTO::block128_vector ot_inputs(2 * num_wires_ * num_simd_);
     for (std::size_t wire_i = 0; wire_i < num_wires_; ++wire_i) {
@@ -202,8 +246,9 @@ void YaoInputGateGarbler::evaluate_online() {
         ot_inputs[keys_offset + 2 * simd_j + 1] = zero_keys[simd_j] ^ global_offset;
       }
     }
-    ot_sender_->SetInputs(std::move(ot_inputs));
-    ot_sender_->SendMessages();
+    auto& got_sender = std::get<1>(ot_sender_);
+    got_sender->SetInputs(std::move(ot_inputs));
+    got_sender->SendMessages();
   } else {
     const auto inputs = input_future_.get();
     if (inputs.size() != num_wires_) {
@@ -239,8 +284,9 @@ void YaoInputGateGarbler::evaluate_online() {
 }
 
 YaoInputGateEvaluator::YaoInputGateEvaluator(std::size_t gate_id, YaoProvider& yao_provider,
-                                             std::size_t num_wires, std::size_t num_simd)
-    : BasicYaoInputGate(gate_id, yao_provider, num_wires, num_simd), ot_receiver_(nullptr) {
+                                             std::size_t num_wires, std::size_t num_simd, bool)
+    : BasicYaoInputGate(gate_id, yao_provider, num_wires, num_simd), ot_receiver_(false) {
+  assert(ot_receiver_.index() == 0);
   // garbler's input => register for keys message
   keys_future_ = yao_provider_.register_for_blocks_message(gate_id, num_wires * num_simd);
 
@@ -253,19 +299,79 @@ YaoInputGateEvaluator::YaoInputGateEvaluator(std::size_t gate_id, YaoProvider& y
   }
 }
 
+YaoInputGateEvaluator::YaoInputGateEvaluator(std::size_t gate_id, YaoProvider& yao_provider,
+                                             std::size_t num_wires, std::size_t num_simd)
+    : YaoInputGateEvaluator(gate_id, yao_provider, num_wires, num_simd, false) {}
+
 YaoInputGateEvaluator::YaoInputGateEvaluator(
     std::size_t gate_id, YaoProvider& yao_provider, std::size_t num_wires, std::size_t num_simd,
-    ENCRYPTO::ReusableFiberFuture<std::vector<ENCRYPTO::BitVector<>>>&& input_future)
+    bool in_setup, ENCRYPTO::ReusableFiberFuture<std::vector<ENCRYPTO::BitVector<>>>&& input_future)
     : BasicYaoInputGate(gate_id, yao_provider, num_wires, num_simd, std::move(input_future)) {
   // my_inputs_ => register for GOTs
   auto& ot_provider = yao_provider_.get_ot_provider();
-  ot_receiver_ = ot_provider.RegisterReceiveGOT128(num_wires * num_simd);
+  if (in_setup) {
+    ot_receiver_ = ot_provider.RegisterReceiveFixedXCOT128(num_wires * num_simd);
+  } else {
+    ot_receiver_ = ot_provider.RegisterReceiveGOT128(num_wires * num_simd);
+  }
 
   if constexpr (MOTION_VERBOSE_DEBUG) {
     auto logger = yao_provider_.get_logger();
     if (logger) {
       logger->LogTrace(
           fmt::format("Gate {}: YaoInputGateEvaluator created (evaluator's input)", gate_id_));
+    }
+  }
+}
+
+YaoInputGateEvaluator::YaoInputGateEvaluator(
+    std::size_t gate_id, YaoProvider& yao_provider, std::size_t num_wires, std::size_t num_simd,
+    ENCRYPTO::ReusableFiberFuture<std::vector<ENCRYPTO::BitVector<>>>&& input_future)
+    : YaoInputGateEvaluator(gate_id, yao_provider, num_wires, num_simd, false,
+                            std::move(input_future)) {}
+
+void YaoInputGateEvaluator::evaluate_setup() {
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = yao_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(
+          fmt::format("Gate {}: YaoInputGateEvaluator::evaluate_setup start", gate_id_));
+    }
+  }
+
+  if (ot_receiver_.index() != 2) {
+    if constexpr (MOTION_VERBOSE_DEBUG) {
+      auto logger = yao_provider_.get_logger();
+      if (logger) {
+        logger->LogTrace(fmt::format(
+            "Gate {}: YaoInputGateEvaluator::evaluate_setup end (nothing to do)", gate_id_));
+      }
+    }
+    return;
+  }
+  // My input provided in setup phase, run C-OTs to obtain input keys
+  auto inputs = input_future_.get();
+  ENCRYPTO::BitVector choice_bits;  //(num_wires_ * num_simd_);
+  for (auto& wire_bits : inputs) {
+    choice_bits.Append(wire_bits);
+  }
+  auto& xcot_receiver = std::get<2>(ot_receiver_);
+  assert(xcot_receiver);
+  xcot_receiver->SetChoices(std::move(choice_bits));
+  xcot_receiver->SendCorrections();
+  xcot_receiver->ComputeOutputs();
+  const auto received_keys = std::move(xcot_receiver->GetOutputs());
+  auto keys_ptr = received_keys.data();
+  for (auto& w : outputs_) {
+    std::copy_n(keys_ptr, num_simd_, std::begin(w->get_keys()));
+    w->set_online_ready();
+    keys_ptr += num_simd_;
+  }
+
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = yao_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(fmt::format("Gate {}: YaoInputGateEvaluator::evaluate_setup end", gate_id_));
     }
   }
 }
@@ -279,18 +385,30 @@ void YaoInputGateEvaluator::evaluate_online() {
     }
   }
 
+  if (ot_receiver_.index() == 2) {
+    if constexpr (MOTION_VERBOSE_DEBUG) {
+      auto logger = yao_provider_.get_logger();
+      if (logger) {
+        logger->LogTrace(fmt::format(
+            "Gate {}: YaoInputGateEvaluator::evaluate_online end (nothing to do)", gate_id_));
+      }
+    }
+    return;
+  }
+
   ENCRYPTO::block128_vector received_keys;
-  if (ot_receiver_) {
+  if (ot_receiver_.index() == 1) {
     // My input, run OTs to obtain input keys
     auto inputs = input_future_.get();
     ENCRYPTO::BitVector choice_bits;  //(num_wires_ * num_simd_);
     for (auto& wire_bits : inputs) {
       choice_bits.Append(wire_bits);
     }
-    ot_receiver_->SetChoices(std::move(choice_bits));
-    ot_receiver_->SendCorrections();
-    ot_receiver_->ComputeOutputs();
-    received_keys = std::move(ot_receiver_->GetOutputs());
+    auto& got_receiver = std::get<1>(ot_receiver_);
+    got_receiver->SetChoices(std::move(choice_bits));
+    got_receiver->SendCorrections();
+    got_receiver->ComputeOutputs();
+    received_keys = std::move(got_receiver->GetOutputs());
   } else {
     // Garbler's input, receive input keys
     received_keys = keys_future_.get();

@@ -23,6 +23,8 @@
 #pragma once
 
 #include <cstdint>
+#include <variant>
+
 #include "gate/new_gate.h"
 #include "utility/bit_vector.h"
 #include "utility/block.h"
@@ -30,6 +32,8 @@
 #include "wire.h"
 
 namespace ENCRYPTO::ObliviousTransfer {
+class FixedXCOT128Receiver;
+class FixedXCOT128Sender;
 class GOT128Receiver;
 class GOT128Sender;
 }  // namespace ENCRYPTO::ObliviousTransfer
@@ -53,8 +57,8 @@ class BasicYaoInputGate : public NewGate {
 
  protected:
   YaoProvider& yao_provider_;
-  std::size_t num_wires_;
-  std::size_t num_simd_;
+  const std::size_t num_wires_;
+  const std::size_t num_simd_;
   ENCRYPTO::ReusableFiberFuture<std::vector<ENCRYPTO::BitVector<>>> input_future_;
   YaoWireVector outputs_;
 };
@@ -104,33 +108,50 @@ class BasicYaoBinaryGate : public NewGate {
 class YaoInputGateGarbler : public detail::BasicYaoInputGate {
  public:
   YaoInputGateGarbler(std::size_t gate_id, YaoProvider&, std::size_t num_wires,
+                      std::size_t num_simd, bool in_setup);
+  YaoInputGateGarbler(std::size_t gate_id, YaoProvider&, std::size_t num_wires,
+                      std::size_t num_simd, bool in_setup,
+                      ENCRYPTO::ReusableFiberFuture<std::vector<ENCRYPTO::BitVector<>>>&&);
+  // create with in_setup = false
+  YaoInputGateGarbler(std::size_t gate_id, YaoProvider&, std::size_t num_wires,
                       std::size_t num_simd);
   YaoInputGateGarbler(std::size_t gate_id, YaoProvider&, std::size_t num_wires,
                       std::size_t num_simd,
                       ENCRYPTO::ReusableFiberFuture<std::vector<ENCRYPTO::BitVector<>>>&&);
+
   bool need_setup() const noexcept override { return true; }
   bool need_online() const noexcept override { return true; }
   void evaluate_setup() override;
   void evaluate_online() override;
 
  private:
-  std::shared_ptr<ENCRYPTO::ObliviousTransfer::GOT128Sender> ot_sender_;
+  std::variant<bool, std::shared_ptr<ENCRYPTO::ObliviousTransfer::GOT128Sender>,
+               std::shared_ptr<ENCRYPTO::ObliviousTransfer::FixedXCOT128Sender>>
+      ot_sender_;
 };
 
 class YaoInputGateEvaluator : public detail::BasicYaoInputGate {
  public:
   YaoInputGateEvaluator(std::size_t gate_id, YaoProvider&, std::size_t num_wires,
+                        std::size_t num_simd, bool in_setup);
+  YaoInputGateEvaluator(std::size_t gate_id, YaoProvider&, std::size_t num_wires,
+                        std::size_t num_simd, bool in_setup,
+                        ENCRYPTO::ReusableFiberFuture<std::vector<ENCRYPTO::BitVector<>>>&&);
+  // create with in_setup = false
+  YaoInputGateEvaluator(std::size_t gate_id, YaoProvider&, std::size_t num_wires,
                         std::size_t num_simd);
   YaoInputGateEvaluator(std::size_t gate_id, YaoProvider&, std::size_t num_wires,
                         std::size_t num_simd,
                         ENCRYPTO::ReusableFiberFuture<std::vector<ENCRYPTO::BitVector<>>>&&);
-  bool need_setup() const noexcept override { return false; }
+  bool need_setup() const noexcept override { return true; }
   bool need_online() const noexcept override { return true; }
-  void evaluate_setup() override {}
+  void evaluate_setup() override;
   void evaluate_online() override;
 
  private:
-  std::shared_ptr<ENCRYPTO::ObliviousTransfer::GOT128Receiver> ot_receiver_;
+  std::variant<bool, std::shared_ptr<ENCRYPTO::ObliviousTransfer::GOT128Receiver>,
+               std::shared_ptr<ENCRYPTO::ObliviousTransfer::FixedXCOT128Receiver>>
+      ot_receiver_;
   ENCRYPTO::ReusableFiberFuture<ENCRYPTO::block128_vector> keys_future_;
 };
 
