@@ -527,7 +527,7 @@ ArithmeticBEAVYToYaoTensorConversionGarbler<T>::ArithmeticBEAVYToYaoTensorConver
       addition_algo_(yao_provider_.get_circuit_loader().load_circuit(
           fmt::format("int_add{}_size.bristol", ENCRYPTO::bit_size_v<T>), CircuitFormat::Bristol)) {
   auto& ot_provider = yao_provider_.get_ot_provider();
-  ot_sender_ = ot_provider.RegisterSendGOT128(bit_size_ * data_size_);
+  ot_sender_ = ot_provider.RegisterSendFixedXCOT128(bit_size_ * data_size_);
   output_->get_keys().resize(bit_size_ * data_size_);
 }
 
@@ -545,21 +545,14 @@ void ArithmeticBEAVYToYaoTensorConversionGarbler<T>::evaluate_setup() {
     }
   }
 
+  // sample garbler's input keys
   garbler_input_keys_ = ENCRYPTO::block128_vector::make_random(bit_size_ * data_size_);
-  evaluator_input_keys_ = ENCRYPTO::block128_vector::make_random(bit_size_ * data_size_);
 
   // run OTs for resharing evaluator's arithmetic secret share
-  {
-    ENCRYPTO::block128_vector ot_inputs(2 * bit_size_ * data_size_);
-    const auto R = yao_provider_.get_global_offset();
-    const auto total_size = bit_size_ * data_size_;
-    for (std::size_t i = 0; i < total_size; ++i) {
-      ot_inputs[2 * i] = evaluator_input_keys_[i];
-      ot_inputs[2 * i + 1] = evaluator_input_keys_[i] ^ R;
-    }
-    ot_sender_->SetInputs(std::move(ot_inputs));
-    ot_sender_->SendMessages();
-  }
+  ot_sender_->SetCorrelation(yao_provider_.get_global_offset());
+  ot_sender_->SendMessages();
+  ot_sender_->ComputeOutputs();
+  evaluator_input_keys_ = ot_sender_->GetOutputs();
 
   // garble addition circuit
   yao_provider_.create_garbled_circuit(gate_id_, data_size_, addition_algo_, garbler_input_keys_,
@@ -633,7 +626,7 @@ ArithmeticBEAVYToYaoTensorConversionEvaluator<T>::ArithmeticBEAVYToYaoTensorConv
           fmt::format("int_add{}_size.bristol", ENCRYPTO::bit_size_v<T>), CircuitFormat::Bristol)) {
   // assert(input->get_share().size() % bit_size_ == 0);
   auto& ot_provider = yao_provider_.get_ot_provider();
-  ot_receiver_ = ot_provider.RegisterReceiveGOT128(bit_size_ * data_size_);
+  ot_receiver_ = ot_provider.RegisterReceiveFixedXCOT128(bit_size_ * data_size_);
   garbler_input_keys_future_ =
       yao_provider_.CommMixin::register_for_blocks_message(0, gate_id, bit_size_ * data_size_, 0);
   garbled_tables_future_ = yao_provider_.CommMixin::register_for_blocks_message(

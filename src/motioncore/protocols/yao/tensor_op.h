@@ -33,6 +33,8 @@
 namespace ENCRYPTO {
 struct AlgorithmDescription;
 namespace ObliviousTransfer {
+class FixedXCOT128Receiver;
+class FixedXCOT128Sender;
 class GOT128Receiver;
 class GOT128Sender;
 }  // namespace ObliviousTransfer
@@ -194,7 +196,7 @@ class ArithmeticBEAVYToYaoTensorConversionGarbler : public NewGate {
   const std::size_t data_size_;
   const beavy::ArithmeticBEAVYTensorCP<T> input_;
   YaoTensorP output_;
-  std::unique_ptr<ENCRYPTO::ObliviousTransfer::GOT128Sender> ot_sender_;
+  std::unique_ptr<ENCRYPTO::ObliviousTransfer::FixedXCOT128Sender> ot_sender_;
   ENCRYPTO::block128_vector garbler_input_keys_;
   ENCRYPTO::block128_vector evaluator_input_keys_;
   ENCRYPTO::block128_vector garbled_tables_;
@@ -219,7 +221,7 @@ class ArithmeticBEAVYToYaoTensorConversionEvaluator : public NewGate {
   const std::size_t data_size_;
   const beavy::ArithmeticBEAVYTensorCP<T> input_;
   YaoTensorP output_;
-  std::unique_ptr<ENCRYPTO::ObliviousTransfer::GOT128Receiver> ot_receiver_;
+  std::unique_ptr<ENCRYPTO::ObliviousTransfer::FixedXCOT128Receiver> ot_receiver_;
   ENCRYPTO::ReusableFiberFuture<ENCRYPTO::block128_vector> garbler_input_keys_future_;
   ENCRYPTO::ReusableFiberFuture<ENCRYPTO::block128_vector> garbled_tables_future_;
   ENCRYPTO::block128_vector garbler_input_keys_;
