@@ -26,10 +26,17 @@
 #include <sstream>
 
 #include <fmt/format.h>
+#include <boost/accumulators/statistics/variance.hpp>
+#include <boost/core/alloc_construct.hpp>
+#include <boost/json.hpp>
+#include <boost/json/except.hpp>
+#include <boost/json/to_string.hpp>
 
 #include "communication/transport.h"
 #include "utility/runtime_info.h"
 #include "utility/version.h"
+
+namespace json = boost::json;
 
 namespace MOTION {
 namespace Statistics {
@@ -97,6 +104,27 @@ std::string AccumulatedRunTimeStats::print_human_readable() const {
   return ss.str();
 }
 
+json::object AccumulatedRunTimeStats::to_json() const {
+  const auto mk_triple = [this](const auto& stat_id) {
+    const auto& acc = at(accumulators_, stat_id);
+    return json::object({{"mean", boost::accumulators::mean(acc)},
+                         {"median", boost::accumulators::median(acc)},
+                         // uncorrected standard deviation
+                         {"stddev", std::sqrt(boost::accumulators::variance(acc))}});
+  };
+  return {{"repetitions", count_},
+          {"mt_setup", mk_triple(StatID::mt_setup)},
+          {"sp_setup", mk_triple(StatID::sp_setup)},
+          {"sb_setup", mk_triple(StatID::sb_setup)},
+          {"linalgtriple_setup", mk_triple(StatID::linalgtriple_setup)},
+          {"base_ots", mk_triple(StatID::base_ots)},
+          {"ot_extension_setup", mk_triple(StatID::ot_extension_setup)},
+          {"preprocessing", mk_triple(StatID::preprocessing)},
+          {"gates_setup", mk_triple(StatID::gates_setup)},
+          {"gates_online", mk_triple(StatID::gates_online)},
+          {"evaluate", mk_triple(StatID::evaluate)}};
+}
+
 void AccumulatedCommunicationStats::add(const Communication::TransportStatistics& stats) {
   accumulators_[idx_num_messages_sent](stats.num_messages_sent);
   accumulators_[idx_num_messages_received](stats.num_messages_received);
@@ -126,6 +154,18 @@ std::string AccumulatedCommunicationStats::print_human_readable() const {
   return ss.str();
 }
 
+json::object AccumulatedCommunicationStats::to_json() const {
+  return {
+      {"bytes_sent",
+       static_cast<std::size_t>(boost::accumulators::mean(accumulators_[idx_num_bytes_sent]))},
+      {"num_messages_sent",
+       static_cast<std::size_t>(boost::accumulators::mean(accumulators_[idx_num_messages_sent]))},
+      {"bytes_received",
+       static_cast<std::size_t>(boost::accumulators::mean(accumulators_[idx_num_bytes_received]))},
+      {"num_messages_received", static_cast<std::size_t>(boost::accumulators::mean(
+                                    accumulators_[idx_num_messages_received]))}};
+}
+
 std::string print_motion_info() {
   std::stringstream ss;
   ss << fmt::format("MOTION version: {} @ {}\n", get_git_version(), get_git_branch())
@@ -148,6 +188,22 @@ std::string print_stats(const std::string& experiment_name,
      << comm_stats.print_human_readable()
      << "===========================================================================\n";
   return ss.str();
+}
+
+json::object to_json(const std::string& experiment_name, const AccumulatedRunTimeStats& exec_stats,
+                     const AccumulatedCommunicationStats& comm_stats) {
+  json::object obj({{"experiment", experiment_name},
+                    {"meta",
+                     {{"invocation", get_cmdline()},
+                      {"user", get_cmdline()},
+                      {"hostname", get_cmdline()},
+                      {"pid", get_pid()},
+                      {"git-branch", get_git_branch()},
+                      {"git-commit", get_git_commit()},
+                      {"git-version", get_git_version()}}}});
+  obj.emplace("runtime", exec_stats.to_json());
+  obj.emplace("communication", comm_stats.to_json());
+  return obj;
 }
 
 }  // namespace Statistics

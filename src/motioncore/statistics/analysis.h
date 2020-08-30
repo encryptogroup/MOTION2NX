@@ -28,6 +28,7 @@
 #include <boost/accumulators/statistics/median.hpp>
 #include <boost/accumulators/statistics/stats.hpp>
 #include <boost/accumulators/statistics/variance.hpp>
+#include <boost/json/object.hpp>
 #include <list>
 #include "run_time_stats.h"
 
@@ -54,6 +55,7 @@ struct AccumulatedRunTimeStats {
 
   void add(const RunTimeStats& stats);
   std::string print_human_readable() const;
+  boost::json::object to_json() const;
 };
 
 struct AccumulatedCommunicationStats {
@@ -72,10 +74,13 @@ struct AccumulatedCommunicationStats {
   void add(const Communication::TransportStatistics& stats);
   void add(const std::vector<Communication::TransportStatistics>& stats);
   std::string print_human_readable() const;
+  boost::json::object to_json() const;
 };
 
 std::string print_stats(const std::string& experiment_name, const AccumulatedRunTimeStats&,
                         const AccumulatedCommunicationStats&);
+boost::json::object to_json(const std::string& experiment_name, const AccumulatedRunTimeStats&,
+                            const AccumulatedCommunicationStats&);
 
 }  // namespace Statistics
 }  // namespace MOTION
