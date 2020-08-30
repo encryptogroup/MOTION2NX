@@ -310,6 +310,7 @@ CommunicationLayer::~CommunicationLayer() {
 
 void CommunicationLayer::start() {
   if (is_started_) {
+    sync();
     return;
   }
   impl_->start_promise_.set_value();
