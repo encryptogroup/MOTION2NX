@@ -42,6 +42,7 @@ struct RunTimeStats {
     sb_setup,
     sp_presetup,
     sp_setup,
+    linalgtriple_setup,
     ot_extension_setup,
     preprocessing,  // MTs, OTs etc.
     gates_setup,
