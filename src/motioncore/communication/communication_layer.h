@@ -88,6 +88,7 @@ class CommunicationLayer {
   void shutdown();
 
   std::vector<TransportStatistics> get_transport_statistics() const noexcept;
+  void reset_transport_statistics() noexcept;
 
   void set_logger(std::shared_ptr<Logger> logger);
 

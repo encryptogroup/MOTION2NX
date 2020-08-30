@@ -518,6 +518,15 @@ std::vector<TransportStatistics> CommunicationLayer::get_transport_statistics() 
   return stats;
 }
 
+void CommunicationLayer::reset_transport_statistics() noexcept {
+  for (std::size_t party_id = 0; party_id < num_parties_; ++party_id) {
+    if (party_id == my_id_) {
+      continue;
+    }
+    impl_->transports_.at(party_id)->reset_stats();
+  }
+}
+
 void CommunicationLayer::set_logger(std::shared_ptr<Logger> logger) {
   if (is_started_) {
     throw std::logic_error(
