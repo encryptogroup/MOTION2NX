@@ -136,7 +136,11 @@ YaoProvider::YaoProvider(Communication::CommunicationLayer& communication_layer,
   }
 }
 
-YaoProvider::~YaoProvider() = default;
+YaoProvider::~YaoProvider() {
+  if (role_ == Role::evaluator) {
+    communication_layer_.deregister_message_handler({Communication::MessageType::YaoSetup});
+  }
+}
 
 static YaoWireVector cast_wires(std::vector<std::shared_ptr<NewWire>> wires) {
   YaoWireVector result(wires.size());

@@ -282,7 +282,7 @@ CommMixin::CommMixin(Communication::CommunicationLayer& communication_layer,
                                                 {gate_message_type});
 }
 
-CommMixin::~CommMixin() = default;
+CommMixin::~CommMixin() { communication_layer_.deregister_message_handler({gate_message_type_}); }
 
 flatbuffers::FlatBufferBuilder CommMixin::build_gate_message(std::size_t gate_id,
                                                              std::size_t msg_num,
