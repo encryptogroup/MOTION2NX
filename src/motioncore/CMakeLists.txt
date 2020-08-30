@@ -219,6 +219,7 @@ target_compile_definitions(motion PUBLIC FMT_HEADER_ONLY BOOST_ERROR_CODE_HEADER
 
 target_link_libraries(motion
         PRIVATE
+        Boost::json
         Boost::log_setup
         Boost::log
         Boost::filesystem

@@ -94,6 +94,8 @@ elseif (NOT fmt_FOUND AND NOT TARGET fmt::fmt)
     #add_subdirectory(extern/fmt)
 endif ()
 
+find_package(boost_json)
+
 set(FBS_DIR_FULL_PREFIX "${MOTION_ROOT_DIR}/fbs")
 set(FBS_INCLUDE_PREFIX "${MOTION_ROOT_DIR}/src/motioncore/communication/fbs_headers")
 
