@@ -118,8 +118,16 @@ std::optional<MPCProtocol> TwoPartyBackend::convert_via(MPCProtocol src_proto,
                                                         MPCProtocol dst_proto) {
   if (src_proto == MPCProtocol::ArithmeticGMW && dst_proto == MPCProtocol::BooleanGMW) {
     return MPCProtocol::Yao;
+  } else if (src_proto == MPCProtocol::ArithmeticGMW && dst_proto == MPCProtocol::BooleanBEAVY) {
+    return MPCProtocol::Yao;
+  } else if (src_proto == MPCProtocol::BooleanGMW && dst_proto == MPCProtocol::ArithmeticBEAVY) {
+    return MPCProtocol::BooleanBEAVY;
+  } else if (src_proto == MPCProtocol::ArithmeticBEAVY && dst_proto == MPCProtocol::BooleanGMW) {
+    return MPCProtocol::Yao;
   } else if (src_proto == MPCProtocol::ArithmeticBEAVY && dst_proto == MPCProtocol::BooleanBEAVY) {
     return MPCProtocol::Yao;
+  } else if (src_proto == MPCProtocol::BooleanBEAVY && dst_proto == MPCProtocol::ArithmeticGMW) {
+    return MPCProtocol::BooleanGMW;
   }
   return std::nullopt;
 }
