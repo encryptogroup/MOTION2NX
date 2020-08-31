@@ -48,13 +48,15 @@
 namespace MOTION {
 
 TwoPartyBackend::TwoPartyBackend(Communication::CommunicationLayer& comm_layer,
-                                 std::size_t num_threads, std::shared_ptr<Logger> logger)
+                                 std::size_t num_threads, bool sync_between_setup_and_online,
+                                 std::shared_ptr<Logger> logger)
     : comm_layer_(comm_layer),
       my_id_(comm_layer_.get_my_id()),
       logger_(logger),
       gate_register_(std::make_unique<GateRegister>()),
       gate_executor_(std::make_unique<NewGateExecutor>(
-          *gate_register_, [this] { run_preprocessing(); }, num_threads, logger_)),
+          *gate_register_, [this] { run_preprocessing(); }, sync_between_setup_and_online,
+          [this] { comm_layer_.sync(); }, num_threads, logger_)),
       circuit_loader_(std::make_unique<CircuitLoader>()),
       run_time_stats_(1),
       motion_base_provider_(std::make_unique<Crypto::MotionBaseProvider>(comm_layer_, logger_)),

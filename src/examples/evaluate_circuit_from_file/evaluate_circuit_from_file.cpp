@@ -50,6 +50,7 @@ struct Options {
   bool json;
   std::size_t num_repetitions;
   std::size_t num_simd;
+  bool sync_between_setup_and_online;
   MOTION::MPCProtocol protocol;
   std::size_t my_id;
   MOTION::Communication::tcp_parties_config tcp_config;
@@ -73,6 +74,8 @@ std::optional<Options> parse_program_options(int argc, char* argv[]) {
     ("protocol", po::value<std::string>()->required(), "2PC protocol (Yao, GMW or BEAVY)")
     ("repetitions", po::value<std::size_t>()->default_value(1), "number of repetitions")
     ("num-simd", po::value<std::size_t>()->default_value(1), "number of SIMD values")
+    ("sync-between-setup-and-online", po::value<bool>()->default_value(false),
+     "run a synchronization protocol before the online phase starts")
     ("no-run", po::bool_switch()->default_value(false), "just build the circuit, but not execute it")
     ("circuit", po::value<std::string>()->required(), "path to a circuit file in the Bristol format")
     ("fashion", po::bool_switch()->default_value(false), "output data in JSON format")
@@ -103,6 +106,7 @@ std::optional<Options> parse_program_options(int argc, char* argv[]) {
   options.json = vm["json"].as<bool>();
   options.num_repetitions = vm["repetitions"].as<std::size_t>();
   options.num_simd = vm["num-simd"].as<std::size_t>();
+  options.sync_between_setup_and_online = vm["sync-between-setup-and-online"].as<bool>();
   options.no_run = vm["no-run"].as<bool>();
   if (options.my_id > 1) {
     std::cerr << "my-id must be one of 0 and 1\n";
@@ -221,6 +225,7 @@ void print_stats(const Options& options,
     auto obj = MOTION::Statistics::to_json(filename, run_time_stats, comm_stats);
     obj.emplace("party_id", options.my_id);
     obj.emplace("protocol", MOTION::ToString(options.protocol));
+    obj.emplace("sync_between_setup_and_online", options.sync_between_setup_and_online);
     obj.emplace("circuit_path", options.circuit_path);
     obj.emplace("fashion", options.fashion);
     std::cout << boost::json::to_string(obj) << "\n";
@@ -243,7 +248,8 @@ int main(int argc, char* argv[]) {
     MOTION::Statistics::AccumulatedRunTimeStats run_time_stats;
     MOTION::Statistics::AccumulatedCommunicationStats comm_stats;
     for (std::size_t i = 0; i < options->num_repetitions; ++i) {
-      MOTION::TwoPartyBackend backend(*comm_layer, options->threads, logger);
+      MOTION::TwoPartyBackend backend(*comm_layer, options->threads,
+                                      options->sync_between_setup_and_online, logger);
       run_circuit(*options, backend);
       comm_layer->sync();
       comm_stats.add(comm_layer->get_transport_statistics());

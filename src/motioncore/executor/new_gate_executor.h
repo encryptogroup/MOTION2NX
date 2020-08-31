@@ -37,20 +37,27 @@ struct RunTimeStats;
 // Evaluates all registered gates.
 class NewGateExecutor {
  public:
-  NewGateExecutor(GateRegister&, std::function<void()> preprocessing_fctn, std::shared_ptr<Logger>);
+  NewGateExecutor(GateRegister&, std::function<void()> preprocessing_fctn,
+                  bool sync_between_setup_and_online, std::function<void()> sync_fctn,
+                  std::size_t num_threads, std::shared_ptr<Logger>);
   NewGateExecutor(GateRegister&, std::function<void()> preprocessing_fctn, std::size_t num_threads,
                   std::shared_ptr<Logger>);
 
   // Run the setup phases first for all gates before starting with the online
   // phases.
-  void evaluate_setup_online(Statistics::RunTimeStats &stats);
+  void evaluate_setup_online(Statistics::RunTimeStats& stats);
   // Run setup and online phase of each gate as soon as possible.
-  void evaluate(Statistics::RunTimeStats &stats);
+  void evaluate(Statistics::RunTimeStats& stats);
 
  private:
-  GateRegister &register_;
+  void evaluate_setup_online_multi_threaded(Statistics::RunTimeStats& stats);
+  void evaluate_setup_online_single_threaded(Statistics::RunTimeStats& stats);
+
+  GateRegister& register_;
   std::function<void()> preprocessing_fctn_;
+  std::function<void()> sync_fctn_;
   std::size_t num_threads_;
+  bool sync_between_setup_and_online_ = false;
   std::shared_ptr<Logger> logger_;
 };
 
