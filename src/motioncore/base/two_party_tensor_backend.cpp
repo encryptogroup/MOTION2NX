@@ -123,7 +123,6 @@ void TwoPartyTensorBackend::run_preprocessing() {
 
 void TwoPartyTensorBackend::run() {
   gate_executor_->evaluate_setup_online(run_time_stats_.back());
-  std::cout << run_time_stats_.back().print_human_readable();
 }
 
 tensor::TensorOpFactory& TwoPartyTensorBackend::get_tensor_op_factory(MPCProtocol proto) {
@@ -152,6 +151,10 @@ tensor::TensorCP TwoPartyTensorBackend::convert(MPCProtocol proto_to, const tens
         fmt::format("don't know how to convert tensors from protocol {} to protocol {}",
                     ToString(proto_from), ToString(proto_to)));
   }
+}
+
+const Statistics::RunTimeStats& TwoPartyTensorBackend::get_run_time_stats() const noexcept {
+  return run_time_stats_.back();
 }
 
 }  // namespace MOTION

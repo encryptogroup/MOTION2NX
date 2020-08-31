@@ -81,6 +81,8 @@ class TwoPartyBackend : public CircuitBuilder {
   std::optional<MPCProtocol> convert_via(MPCProtocol src_proto, MPCProtocol dst_proto) override;
   GateFactory& get_gate_factory(MPCProtocol proto) override;
 
+  const Statistics::RunTimeStats& get_run_time_stats() const noexcept;
+
  private:
   Communication::CommunicationLayer& comm_layer_;
   std::size_t my_id_;

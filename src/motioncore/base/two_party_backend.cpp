@@ -112,7 +112,6 @@ void TwoPartyBackend::run_preprocessing() {
 
 void TwoPartyBackend::run() {
   gate_executor_->evaluate_setup_online(run_time_stats_.back());
-  std::cout << run_time_stats_.back().print_human_readable();
 }
 
 std::optional<MPCProtocol> TwoPartyBackend::convert_via(MPCProtocol src_proto,
@@ -133,6 +132,10 @@ GateFactory& TwoPartyBackend::get_gate_factory(MPCProtocol proto) {
         fmt::format("TwoPartyBackend::get_gate_factory: no GateFactory for protocol {} available",
                     ToString(proto)));
   }
+}
+
+const Statistics::RunTimeStats& TwoPartyBackend::get_run_time_stats() const noexcept {
+  return run_time_stats_.back();
 }
 
 }  // namespace MOTION
