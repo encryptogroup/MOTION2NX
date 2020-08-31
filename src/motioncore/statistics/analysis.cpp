@@ -195,6 +195,7 @@ json::object to_json(const std::string& experiment_name, const AccumulatedRunTim
   json::object obj({{"experiment", experiment_name},
                     {"meta",
                      {{"invocation", get_cmdline()},
+                      {"timestamp", get_timestamp()},
                       {"user", get_username()},
                       {"hostname", get_hostname()},
                       {"pid", get_pid()},
