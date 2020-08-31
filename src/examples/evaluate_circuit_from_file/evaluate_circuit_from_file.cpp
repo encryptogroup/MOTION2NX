@@ -246,6 +246,7 @@ int main(int argc, char* argv[]) {
       run_circuit(*options, backend);
       comm_layer->sync();
       comm_stats.add(comm_layer->get_transport_statistics());
+      comm_layer->reset_transport_statistics();
       run_time_stats.add(backend.get_run_time_stats());
     }
     comm_layer->shutdown();
