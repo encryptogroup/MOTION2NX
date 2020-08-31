@@ -22,12 +22,15 @@
 
 #include <algorithm>
 #include <cmath>
+#include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <random>
 #include <regex>
 
 #include <fmt/format.h>
+#include <boost/algorithm/string.hpp>
+#include <boost/json/to_string.hpp>
 #include <boost/lexical_cast.hpp>
 #include <boost/log/trivial.hpp>
 #include <boost/program_options.hpp>
@@ -42,198 +45,215 @@
 
 namespace po = boost::program_options;
 
-bool CheckPartyArgumentSyntax(const std::string& p);
+struct Options {
+  bool json;
+  std::size_t num_repetitions;
+  std::size_t num_simd;
+  MOTION::MPCProtocol protocol;
+  std::size_t my_id;
+  MOTION::Communication::tcp_parties_config tcp_config;
+  std::string circuit_path;
+  bool fashion;
+  bool no_run = false;
+};
 
-std::pair<po::variables_map, bool> ParseProgramOptions(int ac, char* av[]);
-
-std::unique_ptr<MOTION::Communication::CommunicationLayer> setup_communication(
-    const po::variables_map& vm);
-
-int main(int ac, char* av[]) {
-  try {
-    auto [vm, help_flag] = ParseProgramOptions(ac, av);
-    // if help flag is set - print allowed command line arguments and exit
-    if (help_flag) return EXIT_SUCCESS;
-
-    auto comm_layer = setup_communication(vm);
-    auto my_id = comm_layer->get_my_id();
-
-    auto logger =
-        std::make_shared<MOTION::Logger>(my_id, boost::log::trivial::severity_level::trace);
-    comm_layer->set_logger(logger);
-    MOTION::TwoPartyBackend backend(*comm_layer, logger);
-    ENCRYPTO::AlgorithmDescription algo;
-    if (vm.count("fashion")) {
-      algo = ENCRYPTO::AlgorithmDescription::FromBristolFashion(vm["circuit"].as<std::string>());
-    } else {
-      algo = ENCRYPTO::AlgorithmDescription::FromBristol(vm["circuit"].as<std::string>());
-    }
-    auto proto = [] (auto& vm) {
-      auto proto = vm["protocol"].template as<std::string>();
-      std::transform(std::begin(proto), std::end(proto), std::begin(proto),
-                     [](char x) { return std::tolower(x); });
-      if (proto == "yao") {
-        return MOTION::MPCProtocol::Yao;
-      } else if (proto == "gmw") {
-        return MOTION::MPCProtocol::BooleanGMW;
-      } else if (proto == "beavy") {
-        return MOTION::MPCProtocol::BooleanBEAVY;
-      } else {
-        throw std::invalid_argument("unknown protocol");
-      }
-    }(vm);
-    auto num_simd = vm["num-simd"].as<std::size_t>();
-    auto& gate_factory = backend.get_gate_factory(proto);
-    ENCRYPTO::ReusableFiberPromise<std::vector<ENCRYPTO::BitVector<>>> input_promise;
-    MOTION::WireVector w_in_a;
-    MOTION::WireVector w_in_b;
-    if (my_id == 0) {
-      auto pair = gate_factory.make_boolean_input_gate_my(my_id, algo.n_input_wires_parent_a_, num_simd);
-      input_promise = std::move(pair.first);
-      w_in_a = std::move(pair.second);
-      w_in_b =
-          gate_factory.make_boolean_input_gate_other(1 - my_id, *algo.n_input_wires_parent_b_, num_simd);
-    } else {
-      w_in_a =
-          gate_factory.make_boolean_input_gate_other(1 - my_id, algo.n_input_wires_parent_a_, num_simd);
-      auto pair = gate_factory.make_boolean_input_gate_my(my_id, *algo.n_input_wires_parent_b_, num_simd);
-      input_promise = std::move(pair.first);
-      w_in_b = std::move(pair.second);
-    }
-    auto w_out = backend.make_circuit(algo, w_in_a, w_in_b);
-    auto output_future = gate_factory.make_boolean_output_gate_my(MOTION::ALL_PARTIES, w_out);
-
-    std::vector<ENCRYPTO::BitVector<>> inputs;
-    if (my_id == 0) {
-      std::generate_n(std::back_inserter(inputs), algo.n_input_wires_parent_a_,
-                      [num_simd] { return ENCRYPTO::BitVector<>(num_simd); });
-    } else {
-      std::generate_n(std::back_inserter(inputs), *algo.n_input_wires_parent_b_,
-                      [num_simd] { return ENCRYPTO::BitVector<>(num_simd); });
-    }
-    input_promise.set_value(inputs);
-
-    backend.run();
-
-    output_future.get();
-
-    comm_layer->shutdown();
-
-  } catch (std::runtime_error& e) {
-    std::cerr << e.what() << "\n";
-    return EXIT_FAILURE;
-  }
-  return EXIT_SUCCESS;
-}
-
-const std::regex party_argument_re("(\\d+),(\\S+),(\\d{1,5})");
-
-bool CheckPartyArgumentSyntax(const std::string& p) {
-  // other party's id, IP address, and port
-  return std::regex_match(p, party_argument_re);
-}
-
-std::tuple<std::size_t, std::string, std::uint16_t> ParsePartyArgument(const std::string& p) {
-  std::smatch match;
-  std::regex_match(p, match, party_argument_re);
-  auto id = boost::lexical_cast<std::size_t>(match[1]);
-  auto host = match[2];
-  auto port = boost::lexical_cast<std::uint16_t>(match[3]);
-  return {id, host, port};
-}
-
-// <variables map, help flag>
-std::pair<po::variables_map, bool> ParseProgramOptions(int ac, char* av[]) {
-  using namespace std::string_view_literals;
-  constexpr std::string_view config_file_msg =
-      "config file, other arguments will overwrite the parameters read from the config file"sv;
-  bool print, help;
+std::optional<Options> parse_program_options(int argc, char* argv[]) {
+  Options options;
   boost::program_options::options_description desc("Allowed options");
   // clang-format off
   desc.add_options()
-      ("help,h", po::bool_switch(&help)->default_value(false),"produce help message")
-      ("config-file,f", po::value<std::string>(), config_file_msg.data())
-      ("my-id", po::value<std::size_t>(), "my party id")
-      ("other-parties", po::value<std::vector<std::string>>()->multitoken(), "(other party id, IP, port, my role), e.g., --other-parties 1,127.0.0.1,7777")
-      ("num-simd", po::value<std::size_t>()->default_value(1), "# simd values")
-      ("protocol", po::value<std::string>()->required(), "protocol to use")
-      ("circuit", po::value<std::string>()->required(), "path to a circuit file in the Bristol format")
-      ("fashion", "use the newer Bristol *Fashion* format");
+    ("help,h", po::bool_switch()->default_value(false),"produce help message")
+    ("config-file", po::value<std::string>(), "config file containing options")
+    ("my-id", po::value<std::size_t>()->required(), "my party id")
+    ("party", po::value<std::vector<std::string>>()->multitoken(),
+     "(party id, IP, port), e.g., --party 1,127.0.0.1,7777")
+    ("json", po::bool_switch()->default_value(false), "output data in JSON format")
+    ("protocol", po::value<std::string>()->required(), "2PC protocol (Yao, GMW or BEAVY)")
+    ("repetitions", po::value<std::size_t>()->default_value(1), "number of repetitions")
+    ("num-simd", po::value<std::size_t>()->default_value(1), "number of SIMD values")
+    ("no-run", po::bool_switch()->default_value(false), "just build the circuit, but not execute it")
+    ("circuit", po::value<std::string>()->required(), "path to a circuit file in the Bristol format")
+    ("fashion", po::bool_switch()->default_value(false), "output data in JSON format")
+    ;
   // clang-format on
 
   po::variables_map vm;
-
-  po::store(po::parse_command_line(ac, av, desc), vm);
-  po::notify(vm);
-
-  // argument help or no arguments (at least a config file is expected)
+  po::store(po::parse_command_line(argc, argv, desc), vm);
+  bool help = vm["help"].as<bool>();
   if (help) {
-    std::cout << desc << "\n";
-    return std::make_pair<po::variables_map, bool>({}, true);
+    std::cerr << desc << "\n";
+    return std::nullopt;
+  }
+  try {
+    po::notify(vm);
+  } catch (std::exception& e) {
+    std::cerr << "error:" << e.what() << "\n\n";
+    std::cerr << desc << "\n";
+    return std::nullopt;
   }
 
-  // read config file
   if (vm.count("config-file")) {
     std::ifstream ifs(vm["config-file"].as<std::string>().c_str());
-    po::variables_map vm_config_file;
     po::store(po::parse_config_file(ifs, desc), vm);
     po::notify(vm);
   }
 
-  // print parsed parameters
-  if (vm.count("my-id")) {
-    if (print) std::cout << "My id " << vm["my-id"].as<std::size_t>() << std::endl;
-  } else
-    throw std::runtime_error("My id is not set but required");
-
-  if (vm.count("other-parties")) {
-    const std::vector<std::string> other_parties{
-        vm["other-parties"].as<std::vector<std::string>>()};
-    std::string parties("Other parties: ");
-    for (auto& p : other_parties) {
-      if (CheckPartyArgumentSyntax(p)) {
-        if (print) parties.append(" " + p);
-      } else {
-        throw std::runtime_error("Incorrect party argument syntax " + p);
-      }
-    }
-    if (print) std::cout << parties << std::endl;
-  } else
-    throw std::runtime_error("Other parties' information is not set but required");
-
-  if (print) {
-    std::cout << "Number of SIMD AES evaluations: " << vm["num-simd"].as<std::size_t>()
-              << std::endl;
-
-    std::cout << "MPC Protocol: " << vm["protocol"].as<std::string>() << std::endl;
+  options.my_id = vm["my-id"].as<std::size_t>();
+  options.json = vm["json"].as<bool>();
+  options.num_repetitions = vm["repetitions"].as<std::size_t>();
+  options.num_simd = vm["num-simd"].as<std::size_t>();
+  options.no_run = vm["no-run"].as<bool>();
+  if (options.my_id > 1) {
+    std::cerr << "my-id must be one of 0 and 1\n";
+    return std::nullopt;
   }
-  return std::make_pair(vm, help);
+  auto protocol = vm["protocol"].as<std::string>();
+  boost::algorithm::to_lower(protocol);
+  if (protocol == "yao") {
+    options.protocol = MOTION::MPCProtocol::Yao;
+  } else if (protocol == "gmw") {
+    options.protocol = MOTION::MPCProtocol::BooleanGMW;
+  } else if (protocol == "beavy") {
+    options.protocol = MOTION::MPCProtocol::BooleanBEAVY;
+  } else {
+    std::cerr << "invalid protocol: " << protocol << "\n";
+    return std::nullopt;
+  }
+
+  options.circuit_path = vm["circuit"].as<std::string>();
+  options.fashion = vm["fashion"].as<bool>();
+
+  const auto parse_party_argument =
+      [](const auto& s) -> std::pair<std::size_t, MOTION::Communication::tcp_connection_config> {
+    const static std::regex party_argument_re("([01]),([^,]+),(\\d{1,5})");
+    std::smatch match;
+    if (!std::regex_match(s, match, party_argument_re)) {
+      throw std::invalid_argument("invalid party argument");
+    }
+    auto id = boost::lexical_cast<std::size_t>(match[1]);
+    auto host = match[2];
+    auto port = boost::lexical_cast<std::uint16_t>(match[3]);
+    return {id, {host, port}};
+  };
+
+  const std::vector<std::string> party_infos = vm["party"].as<std::vector<std::string>>();
+  if (party_infos.size() != 2) {
+    std::cerr << "expecting two --party options\n";
+    return std::nullopt;
+  }
+
+  options.tcp_config.resize(2);
+  std::size_t other_id = 2;
+
+  const auto [id0, conn_info0] = parse_party_argument(party_infos[0]);
+  const auto [id1, conn_info1] = parse_party_argument(party_infos[1]);
+  if (id0 == id1) {
+    std::cerr << "need party arguments for party 0 and 1\n";
+    return std::nullopt;
+  }
+  options.tcp_config[id0] = conn_info0;
+  options.tcp_config[id1] = conn_info1;
+
+  return options;
 }
 
 std::unique_ptr<MOTION::Communication::CommunicationLayer> setup_communication(
-    const po::variables_map& vm) {
-  const auto parties_str{vm["other-parties"].as<const std::vector<std::string>>()};
-  const auto num_parties{parties_str.size()};
-  const auto my_id{vm["my-id"].as<std::size_t>()};
-  if (my_id >= num_parties) {
-    throw std::runtime_error(fmt::format(
-        "My id needs to be in the range [0, #parties - 1], current my id is {} and #parties is {}",
-        my_id, num_parties));
-  }
-
-  MOTION::Communication::tcp_parties_config parties_config(num_parties);
-
-  for (const auto& party_str : parties_str) {
-    const auto [party_id, host, port] = ParsePartyArgument(party_str);
-    if (party_id >= num_parties) {
-      throw std::runtime_error(
-          fmt::format("Party's id needs to be in the range [0, #parties - 1], current id "
-                      "is {} and #parties is {}",
-                      party_id, num_parties));
-    }
-    parties_config.at(party_id) = std::make_pair(host, port);
-  }
-  MOTION::Communication::TCPSetupHelper helper(my_id, parties_config);
-  return std::make_unique<MOTION::Communication::CommunicationLayer>(my_id,
+    const Options& options) {
+  MOTION::Communication::TCPSetupHelper helper(options.my_id, options.tcp_config);
+  return std::make_unique<MOTION::Communication::CommunicationLayer>(options.my_id,
                                                                      helper.setup_connections());
+}
+
+void run_circuit(const Options& options, MOTION::TwoPartyBackend& backend) {
+  ENCRYPTO::AlgorithmDescription algo;
+  if (options.fashion) {
+    algo = ENCRYPTO::AlgorithmDescription::FromBristolFashion(options.circuit_path);
+  } else {
+    algo = ENCRYPTO::AlgorithmDescription::FromBristol(options.circuit_path);
+  }
+  auto& gate_factory = backend.get_gate_factory(options.protocol);
+  ENCRYPTO::ReusableFiberPromise<std::vector<ENCRYPTO::BitVector<>>> input_promise;
+  MOTION::WireVector w_in_a;
+  MOTION::WireVector w_in_b;
+  if (options.my_id == 0) {
+    auto pair = gate_factory.make_boolean_input_gate_my(options.my_id, algo.n_input_wires_parent_a_,
+                                                        options.num_simd);
+    input_promise = std::move(pair.first);
+    w_in_a = std::move(pair.second);
+    w_in_b = gate_factory.make_boolean_input_gate_other(
+        1 - options.my_id, *algo.n_input_wires_parent_b_, options.num_simd);
+  } else {
+    w_in_a = gate_factory.make_boolean_input_gate_other(
+        1 - options.my_id, algo.n_input_wires_parent_a_, options.num_simd);
+    auto pair = gate_factory.make_boolean_input_gate_my(
+        options.my_id, *algo.n_input_wires_parent_b_, options.num_simd);
+    input_promise = std::move(pair.first);
+    w_in_b = std::move(pair.second);
+  }
+  auto w_out = backend.make_circuit(algo, w_in_a, w_in_b);
+  auto output_future = gate_factory.make_boolean_output_gate_my(MOTION::ALL_PARTIES, w_out);
+
+  if (options.no_run) {
+    return;
+  }
+
+  std::vector<ENCRYPTO::BitVector<>> inputs;
+  if (options.my_id == 0) {
+    std::generate_n(std::back_inserter(inputs), algo.n_input_wires_parent_a_,
+                    [options] { return ENCRYPTO::BitVector<>(options.num_simd); });
+  } else {
+    std::generate_n(std::back_inserter(inputs), *algo.n_input_wires_parent_b_,
+                    [options] { return ENCRYPTO::BitVector<>(options.num_simd); });
+  }
+  input_promise.set_value(inputs);
+
+  backend.run();
+
+  output_future.get();
+}
+
+void print_stats(const Options& options,
+                 const MOTION::Statistics::AccumulatedRunTimeStats& run_time_stats,
+                 const MOTION::Statistics::AccumulatedCommunicationStats& comm_stats) {
+  const auto filename = std::filesystem::path(options.circuit_path).filename();
+  if (options.json) {
+    auto obj = MOTION::Statistics::to_json(filename, run_time_stats, comm_stats);
+    obj.emplace("party_id", options.my_id);
+    obj.emplace("protocol", MOTION::ToString(options.protocol));
+    obj.emplace("circuit_path", options.circuit_path);
+    obj.emplace("fashion", options.fashion);
+    std::cout << boost::json::to_string(obj) << "\n";
+  } else {
+    std::cout << MOTION::Statistics::print_stats(filename, run_time_stats, comm_stats);
+  }
+}
+
+int main(int argc, char* argv[]) {
+  auto options = parse_program_options(argc, argv);
+  if (!options.has_value()) {
+    return EXIT_FAILURE;
+  }
+
+  try {
+    auto comm_layer = setup_communication(*options);
+    auto logger = std::make_shared<MOTION::Logger>(options->my_id,
+                                                   boost::log::trivial::severity_level::trace);
+    comm_layer->set_logger(logger);
+    MOTION::Statistics::AccumulatedRunTimeStats run_time_stats;
+    MOTION::Statistics::AccumulatedCommunicationStats comm_stats;
+    for (std::size_t i = 0; i < options->num_repetitions; ++i) {
+      MOTION::TwoPartyBackend backend(*comm_layer, logger);
+      run_circuit(*options, backend);
+      comm_layer->sync();
+      comm_stats.add(comm_layer->get_transport_statistics());
+      run_time_stats.add(backend.get_run_time_stats());
+    }
+    comm_layer->shutdown();
+    print_stats(*options, run_time_stats, comm_stats);
+  } catch (std::runtime_error& e) {
+    std::cerr << "ERROR OCCURRED: " << e.what() << "\n";
+    return EXIT_FAILURE;
+  }
+
+  return EXIT_SUCCESS;
 }
