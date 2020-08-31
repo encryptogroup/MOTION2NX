@@ -105,7 +105,7 @@ void NewGateExecutor::evaluate_setup_online(Statistics::RunTimeStats &stats) {
   stats.record_end<Statistics::RunTimeStats::StatID::evaluate>();
 }
 
-void NewGateExecutor::evaluate(Statistics::RunTimeStats &stats) {
+void NewGateExecutor::evaluate(Statistics::RunTimeStats&) {
   throw std::logic_error("not implemented");
 }
 
