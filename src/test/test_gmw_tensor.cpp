@@ -65,7 +65,7 @@ class GMWTensorTest : public ::testing::Test {
           *comm_layers_[i], *ot_provider_managers_[i], nullptr);
       linalg_triple_providers_[i] = std::make_shared<MOTION::LinAlgTriplesFromAP>(
           arithmetic_provider_managers_[i]->get_provider(1 - i),
-          ot_provider_managers_[i]->get_provider(1 - i), nullptr);
+          ot_provider_managers_[i]->get_provider(1 - i), stats_[i], nullptr);
       mt_providers_[i] = std::make_unique<MOTION::MTProviderFromOTs>(
           i, 2, *arithmetic_provider_managers_[i], *ot_provider_managers_[i], stats_[i], nullptr);
       sp_providers_[i] = std::make_unique<MOTION::SPProviderFromOTs>(

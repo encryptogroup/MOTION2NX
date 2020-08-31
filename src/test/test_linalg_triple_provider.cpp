@@ -30,6 +30,7 @@
 #include "crypto/motion_base_provider.h"
 #include "crypto/multiplication_triple/linalg_triple_provider.h"
 #include "crypto/oblivious_transfer/ot_provider.h"
+#include "statistics/run_time_stats.h"
 #include "utility/linear_algebra.h"
 
 template <typename T>
@@ -55,7 +56,7 @@ class LinAlgTripleProviderTest : public ::testing::Test {
           *comm_layers_[i], *ot_provider_managers_[i], nullptr);
       linalg_triple_providers_[i] = std::make_unique<MOTION::LinAlgTriplesFromAP>(
           arithmetic_provider_managers_[i]->get_provider(1 - i),
-          ot_provider_managers_[i]->get_provider(1 - i), nullptr);
+          ot_provider_managers_[i]->get_provider(1 - i), stats_[i], nullptr);
     }
 
     std::vector<std::future<void>> futs;
@@ -103,6 +104,7 @@ class LinAlgTripleProviderTest : public ::testing::Test {
       ot_provider_managers_;
   std::vector<std::unique_ptr<MOTION::ArithmeticProviderManager>> arithmetic_provider_managers_;
   std::vector<std::unique_ptr<MOTION::LinAlgTripleProvider>> linalg_triple_providers_;
+  std::array<MOTION::Statistics::RunTimeStats, 2> stats_;
 };
 
 using integer_types =
