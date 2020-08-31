@@ -20,6 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+#include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <optional>
@@ -29,6 +30,7 @@
 
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/case_conv.hpp>
+#include <boost/json/to_string.hpp>
 #include <boost/lexical_cast.hpp>
 #include <boost/log/trivial.hpp>
 #include <boost/program_options.hpp>
@@ -37,6 +39,7 @@
 #include "communication/communication_layer.h"
 #include "communication/tcp_transport.h"
 #include "onnx_adapter.h"
+#include "statistics/analysis.h"
 #include "tensor/tensor.h"
 #include "tensor/tensor_op.h"
 #include "tensor/tensor_op_factory.h"
@@ -47,6 +50,7 @@
 namespace po = boost::program_options;
 
 struct Options {
+  bool json;
   std::size_t num_repetitions;
   MOTION::MPCProtocol protocol;
   std::size_t my_id;
@@ -66,6 +70,7 @@ std::optional<Options> parse_program_options(int argc, char* argv[]) {
     ("my-id", po::value<std::size_t>()->required(), "my party id")
     ("party", po::value<std::vector<std::string>>()->multitoken(),
      "(party id, IP, port), e.g., --party 1,127.0.0.1,7777")
+    ("json", po::bool_switch()->default_value(false), "output data in JSON format")
     ("protocol", po::value<std::string>()->required(), "2PC protocol (GMW or BEAVY)")
     ("repetitions", po::value<std::size_t>()->default_value(1), "number of repetitions")
     ("no-run", po::bool_switch()->default_value(false),
@@ -97,6 +102,7 @@ std::optional<Options> parse_program_options(int argc, char* argv[]) {
   }
 
   options.my_id = vm["my-id"].as<std::size_t>();
+  options.json = vm["json"].as<bool>();
   options.num_repetitions = vm["repetitions"].as<std::size_t>();
   options.no_run = vm["no-run"].as<bool>();
   options.fake_triples = vm["fake-triples"].as<bool>();
@@ -182,6 +188,22 @@ void run_model(const Options& options, MOTION::TwoPartyTensorBackend& backend) {
   }
 }
 
+void print_stats(const Options& options,
+                 const MOTION::Statistics::AccumulatedRunTimeStats& run_time_stats,
+                 const MOTION::Statistics::AccumulatedCommunicationStats& comm_stats) {
+  const auto filename = std::filesystem::path(options.model_path).filename();
+  if (options.json) {
+    auto obj = MOTION::Statistics::to_json(filename, run_time_stats, comm_stats);
+    obj.emplace("party_id", options.my_id);
+    obj.emplace("protocol", MOTION::ToString(options.protocol));
+    obj.emplace("model_path", options.model_path);
+    obj.emplace("fake_triples", options.fake_triples);
+    std::cout << boost::json::to_string(obj) << "\n";
+  } else {
+    std::cout << MOTION::Statistics::print_stats(filename, run_time_stats, comm_stats);
+  }
+}
+
 int main(int argc, char* argv[]) {
   auto options = parse_program_options(argc, argv);
   if (!options.has_value()) {
@@ -193,9 +215,17 @@ int main(int argc, char* argv[]) {
     auto logger = std::make_shared<MOTION::Logger>(options->my_id,
                                                    boost::log::trivial::severity_level::trace);
     comm_layer->set_logger(logger);
-    MOTION::TwoPartyTensorBackend backend(*comm_layer, logger, options->fake_triples);
-    run_model(*options, backend);
+    MOTION::Statistics::AccumulatedRunTimeStats run_time_stats;
+    MOTION::Statistics::AccumulatedCommunicationStats comm_stats;
+    for (std::size_t i = 0; i < options->num_repetitions; ++i) {
+      MOTION::TwoPartyTensorBackend backend(*comm_layer, logger, options->fake_triples);
+      run_model(*options, backend);
+      comm_layer->sync();
+      comm_stats.add(comm_layer->get_transport_statistics());
+      run_time_stats.add(backend.get_run_time_stats());
+    }
     comm_layer->shutdown();
+    print_stats(*options, run_time_stats, comm_stats);
   } catch (std::runtime_error& e) {
     std::cerr << "ERROR OCCURRED: " << e.what() << "\n";
     return EXIT_FAILURE;
