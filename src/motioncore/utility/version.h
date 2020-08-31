@@ -33,4 +33,7 @@ const char* get_git_commit();
 // Return current the git branch or N/A if not build from git.
 const char* get_git_branch();
 
+// Return the configured build type, e.g., Debug or Release
+const char* get_build_type();
+
 }  // namespace MOTION

@@ -27,9 +27,11 @@ namespace MOTION {
 static const char* git_version = "@GIT_VERSION@";
 static const char* git_commit = "@GIT_COMMIT@";
 static const char* git_branch = "@GIT_BRANCH@";
+static const char* cmake_build_type = "@VERSION_BUILD_TYPE@";
 
 const char* get_git_version() { return git_version; }
 const char* get_git_commit() { return git_commit; }
 const char* get_git_branch() { return git_branch; }
+const char* get_build_type() { return cmake_build_type; }
 
 }  // namespace MOTION

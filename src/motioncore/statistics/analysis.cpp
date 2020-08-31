@@ -199,6 +199,7 @@ json::object to_json(const std::string& experiment_name, const AccumulatedRunTim
                       {"user", get_username()},
                       {"hostname", get_hostname()},
                       {"pid", get_pid()},
+                      {"build-type", get_build_type()},
                       {"git-branch", get_git_branch()},
                       {"git-commit", get_git_commit()},
                       {"git-version", get_git_version()}}}});

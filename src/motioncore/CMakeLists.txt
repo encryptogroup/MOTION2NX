@@ -107,6 +107,7 @@ target_sources(motion PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/version.cpp")
 add_custom_target(motion_version
                    COMMAND "${CMAKE_COMMAND}"
                       "-DVERSION_CPP_IN:FILEPATH=${CMAKE_CURRENT_SOURCE_DIR}/utility/version.cpp.in"
+                      "-DVERSION_BUILD_TYPE:STRING=${CMAKE_BUILD_TYPE}"
                       "-P" "${CMAKE_CURRENT_SOURCE_DIR}/cmake/version.cmake"
                    DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/utility/version.cpp.in"
                    BYPRODUCTS "${CMAKE_CURRENT_BINARY_DIR}/version.cpp.new"
