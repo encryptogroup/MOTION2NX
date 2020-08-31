@@ -46,6 +46,7 @@
 namespace po = boost::program_options;
 
 struct Options {
+  std::size_t threads;
   bool json;
   std::size_t num_repetitions;
   std::size_t num_simd;
@@ -67,6 +68,7 @@ std::optional<Options> parse_program_options(int argc, char* argv[]) {
     ("my-id", po::value<std::size_t>()->required(), "my party id")
     ("party", po::value<std::vector<std::string>>()->multitoken(),
      "(party id, IP, port), e.g., --party 1,127.0.0.1,7777")
+    ("threads", po::value<std::size_t>()->default_value(0), "number of threads to use for gate evaluation")
     ("json", po::bool_switch()->default_value(false), "output data in JSON format")
     ("protocol", po::value<std::string>()->required(), "2PC protocol (Yao, GMW or BEAVY)")
     ("repetitions", po::value<std::size_t>()->default_value(1), "number of repetitions")
@@ -97,6 +99,7 @@ std::optional<Options> parse_program_options(int argc, char* argv[]) {
   }
 
   options.my_id = vm["my-id"].as<std::size_t>();
+  options.threads = vm["threads"].as<std::size_t>();
   options.json = vm["json"].as<bool>();
   options.num_repetitions = vm["repetitions"].as<std::size_t>();
   options.num_simd = vm["num-simd"].as<std::size_t>();
@@ -240,7 +243,7 @@ int main(int argc, char* argv[]) {
     MOTION::Statistics::AccumulatedRunTimeStats run_time_stats;
     MOTION::Statistics::AccumulatedCommunicationStats comm_stats;
     for (std::size_t i = 0; i < options->num_repetitions; ++i) {
-      MOTION::TwoPartyBackend backend(*comm_layer, logger);
+      MOTION::TwoPartyBackend backend(*comm_layer, options->threads, logger);
       run_circuit(*options, backend);
       comm_layer->sync();
       comm_stats.add(comm_layer->get_transport_statistics());

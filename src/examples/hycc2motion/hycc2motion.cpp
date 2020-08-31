@@ -20,6 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+#include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <optional>
@@ -29,6 +30,7 @@
 
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/case_conv.hpp>
+#include <boost/json/to_string.hpp>
 #include <boost/lexical_cast.hpp>
 #include <boost/log/trivial.hpp>
 #include <boost/program_options.hpp>
@@ -37,6 +39,7 @@
 #include "communication/communication_layer.h"
 #include "communication/tcp_transport.h"
 #include "hycc_adapter.h"
+#include "statistics/analysis.h"
 #include "tensor/tensor.h"
 #include "tensor/tensor_op.h"
 #include "tensor/tensor_op_factory.h"
@@ -47,13 +50,15 @@
 namespace po = boost::program_options;
 
 struct Options {
+  std::size_t threads;
+  bool json;
   std::size_t num_repetitions;
+  std::size_t num_simd;
   MOTION::MPCProtocol arithmetic_protocol;
   MOTION::MPCProtocol boolean_protocol;
   std::size_t my_id;
   MOTION::Communication::tcp_parties_config tcp_config;
   std::string circuit_path;
-  std::size_t num_simd;
   bool no_run = false;
 };
 
@@ -67,7 +72,10 @@ std::optional<Options> parse_program_options(int argc, char* argv[]) {
     ("my-id", po::value<std::size_t>()->required(), "my party id")
     ("party", po::value<std::vector<std::string>>()->multitoken(),
      "(party id, IP, port), e.g., --party 1,127.0.0.1,7777")
-    ("protocol", po::value<std::string>()->required(), "2PC protocol (GMW or BEAVY)")
+    ("threads", po::value<std::size_t>()->default_value(0), "number of threads to use for gate evaluation")
+    ("json", po::bool_switch()->default_value(false), "output data in JSON format")
+    ("arithmetic-protocol", po::value<std::string>()->required(), "2PC protocol (GMW or BEAVY)")
+    ("boolean-protocol", po::value<std::string>()->required(), "2PC protocol (GMW or BEAVY)")
     ("repetitions", po::value<std::size_t>()->default_value(1), "number of repetitions")
     ("num-simd", po::value<std::size_t>()->default_value(1), "size of SIMD operations")
     ("no-run", po::bool_switch()->default_value(false),
@@ -82,6 +90,10 @@ std::optional<Options> parse_program_options(int argc, char* argv[]) {
     std::cerr << desc << "\n";
     return std::nullopt;
   }
+  if (vm.count("config-file")) {
+    std::ifstream ifs(vm["config-file"].as<std::string>().c_str());
+    po::store(po::parse_config_file(ifs, desc), vm);
+  }
   try {
     po::notify(vm);
   } catch (std::exception& e) {
@@ -90,13 +102,9 @@ std::optional<Options> parse_program_options(int argc, char* argv[]) {
     return std::nullopt;
   }
 
-  if (vm.count("config-file")) {
-    std::ifstream ifs(vm["config-file"].as<std::string>().c_str());
-    po::store(po::parse_config_file(ifs, desc), vm);
-    po::notify(vm);
-  }
-
   options.my_id = vm["my-id"].as<std::size_t>();
+  options.threads = vm["threads"].as<std::size_t>();
+  options.json = vm["json"].as<bool>();
   options.num_repetitions = vm["repetitions"].as<std::size_t>();
   options.num_simd = vm["num-simd"].as<std::size_t>();
   options.no_run = vm["no-run"].as<bool>();
@@ -104,17 +112,29 @@ std::optional<Options> parse_program_options(int argc, char* argv[]) {
     std::cerr << "my-id must be one of 0 and 1\n";
     return std::nullopt;
   }
-  auto protocol = vm["protocol"].as<std::string>();
-  boost::algorithm::to_lower(protocol);
-  if (protocol == "gmw") {
-    options.arithmetic_protocol = MOTION::MPCProtocol::ArithmeticGMW;
-    options.boolean_protocol = MOTION::MPCProtocol::BooleanGMW;
-  } else if (protocol == "beavy") {
-    options.arithmetic_protocol = MOTION::MPCProtocol::ArithmeticBEAVY;
-    options.boolean_protocol = MOTION::MPCProtocol::BooleanBEAVY;
-  } else {
-    std::cerr << "invalid protocol: " << protocol << "\n";
-    return std::nullopt;
+
+  {
+    auto boolean_protocol = vm["boolean-protocol"].as<std::string>();
+    boost::algorithm::to_lower(boolean_protocol);
+    if (boolean_protocol == "gmw") {
+      options.boolean_protocol = MOTION::MPCProtocol::BooleanGMW;
+    } else if (boolean_protocol == "beavy") {
+      options.boolean_protocol = MOTION::MPCProtocol::BooleanBEAVY;
+    } else {
+      std::cerr << "invalid Boolean protocol: " << boolean_protocol << "\n";
+      return std::nullopt;
+    }
+
+    auto arithmetic_protocol = vm["arithmetic-protocol"].as<std::string>();
+    boost::algorithm::to_lower(arithmetic_protocol);
+    if (arithmetic_protocol == "gmw") {
+      options.arithmetic_protocol = MOTION::MPCProtocol::ArithmeticGMW;
+    } else if (arithmetic_protocol == "beavy") {
+      options.arithmetic_protocol = MOTION::MPCProtocol::ArithmeticBEAVY;
+    } else {
+      std::cerr << "invalid Arithmetic protocol: " << arithmetic_protocol << "\n";
+      return std::nullopt;
+    }
   }
 
   options.circuit_path = vm["circuit"].as<std::string>();
@@ -229,6 +249,22 @@ void run_model(const Options& options, MOTION::TwoPartyBackend& backend,
   collect_outputs(options, hycc_adapter);
 }
 
+void print_stats(const Options& options,
+                 const MOTION::Statistics::AccumulatedRunTimeStats& run_time_stats,
+                 const MOTION::Statistics::AccumulatedCommunicationStats& comm_stats) {
+  const auto filename = std::filesystem::path(options.circuit_path).filename();
+  if (options.json) {
+    auto obj = MOTION::Statistics::to_json(filename, run_time_stats, comm_stats);
+    obj.emplace("party_id", options.my_id);
+    obj.emplace("boolean_protocol", MOTION::ToString(options.boolean_protocol));
+    obj.emplace("arithmetic_protocol", MOTION::ToString(options.arithmetic_protocol));
+    obj.emplace("circuit_path", options.circuit_path);
+    std::cout << boost::json::to_string(obj) << "\n";
+  } else {
+    std::cout << MOTION::Statistics::print_stats(filename, run_time_stats, comm_stats);
+  }
+}
+
 int main(int argc, char* argv[]) {
   auto options = parse_program_options(argc, argv);
   if (!options.has_value()) {
@@ -240,9 +276,18 @@ int main(int argc, char* argv[]) {
     auto logger = std::make_shared<MOTION::Logger>(options->my_id,
                                                    boost::log::trivial::severity_level::trace);
     comm_layer->set_logger(logger);
-    MOTION::TwoPartyBackend backend(*comm_layer, logger);
-    run_model(*options, backend, logger);
+    MOTION::Statistics::AccumulatedRunTimeStats run_time_stats;
+    MOTION::Statistics::AccumulatedCommunicationStats comm_stats;
+    for (std::size_t i = 0; i < options->num_repetitions; ++i) {
+      MOTION::TwoPartyBackend backend(*comm_layer, options->threads, logger);
+      run_model(*options, backend, logger);
+      comm_layer->sync();
+      comm_stats.add(comm_layer->get_transport_statistics());
+      comm_layer->reset_transport_statistics();
+      run_time_stats.add(backend.get_run_time_stats());
+    }
     comm_layer->shutdown();
+    print_stats(*options, run_time_stats, comm_stats);
   } catch (std::runtime_error& e) {
     std::cerr << "ERROR OCCURRED: " << e.what() << "\n";
     return EXIT_FAILURE;
