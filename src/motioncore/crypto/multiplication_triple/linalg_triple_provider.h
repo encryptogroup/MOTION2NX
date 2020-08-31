@@ -42,6 +42,10 @@ class ROTSender;
 
 namespace MOTION {
 
+namespace Statistics {
+struct RunTimeStats;
+}
+
 class ArithmeticProvider;
 template <typename T>
 class ConvolutionInputSide;
@@ -127,7 +131,7 @@ class LinAlgTripleProvider : public ENCRYPTO::enable_wait_setup {
 class LinAlgTriplesFromAP : public LinAlgTripleProvider {
  public:
   LinAlgTriplesFromAP(ArithmeticProvider&, ENCRYPTO::ObliviousTransfer::OTProvider&,
-                      std::shared_ptr<Logger>);
+                      Statistics::RunTimeStats&, std::shared_ptr<Logger>);
   ~LinAlgTriplesFromAP();
 
   void setup() override;
@@ -140,6 +144,7 @@ class LinAlgTriplesFromAP : public LinAlgTripleProvider {
  private:
   ArithmeticProvider& arith_provider_;
   ENCRYPTO::ObliviousTransfer::OTProvider& ot_provider_;
+  Statistics::RunTimeStats& run_time_stats_;
   std::shared_ptr<Logger> logger_;
 
   template <typename T>

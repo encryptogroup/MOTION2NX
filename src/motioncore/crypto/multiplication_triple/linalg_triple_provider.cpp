@@ -32,9 +32,11 @@
 #include "crypto/arithmetic_provider.h"
 #include "crypto/oblivious_transfer/ot_flavors.h"
 #include "crypto/oblivious_transfer/ot_provider.h"
+#include "statistics/run_time_stats.h"
 #include "tensor/tensor_op.h"
 #include "utility/helpers.h"
 #include "utility/linear_algebra.h"
+#include "utility/logger.h"
 
 namespace MOTION {
 
@@ -226,12 +228,23 @@ LinAlgTripleProvider::BooleanTriple LinAlgTripleProvider::get_relu_triple(std::s
 
 LinAlgTriplesFromAP::LinAlgTriplesFromAP(ArithmeticProvider& arith_provider,
                                          ENCRYPTO::ObliviousTransfer::OTProvider& ot_provider,
+                                         Statistics::RunTimeStats& run_time_stats,
                                          std::shared_ptr<Logger> logger)
-    : arith_provider_(arith_provider), ot_provider_(ot_provider), logger_(logger) {}
+    : arith_provider_(arith_provider),
+      ot_provider_(ot_provider),
+      run_time_stats_(run_time_stats),
+      logger_(logger) {}
 
 LinAlgTriplesFromAP::~LinAlgTriplesFromAP() = default;
 
 void LinAlgTriplesFromAP::setup() {
+  if constexpr (MOTION_DEBUG) {
+    if (logger_) {
+      logger_->LogDebug("LinAlgTriplesFromAP::setup start");
+    }
+  }
+  run_time_stats_.record_start<Statistics::RunTimeStats::StatID::linalgtriple_setup>();
+
   const auto run_setup_gemm_1 = [](const auto& count_map, auto& handle_map, auto& triple_map) {
     for (const auto& [gemm_op, count] : count_map) {
       auto& handle_vec = handle_map.at(gemm_op);
@@ -398,6 +411,13 @@ void LinAlgTriplesFromAP::setup() {
   run_setup_boolean(relu_counts_, relu_handles_, relu_triples_);
 
   set_setup_ready();
+
+  run_time_stats_.record_end<Statistics::RunTimeStats::StatID::linalgtriple_setup>();
+  if constexpr (MOTION_DEBUG) {
+    if (logger_) {
+      logger_->LogDebug("LinAlgTriplesFromAP::setup end");
+    }
+  }
 }
 
 void LinAlgTriplesFromAP::registration_hook(const tensor::GemmOp& gemm_op, std::size_t bit_size) {
