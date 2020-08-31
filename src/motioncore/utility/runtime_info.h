@@ -41,4 +41,7 @@ std::string get_hostname();
 // Get this user's name via `whoami`
 std::string get_username();
 
+// Get current timestamp
+std::string get_timestamp();
+
 }  // namespace MOTION

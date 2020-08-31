@@ -23,8 +23,10 @@
 #include "runtime_info.h"
 
 #include <cassert>
+#include <ctime>
 #include <fstream>
 
+#include <fmt/chrono.h>
 #include <boost/process/child.hpp>
 #include <boost/process/io.hpp>
 #include <boost/process/pipe.hpp>
@@ -67,6 +69,11 @@ std::string get_username() {
   std::string username;
   std::getline(output, username);
   return username;
+}
+
+std::string get_timestamp() {
+  std::time_t t = std::time(nullptr);
+  return fmt::format("{:%FT%T%z}.", fmt::localtime(t));
 }
 
 }  // namespace MOTION
