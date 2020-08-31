@@ -32,11 +32,16 @@
 
 namespace MOTION {
 
-NewGateExecutor::NewGateExecutor(GateRegister &reg, std::function<void(void)> preprocessing_fctn,
-                           std::shared_ptr<Logger> logger)
+NewGateExecutor::NewGateExecutor(GateRegister& reg, std::function<void(void)> preprocessing_fctn,
+                                 std::size_t num_threads, std::shared_ptr<Logger> logger)
     : register_(reg),
       preprocessing_fctn_(std::move(preprocessing_fctn)),
+      num_threads_(num_threads),
       logger_(std::move(logger)) {}
+
+NewGateExecutor::NewGateExecutor(GateRegister& reg, std::function<void(void)> preprocessing_fctn,
+                                 std::shared_ptr<Logger> logger)
+    : NewGateExecutor(reg, preprocessing_fctn, std::thread::hardware_concurrency(), logger) {}
 
 void NewGateExecutor::evaluate_setup_online(Statistics::RunTimeStats &stats) {
   stats.record_start<Statistics::RunTimeStats::StatID::evaluate>();
@@ -48,9 +53,8 @@ void NewGateExecutor::evaluate_setup_online(Statistics::RunTimeStats &stats) {
         "Start evaluating the circuit gates sequentially (online after all finished setup)");
   }
 
-  // create a pool with std::thread::hardware_concurrency() no. of threads
-  // to execute fibers
-  ENCRYPTO::FiberThreadPool fpool(0, 2 * register_.get_num_gates());
+  // create a pool to execute fibers
+  ENCRYPTO::FiberThreadPool fpool(num_threads_, 2 * register_.get_num_gates());
 
   // ------------------------------ setup phase ------------------------------
   stats.record_start<Statistics::RunTimeStats::StatID::gates_setup>();

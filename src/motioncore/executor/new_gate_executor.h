@@ -37,7 +37,9 @@ struct RunTimeStats;
 // Evaluates all registered gates.
 class NewGateExecutor {
  public:
-  NewGateExecutor(GateRegister &, std::function<void()> preprocessing_fctn, std::shared_ptr<Logger>);
+  NewGateExecutor(GateRegister&, std::function<void()> preprocessing_fctn, std::shared_ptr<Logger>);
+  NewGateExecutor(GateRegister&, std::function<void()> preprocessing_fctn, std::size_t num_threads,
+                  std::shared_ptr<Logger>);
 
   // Run the setup phases first for all gates before starting with the online
   // phases.
@@ -48,6 +50,7 @@ class NewGateExecutor {
  private:
   GateRegister &register_;
   std::function<void()> preprocessing_fctn_;
+  std::size_t num_threads_;
   std::shared_ptr<Logger> logger_;
 };
 
