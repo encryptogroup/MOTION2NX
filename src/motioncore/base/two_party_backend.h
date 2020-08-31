@@ -72,7 +72,8 @@ struct RunTimeStats;
 
 class TwoPartyBackend : public CircuitBuilder {
  public:
-  TwoPartyBackend(Communication::CommunicationLayer&, std::shared_ptr<Logger>);
+  TwoPartyBackend(Communication::CommunicationLayer&, std::size_t num_threads,
+                  std::shared_ptr<Logger>);
   ~TwoPartyBackend();
 
   void run_preprocessing();
