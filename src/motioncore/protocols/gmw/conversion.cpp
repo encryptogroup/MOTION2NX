@@ -76,6 +76,7 @@ void BooleanToArithmeticGMWGate<T>::evaluate_online() {
   // collect all shares into a single buffer
   for (std::size_t wire_i = 0; wire_i < num_wires; ++wire_i) {
     const auto& wire = inputs_[wire_i];
+    wire->wait_online();
     t.Append(wire->get_share());
   }
 
