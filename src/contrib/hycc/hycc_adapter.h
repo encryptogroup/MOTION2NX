@@ -49,6 +49,7 @@ class HyCCAdapter {
   ~HyCCAdapter();
 
   void load_circuit(const std::string& path);
+  void clear_hycc_data();
 
   std::size_t get_num_simd() const noexcept;
 

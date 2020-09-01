@@ -241,6 +241,7 @@ void run_model(const Options& options, MOTION::TwoPartyBackend& backend,
                                          options.boolean_protocol, MOTION::MPCProtocol::Yao,
                                          options.num_simd, logger);
   hycc_adapter.load_circuit(options.circuit_path);
+  hycc_adapter.clear_hycc_data();
 
   if (options.no_run) {
     return;

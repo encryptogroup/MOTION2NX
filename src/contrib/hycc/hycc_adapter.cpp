@@ -759,6 +759,17 @@ void HyCCAdapter::load_circuit(const std::string& file_path) {
   impl_->process_circuit_outputs(main_circuit);
 }
 
+void HyCCAdapter::clear_hycc_data() {
+  std::vector<std::string>().swap(impl_->circuit_files_);
+  std::unordered_map<std::string, simple_circuitt>().swap(impl_->cbmc_circuits_);
+  std::unordered_map<simple_circuitt::gatet::wire_endpointt, WireVector, wire_endpoint_hasht>()
+      .swap(impl_->arithmetic_wires_);
+  std::unordered_map<simple_circuitt::gatet::wire_endpointt, WireVector, wire_endpoint_hasht>()
+      .swap(impl_->boolean_wires_);
+  std::unordered_map<simple_circuitt::gatet::wire_endpointt, WireVector, wire_endpoint_hasht>()
+      .swap(impl_->yao_wires_);
+}
+
 std::size_t HyCCAdapter::get_num_simd() const noexcept { return impl_->num_simd_; }
 
 std::pair<std::size_t, ENCRYPTO::ReusableFiberPromise<std::vector<ENCRYPTO::BitVector<>>>>&
