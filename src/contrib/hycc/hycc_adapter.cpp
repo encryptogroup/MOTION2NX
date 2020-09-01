@@ -160,8 +160,6 @@ MPCProtocol HyCCAdapter::HyCCAdapterImpl::get_protocol_from_filename(const std::
 
 static void set_mpc_protocol(simple_circuitt& circuit, MPCProtocol boolean_protocol,
                              MPCProtocol arithmetic_protocol) {
-  std::cerr << "setting protocol of circuit\n";
-
   const auto set_protocol = [](simple_circuitt::gatet& gate, MPCProtocol protocol) {
     // Use the 64th bit to indicate whether a protocol has been set
     gate.user.uint_val |= 1ull << 63;
@@ -184,12 +182,8 @@ static void set_mpc_protocol(simple_circuitt& circuit, MPCProtocol boolean_proto
     // Assume that single bit inputs are boolean
     if (input.get_width() == 1) {
       set_protocol(input, boolean_protocol);
-      // std::cerr << fmt::format("set protocol of input gate {} to {}\n", (void*)&input,
-      //                          ToString(boolean_protocol));
     } else {
       set_protocol(input, arithmetic_protocol);
-      // std::cerr << fmt::format("set protocol of input gate {} to {}\n", (void*)&input,
-      //                          ToString(arithmetic_protocol));
     }
   }
 
@@ -242,9 +236,10 @@ static std::size_t get_arithmetic_bit_size(
 }
 
 simple_circuitt& HyCCAdapter::HyCCAdapterImpl::load_circuit_files() {
-  std::cerr << "start loading circuit files\n";
   for (const auto& filename : circuit_files_) {
-    std::cerr << fmt::format("loading circuit file '{}'\n", filename);
+    if (logger_) {
+      logger_->LogDebug(fmt::format("loading circuit file '{}'", filename));
+    }
     const auto protocol = get_protocol_from_filename(filename);
     const auto file_path = circuit_directory_ / filename;
     simple_circuitt cbmc_circuit(cbmc_logger_, "");
@@ -269,22 +264,15 @@ simple_circuitt& HyCCAdapter::HyCCAdapterImpl::load_circuit_files() {
     throw hycc_error(fmt::format("Couldn't find main circuit '{}'", main_name));
   }
   auto& main_circuit = it->second;
-  std::cerr << "linking circuits ...";
   main_circuit.link(cbmc_circuits_);
-  std::cerr << " done\n";
   return main_circuit;
 }
 
 void HyCCAdapter::HyCCAdapterImpl::process_circuit_inputs(const simple_circuitt& circuit) {
-  std::cerr << "processing circuit inputs\n";
   for (const auto* input_var : circuit.ordered_inputs()) {
     const auto& label = input_var->name;
     const auto input_owner = static_cast<std::size_t>(input_var->owner);
     auto& gates = input_var->gates;
-    // std::cerr << "processing input:\n";
-    // std::cerr << fmt::format("- label = {}\n", label);
-    // std::cerr << fmt::format("- owner = {}\n", input_owner);
-    // std::cerr << fmt::format("- gates: {}\n", gates.size());
     // - assume all gates have the same width: 1 (Boolean) or 8/16/32/64 (arithmetic)
     // - assume all gates have protocol
     // TODO
@@ -292,9 +280,6 @@ void HyCCAdapter::HyCCAdapterImpl::process_circuit_inputs(const simple_circuitt&
     // - create single/multiple input gates (Boolean/arithmetic), split wires
     const auto num_gates = gates.size();
     for (std::size_t i = 0; i < num_gates; ++i) {
-      // std::cerr << fmt::format("  + gate {} of width {}\n", (void*)gates[i], gates[i]->get_width());
-      // std::cerr << fmt::format("    assigned protocol: {}\n",
-      //                          ToString(get_protocol_from_gate(*gates[i])));
       create_input_gate(input_owner, label, i, gates[i]);
     }
   }
@@ -303,7 +288,6 @@ void HyCCAdapter::HyCCAdapterImpl::process_circuit_inputs(const simple_circuitt&
 void HyCCAdapter::HyCCAdapterImpl::create_input_gate(std::size_t input_owner,
                                                      const std::string& label, std::size_t index,
                                                      simple_circuitt::gatet* gate) {
-  // std::cerr << fmt::format("creating input gate {} ...", (const void*)gate);
   const auto protocol = get_protocol_from_gate(*gate);
   const auto input_label = fmt::format("{}-{}", label, index);
   const auto my_input = input_owner == my_id_;
@@ -382,19 +366,13 @@ void HyCCAdapter::HyCCAdapterImpl::create_input_gate(std::size_t input_owner,
   }
   store_wires(primary_output(const_cast<simple_circuitt::gatet*>(gate)), protocol,
               std::move(wires));
-  // std::cerr << " done\n";
 }
 
 void HyCCAdapter::HyCCAdapterImpl::process_circuit_outputs(const simple_circuitt& circuit) {
-  std::cerr << "processing circuit outputs\n";
   for (const auto* input_var : circuit.ordered_outputs()) {
     const auto& label = input_var->name;
     const std::size_t output_owner = 1;  // assume P_1 gets the output
     auto& gates = input_var->gates;
-    // std::cerr << "processing output:\n";
-    // std::cerr << fmt::format("- label = {}\n", label);
-    // std::cerr << fmt::format("- owner = {}\n", output_owner);
-    // std::cerr << fmt::format("- gates: {}\n", gates.size());
     // - assume all gates have the same width: 1 (Boolean) or 8/16/32/64 (arithmetic)
     // - assume all gates have protocol
     // TODO
@@ -402,9 +380,6 @@ void HyCCAdapter::HyCCAdapterImpl::process_circuit_outputs(const simple_circuitt
     // - create single/multiple input gates (Boolean/arithmetic), split wires
     const auto num_gates = gates.size();
     for (std::size_t i = 0; i < num_gates; ++i) {
-      // std::cerr << fmt::format("  + gate {} of width {}\n", (void*)gates[i], gates[i]->get_width());
-      // std::cerr << fmt::format("    assigned protocol: {}\n",
-      //                          ToString(get_protocol_from_gate(*gates[i])));
       create_output_gate(output_owner, label, i, gates[i]);
     }
   }
@@ -413,7 +388,6 @@ void HyCCAdapter::HyCCAdapterImpl::process_circuit_outputs(const simple_circuitt
 void HyCCAdapter::HyCCAdapterImpl::create_output_gate(std::size_t output_owner,
                                                       const std::string& label, std::size_t index,
                                                       const simple_circuitt::gatet* gate) {
-  // std::cerr << fmt::format("creating output gate {} ...", (const void*)gate);
   if (gate->num_fanins() != 1) {
     throw hycc_error(fmt::format("unexpected number of inputs: {}", gate->num_fanins()));
   }
@@ -478,7 +452,6 @@ void HyCCAdapter::HyCCAdapterImpl::create_output_gate(std::size_t output_owner,
   } else {
     throw hycc_error(fmt::format("unexpected protocol {}", protocol));
   }
-  // std::cerr << " done\n";
 }
 
 const WireVector& HyCCAdapter::HyCCAdapterImpl::get_or_create_wires(
@@ -719,9 +692,7 @@ void HyCCAdapter::HyCCAdapterImpl::topological_traversal(simple_circuitt& main_c
         throw hycc_error("HyCC operation LUT is not supported");
     }
   };
-  std::cerr << "run topological_traversal ...";
   main_circuit.topological_traversal(visitor);
-  std::cerr << " done\n";
 }
 
 HyCCAdapter::HyCCAdapter(std::size_t my_id, CircuitBuilder& circuit_builder,
@@ -741,7 +712,9 @@ HyCCAdapter::HyCCAdapter(std::size_t my_id, CircuitBuilder& circuit_builder,
 HyCCAdapter::~HyCCAdapter() = default;
 
 void HyCCAdapter::load_circuit(const std::string& file_path) {
-  std::cerr << fmt::format("loading HyCC circuit '{}'\n", file_path);
+  if (impl_->logger_) {
+    impl_->logger_->LogDebug(fmt::format("loading HyCC circuit '{}'", file_path));
+  }
   std::ifstream file(file_path);
   if (!file.is_open() || !file.good()) {
     throw hycc_error(fmt::format("could not open file: '{}'", file_path));
