@@ -127,6 +127,8 @@ void NewGateExecutor::evaluate_setup_online_single_threaded(Statistics::RunTimeS
 
   preprocessing_fctn_();
 
+  std::vector<boost::fibers::fiber> fibers;
+
   if (logger_) {
     logger_->LogInfo(
         "Start evaluating the circuit gates sequentially (online after all finished setup) "
@@ -139,7 +141,7 @@ void NewGateExecutor::evaluate_setup_online_single_threaded(Statistics::RunTimeS
   // evaluate the setup phase of all the gates
   for (auto& gate : register_.get_gates()) {
     if (gate->need_setup()) {
-      boost::fibers::fiber(boost::fibers::launch::dispatch, [&] {
+      fibers.emplace_back(boost::fibers::launch::dispatch, [&] {
         gate->evaluate_setup();
         register_.increment_gate_setup_counter();
       });
@@ -148,6 +150,9 @@ void NewGateExecutor::evaluate_setup_online_single_threaded(Statistics::RunTimeS
   register_.wait_setup();
 
   stats.record_end<Statistics::RunTimeStats::StatID::gates_setup>();
+
+  std::for_each(std::begin(fibers), std::end(fibers), [](auto& f) { f.join(); });
+  fibers.clear();
 
   if (sync_between_setup_and_online_) {
     sync_fctn_();
@@ -163,7 +168,7 @@ void NewGateExecutor::evaluate_setup_online_single_threaded(Statistics::RunTimeS
   // evaluate the online phase of all the gates
   for (auto& gate : register_.get_gates()) {
     if (gate->need_online()) {
-      boost::fibers::fiber(boost::fibers::launch::dispatch, [&] {
+      fibers.emplace_back(boost::fibers::launch::dispatch, [&] {
         gate->evaluate_online();
         register_.increment_gate_online_counter();
       });
@@ -175,11 +180,13 @@ void NewGateExecutor::evaluate_setup_online_single_threaded(Statistics::RunTimeS
 
   // --------------------------------------------------------------------------
 
+  stats.record_end<Statistics::RunTimeStats::StatID::evaluate>();
+
   if (logger_) {
     logger_->LogInfo("Finished with the online phase of the circuit gates (single-threaded)");
   }
 
-  stats.record_end<Statistics::RunTimeStats::StatID::evaluate>();
+  std::for_each(std::begin(fibers), std::end(fibers), [](auto& f) { f.join(); });
 }
 
 void NewGateExecutor::evaluate(Statistics::RunTimeStats&) {
