@@ -936,7 +936,7 @@ TYPED_TEST(YaoArithmeticBEAVYTensorTest, ReLUInBooleanBEAVY) {
   }
 }
 
-TYPED_TEST(YaoArithmeticBEAVYTensorTest, ReLUInBooleanXArithmeticBEAVY) {
+TYPED_TEST(YaoArithmeticBEAVYTensorTest, DISABLED_ReLUInBooleanXArithmeticBEAVY) {
   MOTION::tensor::TensorDimensions dims = {
       .batch_size_ = 1, .num_channels_ = 1, .height_ = 28, .width_ = 28};
   const auto input = this->generate_inputs(dims);
