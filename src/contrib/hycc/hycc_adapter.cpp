@@ -655,10 +655,14 @@ void HyCCAdapter::HyCCAdapterImpl::visit_binary_gate(simple_circuitt::gatet* gat
       output = circuit_builder_.make_binary_gate(ENCRYPTO::PrimitiveOperationType::XOR, input_a,
                                                  input_b);
       break;
-    case simple_circuitt::OR:
-      output =
-          circuit_builder_.make_binary_gate(ENCRYPTO::PrimitiveOperationType::OR, input_a, input_b);
+    case simple_circuitt::OR: {
+      auto tmp1 = circuit_builder_.make_unary_gate(ENCRYPTO::PrimitiveOperationType::INV, input_a);
+      auto tmp2 = circuit_builder_.make_unary_gate(ENCRYPTO::PrimitiveOperationType::INV, input_b);
+      auto tmp3 =
+          circuit_builder_.make_binary_gate(ENCRYPTO::PrimitiveOperationType::AND, tmp1, tmp2);
+      output = circuit_builder_.make_unary_gate(ENCRYPTO::PrimitiveOperationType::INV, tmp3);
       break;
+    }
     case simple_circuitt::ADD:
       output = circuit_builder_.make_binary_gate(ENCRYPTO::PrimitiveOperationType::ADD, input_a,
                                                  input_b);
