@@ -74,7 +74,7 @@ std::optional<Options> parse_program_options(int argc, char* argv[]) {
     ("protocol", po::value<std::string>()->required(), "2PC protocol (Yao, GMW or BEAVY)")
     ("repetitions", po::value<std::size_t>()->default_value(1), "number of repetitions")
     ("num-simd", po::value<std::size_t>()->default_value(1), "number of SIMD values")
-    ("sync-between-setup-and-online", po::value<bool>()->default_value(false),
+    ("sync-between-setup-and-online", po::bool_switch()->default_value(false),
      "run a synchronization protocol before the online phase starts")
     ("no-run", po::bool_switch()->default_value(false), "just build the circuit, but not execute it")
     ("circuit", po::value<std::string>()->required(), "path to a circuit file in the Bristol format")

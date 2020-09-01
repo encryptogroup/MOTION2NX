@@ -79,7 +79,7 @@ std::optional<Options> parse_program_options(int argc, char* argv[]) {
     ("boolean-protocol", po::value<std::string>()->required(), "2PC protocol (GMW or BEAVY)")
     ("repetitions", po::value<std::size_t>()->default_value(1), "number of repetitions")
     ("num-simd", po::value<std::size_t>()->default_value(1), "size of SIMD operations")
-    ("sync-between-setup-and-online", po::value<bool>()->default_value(false),
+    ("sync-between-setup-and-online", po::bool_switch()->default_value(false),
      "run a synchronization protocol before the online phase starts")
     ("no-run", po::bool_switch()->default_value(false),
      "just build the network, but not execute it")
