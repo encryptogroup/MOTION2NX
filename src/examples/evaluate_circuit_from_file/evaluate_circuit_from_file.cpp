@@ -225,6 +225,7 @@ void print_stats(const Options& options,
     auto obj = MOTION::Statistics::to_json(filename, run_time_stats, comm_stats);
     obj.emplace("party_id", options.my_id);
     obj.emplace("protocol", MOTION::ToString(options.protocol));
+    obj.emplace("threads", options.threads);
     obj.emplace("sync_between_setup_and_online", options.sync_between_setup_and_online);
     obj.emplace("circuit_path", options.circuit_path);
     obj.emplace("fashion", options.fashion);

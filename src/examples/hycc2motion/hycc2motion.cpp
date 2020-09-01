@@ -262,6 +262,7 @@ void print_stats(const Options& options,
     obj.emplace("party_id", options.my_id);
     obj.emplace("boolean_protocol", MOTION::ToString(options.boolean_protocol));
     obj.emplace("arithmetic_protocol", MOTION::ToString(options.arithmetic_protocol));
+    obj.emplace("threads", options.threads);
     obj.emplace("sync_between_setup_and_online", options.sync_between_setup_and_online);
     obj.emplace("circuit_path", options.circuit_path);
     std::cout << boost::json::to_string(obj) << "\n";
