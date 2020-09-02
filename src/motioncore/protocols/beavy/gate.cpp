@@ -260,9 +260,11 @@ BooleanBEAVYOutputGate::BooleanBEAVYOutputGate(std::size_t gate_id, BEAVYProvide
       output_owner_(output_owner),
       inputs_(std::move(inputs)) {
   std::size_t my_id = beavy_provider_.get_my_id();
+  auto num_bits = count_bits(inputs_);
   if (output_owner_ == ALL_PARTIES || output_owner_ == my_id) {
-    share_futures_ = beavy_provider_.register_for_bits_messages(gate_id_, count_bits(inputs_));
+    share_futures_ = beavy_provider_.register_for_bits_messages(gate_id_, num_bits);
   }
+  my_secret_share_.Reserve(Helpers::Convert::BitsToBytes(num_bits));
 }
 
 ENCRYPTO::ReusableFiberFuture<std::vector<ENCRYPTO::BitVector<>>>
@@ -272,6 +274,37 @@ BooleanBEAVYOutputGate::get_output_future() {
     return output_promise_.get_future();
   } else {
     throw std::logic_error("not this parties output");
+  }
+}
+
+void BooleanBEAVYOutputGate::evaluate_setup() {
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = beavy_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(
+          fmt::format("Gate {}: BooleanBEAVYOutputGate::evaluate_setup start", gate_id_));
+    }
+  }
+
+  for (const auto& wire : inputs_) {
+    wire->wait_setup();
+    my_secret_share_.Append(wire->get_secret_share());
+  }
+  std::size_t my_id = beavy_provider_.get_my_id();
+  if (output_owner_ != my_id) {
+    if (output_owner_ == ALL_PARTIES) {
+      beavy_provider_.broadcast_bits_message(gate_id_, my_secret_share_);
+    } else {
+      beavy_provider_.send_bits_message(output_owner_, gate_id_, my_secret_share_);
+    }
+  }
+
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = beavy_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(
+          fmt::format("Gate {}: BooleanBEAVYOutputGate::evaluate_setup end", gate_id_));
+    }
   }
 }
 
@@ -285,20 +318,6 @@ void BooleanBEAVYOutputGate::evaluate_online() {
   }
 
   std::size_t my_id = beavy_provider_.get_my_id();
-  // TODO: move sending secret share to setup phase
-  ENCRYPTO::BitVector<> my_secret_share;
-  // auto num_bits = count_bits(inputs_);  // TODO: reserve
-  for (const auto& wire : inputs_) {
-    // wire->wait_setup();  // XXX: only necessary if setup/online phases are interleaved
-    my_secret_share.Append(wire->get_secret_share());
-  }
-  if (output_owner_ != my_id) {
-    if (output_owner_ == ALL_PARTIES) {
-      beavy_provider_.broadcast_bits_message(gate_id_, my_secret_share);
-    } else {
-      beavy_provider_.send_bits_message(output_owner_, gate_id_, my_secret_share);
-    }
-  }
   if (output_owner_ == ALL_PARTIES || output_owner_ == my_id) {
     std::size_t num_parties = beavy_provider_.get_num_parties();
     for (std::size_t party_id = 0; party_id < num_parties; ++party_id) {
@@ -306,7 +325,7 @@ void BooleanBEAVYOutputGate::evaluate_online() {
         continue;
       }
       const auto other_share = share_futures_[party_id].get();
-      my_secret_share ^= other_share;
+      my_secret_share_ ^= other_share;
     }
     std::vector<ENCRYPTO::BitVector<>> outputs;
     outputs.reserve(num_wires_);
@@ -314,7 +333,7 @@ void BooleanBEAVYOutputGate::evaluate_online() {
     for (std::size_t wire_i = 0; wire_i < num_wires_; ++wire_i) {
       auto num_simd = inputs_[wire_i]->get_num_simd();
       auto& output =
-          outputs.emplace_back(my_secret_share.Subset(bit_offset, bit_offset + num_simd));
+          outputs.emplace_back(my_secret_share_.Subset(bit_offset, bit_offset + num_simd));
       inputs_[wire_i]->wait_online();
       output ^= inputs_[wire_i]->get_public_share();
       bit_offset += num_simd;
@@ -677,7 +696,32 @@ ENCRYPTO::ReusableFiberFuture<std::vector<T>> ArithmeticBEAVYOutputGate<T>::get_
 
 template <typename T>
 void ArithmeticBEAVYOutputGate<T>::evaluate_setup() {
-  // nothing to do
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = beavy_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(
+          fmt::format("Gate {}: ArithmeticBEAVYOutputGate<T>::evaluate_setup start", gate_id_));
+    }
+  }
+
+  std::size_t my_id = beavy_provider_.get_my_id();
+  if (output_owner_ != my_id) {
+    input_->wait_setup();
+    auto my_secret_share = input_->get_secret_share();
+    if (output_owner_ == ALL_PARTIES) {
+      beavy_provider_.broadcast_ints_message(gate_id_, my_secret_share);
+    } else {
+      beavy_provider_.send_ints_message(output_owner_, gate_id_, my_secret_share);
+    }
+  }
+
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = beavy_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(
+          fmt::format("Gate {}: ArithmeticBEAVYOutputGate<T>::evaluate_setup end", gate_id_));
+    }
+  }
 }
 
 template <typename T>
@@ -691,17 +735,9 @@ void ArithmeticBEAVYOutputGate<T>::evaluate_online() {
   }
 
   std::size_t my_id = beavy_provider_.get_my_id();
-  // TODO: move sending secret share to setup phase
-  input_->wait_setup();
-  auto my_secret_share = input_->get_secret_share();
-  if (output_owner_ != my_id) {
-    if (output_owner_ == ALL_PARTIES) {
-      beavy_provider_.broadcast_ints_message(gate_id_, my_secret_share);
-    } else {
-      beavy_provider_.send_ints_message(output_owner_, gate_id_, my_secret_share);
-    }
-  }
   if (output_owner_ == ALL_PARTIES || output_owner_ == my_id) {
+    input_->wait_setup();
+    auto my_secret_share = input_->get_secret_share();
     const auto other_secret_share = share_future_.get();
     std::transform(std::begin(my_secret_share), std::end(my_secret_share),
                    std::begin(other_secret_share), std::begin(my_secret_share), std::plus{});

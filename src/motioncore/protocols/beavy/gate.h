@@ -121,9 +121,9 @@ class BooleanBEAVYOutputGate : public NewGate {
   BooleanBEAVYOutputGate(std::size_t gate_id, BEAVYProvider&, BooleanBEAVYWireVector&&,
                          std::size_t output_owner);
   ENCRYPTO::ReusableFiberFuture<std::vector<ENCRYPTO::BitVector<>>> get_output_future();
-  bool need_setup() const noexcept override { return false; }
+  bool need_setup() const noexcept override { return true; }
   bool need_online() const noexcept override { return true; }
-  void evaluate_setup() override {}
+  void evaluate_setup() override;
   void evaluate_online() override;
 
  private:
@@ -133,6 +133,7 @@ class BooleanBEAVYOutputGate : public NewGate {
   ENCRYPTO::ReusableFiberPromise<std::vector<ENCRYPTO::BitVector<>>> output_promise_;
   std::vector<ENCRYPTO::ReusableFiberFuture<ENCRYPTO::BitVector<>>> share_futures_;
   const BooleanBEAVYWireVector inputs_;
+  ENCRYPTO::BitVector<> my_secret_share_;
 };
 
 class BooleanBEAVYINVGate : public detail::BasicBooleanBEAVYUnaryGate {
