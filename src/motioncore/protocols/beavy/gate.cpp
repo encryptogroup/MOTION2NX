@@ -289,6 +289,7 @@ void BooleanBEAVYOutputGate::evaluate_online() {
   ENCRYPTO::BitVector<> my_secret_share;
   // auto num_bits = count_bits(inputs_);  // TODO: reserve
   for (const auto& wire : inputs_) {
+    // wire->wait_setup();  // XXX: only necessary if setup/online phases are interleaved
     my_secret_share.Append(wire->get_secret_share());
   }
   if (output_owner_ != my_id) {
@@ -691,6 +692,7 @@ void ArithmeticBEAVYOutputGate<T>::evaluate_online() {
 
   std::size_t my_id = beavy_provider_.get_my_id();
   // TODO: move sending secret share to setup phase
+  input_->wait_setup();
   auto my_secret_share = input_->get_secret_share();
   if (output_owner_ != my_id) {
     if (output_owner_ == ALL_PARTIES) {
@@ -902,6 +904,8 @@ void ArithmeticBEAVYMULGate<T>::evaluate_setup() {
   this->output_->get_secret_share() = Helpers::RandomVector<T>(num_simd);
   this->output_->set_setup_ready();
 
+  this->input_a_->wait_setup();
+  this->input_b_->wait_setup();
   const auto& delta_a_share = this->input_a_->get_secret_share();
   const auto& delta_b_share = this->input_b_->get_secret_share();
   const auto& delta_y_share = this->output_->get_secret_share();
