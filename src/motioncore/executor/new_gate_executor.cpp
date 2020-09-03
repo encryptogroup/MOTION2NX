@@ -22,6 +22,7 @@
 
 #include "new_gate_executor.h"
 
+#include <boost/fiber/future/async.hpp>
 #include <boost/fiber/policy.hpp>
 #include <iostream>
 
@@ -29,6 +30,7 @@
 #include "gate/new_gate.h"
 #include "statistics/run_time_stats.h"
 #include "utility/fiber_thread_pool/fiber_thread_pool.hpp"
+#include "utility/synchronized_queue.h"
 #include "utility/logger.h"
 
 namespace MOTION {
@@ -127,7 +129,12 @@ void NewGateExecutor::evaluate_setup_online_single_threaded(Statistics::RunTimeS
 
   preprocessing_fctn_();
 
-  std::vector<boost::fibers::fiber> fibers;
+  ENCRYPTO::SynchronizedFiberQueue<boost::fibers::fiber> cleanup_channel;
+  auto cleanup_fut = boost::fibers::async([&cleanup_channel] {
+    while (auto f = cleanup_channel.dequeue()) {
+      f->join();
+    }
+  });
 
   if (logger_) {
     logger_->LogInfo(
@@ -141,18 +148,15 @@ void NewGateExecutor::evaluate_setup_online_single_threaded(Statistics::RunTimeS
   // evaluate the setup phase of all the gates
   for (auto& gate : register_.get_gates()) {
     if (gate->need_setup()) {
-      fibers.emplace_back(boost::fibers::launch::dispatch, [&] {
+      cleanup_channel.enqueue(boost::fibers::fiber(boost::fibers::launch::dispatch, [&] {
         gate->evaluate_setup();
         register_.increment_gate_setup_counter();
-      });
+      }));
     }
   }
   register_.wait_setup();
 
   stats.record_end<Statistics::RunTimeStats::StatID::gates_setup>();
-
-  std::for_each(std::begin(fibers), std::end(fibers), [](auto& f) { f.join(); });
-  fibers.clear();
 
   if (sync_between_setup_and_online_) {
     sync_fctn_();
@@ -168,10 +172,10 @@ void NewGateExecutor::evaluate_setup_online_single_threaded(Statistics::RunTimeS
   // evaluate the online phase of all the gates
   for (auto& gate : register_.get_gates()) {
     if (gate->need_online()) {
-      fibers.emplace_back(boost::fibers::launch::dispatch, [&] {
+      cleanup_channel.enqueue(boost::fibers::fiber(boost::fibers::launch::dispatch, [&] {
         gate->evaluate_online();
         register_.increment_gate_online_counter();
-      });
+      }));
     }
   }
   register_.wait_online();
@@ -186,7 +190,8 @@ void NewGateExecutor::evaluate_setup_online_single_threaded(Statistics::RunTimeS
     logger_->LogInfo("Finished with the online phase of the circuit gates (single-threaded)");
   }
 
-  std::for_each(std::begin(fibers), std::end(fibers), [](auto& f) { f.join(); });
+  cleanup_channel.close();
+  cleanup_fut.get();
 }
 
 void NewGateExecutor::evaluate(Statistics::RunTimeStats&) {
