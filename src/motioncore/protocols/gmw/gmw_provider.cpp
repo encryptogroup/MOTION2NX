@@ -702,7 +702,8 @@ tensor::TensorCP GMWProvider::make_tensor_flatten_op(const tensor::TensorCP inpu
 tensor::TensorCP GMWProvider::make_tensor_conv2d_op(const tensor::Conv2DOp& conv_op,
                                                     const tensor::TensorCP input,
                                                     const tensor::TensorCP kernel,
-                                                    const tensor::TensorCP bias) {
+                                                    const tensor::TensorCP bias,
+                                                    std::size_t fractional_bits) {
   if (!conv_op.verify()) {
     throw std::invalid_argument("invalid Conv2dOp");
   }
@@ -727,7 +728,8 @@ tensor::TensorCP GMWProvider::make_tensor_conv2d_op(const tensor::Conv2DOp& conv
   std::unique_ptr<NewGate> gate;
   auto gate_id = gate_register_.get_next_gate_id();
   tensor::TensorCP output;
-  const auto make_conv_op = [this, input, conv_op, kernel, bias, gate_id, &output](auto dummy_arg) {
+  const auto make_conv_op = [this, input, conv_op, kernel, bias, fractional_bits, gate_id,
+                             &output](auto dummy_arg) {
     using T = decltype(dummy_arg);
     auto input_ptr = std::dynamic_pointer_cast<const ArithmeticGMWTensor<T>>(input);
     auto kernel_ptr = std::dynamic_pointer_cast<const ArithmeticGMWTensor<T>>(kernel);
@@ -737,7 +739,7 @@ tensor::TensorCP GMWProvider::make_tensor_conv2d_op(const tensor::Conv2DOp& conv
       assert(bias_ptr);
     }
     auto tensor_op = std::make_unique<ArithmeticGMWTensorConv2D<T>>(
-        gate_id, *this, conv_op, input_ptr, kernel_ptr, bias_ptr);
+        gate_id, *this, conv_op, input_ptr, kernel_ptr, bias_ptr, fractional_bits);
     output = tensor_op->get_output_tensor();
     return tensor_op;
   };
@@ -754,7 +756,8 @@ tensor::TensorCP GMWProvider::make_tensor_conv2d_op(const tensor::Conv2DOp& conv
 
 tensor::TensorCP GMWProvider::make_tensor_gemm_op(const tensor::GemmOp& gemm_op,
                                                   const tensor::TensorCP input_A,
-                                                  const tensor::TensorCP input_B) {
+                                                  const tensor::TensorCP input_B,
+                                                  std::size_t fractional_bits) {
   if (!gemm_op.verify()) {
     throw std::invalid_argument("invalid GemmOp");
   }
@@ -771,11 +774,12 @@ tensor::TensorCP GMWProvider::make_tensor_gemm_op(const tensor::GemmOp& gemm_op,
   std::unique_ptr<NewGate> gate;
   auto gate_id = gate_register_.get_next_gate_id();
   tensor::TensorCP output;
-  const auto make_op = [this, input_A, gemm_op, input_B, gate_id, &output](auto dummy_arg) {
+  const auto make_op = [this, input_A, gemm_op, input_B, fractional_bits, gate_id,
+                        &output](auto dummy_arg) {
     using T = decltype(dummy_arg);
     auto tensor_op = std::make_unique<ArithmeticGMWTensorGemm<T>>(
         gate_id, *this, gemm_op, std::dynamic_pointer_cast<const ArithmeticGMWTensor<T>>(input_A),
-        std::dynamic_pointer_cast<const ArithmeticGMWTensor<T>>(input_B));
+        std::dynamic_pointer_cast<const ArithmeticGMWTensor<T>>(input_B), fractional_bits);
     output = tensor_op->get_output_tensor();
     return tensor_op;
   };
@@ -790,15 +794,17 @@ tensor::TensorCP GMWProvider::make_tensor_gemm_op(const tensor::GemmOp& gemm_op,
   return output;
 }
 
-tensor::TensorCP GMWProvider::make_tensor_sqr_op(const tensor::TensorCP input) {
+tensor::TensorCP GMWProvider::make_tensor_sqr_op(const tensor::TensorCP input,
+                                                 std::size_t fractional_bits) {
   auto bit_size = input->get_bit_size();
   std::unique_ptr<NewGate> gate;
   auto gate_id = gate_register_.get_next_gate_id();
   tensor::TensorCP output;
-  const auto make_op = [this, input, gate_id, &output](auto dummy_arg) {
+  const auto make_op = [this, input, fractional_bits, gate_id, &output](auto dummy_arg) {
     using T = decltype(dummy_arg);
     auto tensor_op = std::make_unique<ArithmeticGMWTensorSqr<T>>(
-        gate_id, *this, std::dynamic_pointer_cast<const ArithmeticGMWTensor<T>>(input));
+        gate_id, *this, std::dynamic_pointer_cast<const ArithmeticGMWTensor<T>>(input),
+        fractional_bits);
     output = tensor_op->get_output_tensor();
     return tensor_op;
   };

@@ -141,9 +141,9 @@ template <typename T>
 class ArithmeticBEAVYTensorConv2D : public NewGate {
  public:
   ArithmeticBEAVYTensorConv2D(std::size_t gate_id, BEAVYProvider&, tensor::Conv2DOp,
-                            const ArithmeticBEAVYTensorCP<T> input,
-                            const ArithmeticBEAVYTensorCP<T> kernel,
-                            const ArithmeticBEAVYTensorCP<T> bias);
+                              const ArithmeticBEAVYTensorCP<T> input,
+                              const ArithmeticBEAVYTensorCP<T> kernel,
+                              const ArithmeticBEAVYTensorCP<T> bias, std::size_t fractional_bits);
   ~ArithmeticBEAVYTensorConv2D();
   bool need_setup() const noexcept override { return true; }
   bool need_online() const noexcept override { return true; }
@@ -154,6 +154,7 @@ class ArithmeticBEAVYTensorConv2D : public NewGate {
  private:
   BEAVYProvider& beavy_provider_;
   tensor::Conv2DOp conv_op_;
+  std::size_t fractional_bits_;
   const ArithmeticBEAVYTensorCP<T> input_;
   const ArithmeticBEAVYTensorCP<T> kernel_;
   const ArithmeticBEAVYTensorCP<T> bias_;
@@ -168,8 +169,8 @@ template <typename T>
 class ArithmeticBEAVYTensorGemm : public NewGate {
  public:
   ArithmeticBEAVYTensorGemm(std::size_t gate_id, BEAVYProvider&, tensor::GemmOp,
-                          const ArithmeticBEAVYTensorCP<T> input_A,
-                          const ArithmeticBEAVYTensorCP<T> input_B);
+                            const ArithmeticBEAVYTensorCP<T> input_A,
+                            const ArithmeticBEAVYTensorCP<T> input_B, std::size_t fractional_bits);
   ~ArithmeticBEAVYTensorGemm();
   bool need_setup() const noexcept override { return true; }
   bool need_online() const noexcept override { return true; }
@@ -180,6 +181,7 @@ class ArithmeticBEAVYTensorGemm : public NewGate {
  private:
   BEAVYProvider& beavy_provider_;
   tensor::GemmOp gemm_op_;
+  std::size_t fractional_bits_;
   const ArithmeticBEAVYTensorCP<T> input_A_;
   const ArithmeticBEAVYTensorCP<T> input_B_;
   std::shared_ptr<ArithmeticBEAVYTensor<T>> output_;
@@ -194,7 +196,7 @@ class ArithmeticBEAVYTensorMul : public NewGate {
  public:
   ArithmeticBEAVYTensorMul(std::size_t gate_id, BEAVYProvider&,
                            const ArithmeticBEAVYTensorCP<T> input_A,
-                           const ArithmeticBEAVYTensorCP<T> input_B);
+                           const ArithmeticBEAVYTensorCP<T> input_B, std::size_t fractional_bits);
   ~ArithmeticBEAVYTensorMul();
   bool need_setup() const noexcept override { return true; }
   bool need_online() const noexcept override { return true; }
@@ -204,6 +206,7 @@ class ArithmeticBEAVYTensorMul : public NewGate {
 
  private:
   BEAVYProvider& beavy_provider_;
+  std::size_t fractional_bits_;
   const ArithmeticBEAVYTensorCP<T> input_A_;
   const ArithmeticBEAVYTensorCP<T> input_B_;
   std::shared_ptr<ArithmeticBEAVYTensor<T>> output_;

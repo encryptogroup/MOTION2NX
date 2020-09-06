@@ -33,6 +33,7 @@
 #include "crypto/oblivious_transfer/ot_provider.h"
 #include "crypto/sharing_randomness_generator.h"
 #include "utility/constants.h"
+#include "utility/fixed_point.h"
 #include "utility/linear_algebra.h"
 #include "utility/logger.h"
 
@@ -332,15 +333,14 @@ void ArithmeticBEAVYTensorFlatten<T>::evaluate_online() {
 template class ArithmeticBEAVYTensorFlatten<std::uint64_t>;
 
 template <typename T>
-ArithmeticBEAVYTensorConv2D<T>::ArithmeticBEAVYTensorConv2D(std::size_t gate_id,
-                                                            BEAVYProvider& beavy_provider,
-                                                            tensor::Conv2DOp conv_op,
-                                                            const ArithmeticBEAVYTensorCP<T> input,
-                                                            const ArithmeticBEAVYTensorCP<T> kernel,
-                                                            const ArithmeticBEAVYTensorCP<T> bias)
+ArithmeticBEAVYTensorConv2D<T>::ArithmeticBEAVYTensorConv2D(
+    std::size_t gate_id, BEAVYProvider& beavy_provider, tensor::Conv2DOp conv_op,
+    const ArithmeticBEAVYTensorCP<T> input, const ArithmeticBEAVYTensorCP<T> kernel,
+    const ArithmeticBEAVYTensorCP<T> bias, std::size_t fractional_bits)
     : NewGate(gate_id),
       beavy_provider_(beavy_provider),
       conv_op_(conv_op),
+      fractional_bits_(fractional_bits),
       input_(input),
       kernel_(kernel),
       bias_(bias),
@@ -384,9 +384,13 @@ void ArithmeticBEAVYTensorConv2D<T>::evaluate_setup() {
 
   // [Delta_y]_i = [delta_a]_i * [delta_b]_i
   convolution(conv_op_, delta_a_share.data(), delta_b_share.data(), Delta_y_share_.data());
-  // [Delta_y]_i += [delta_y]_i
-  std::transform(std::begin(Delta_y_share_), std::end(Delta_y_share_), std::begin(delta_y_share),
-                 std::begin(Delta_y_share_), std::plus{});
+
+  if (fractional_bits_ == 0) {
+    // [Delta_y]_i += [delta_y]_i
+    std::transform(std::begin(Delta_y_share_), std::end(Delta_y_share_), std::begin(delta_y_share),
+                   std::begin(Delta_y_share_), std::plus{});
+    // NB: happens after truncation if that is requested
+  }
 
   conv_input_side_->compute_output();
   conv_kernel_side_->compute_output();
@@ -447,6 +451,17 @@ void ArithmeticBEAVYTensorConv2D<T>::evaluate_online() {
     std::transform(std::begin(Delta_y_share_), std::end(Delta_y_share_), std::begin(tmp),
                    std::begin(Delta_y_share_), std::plus{});
   }
+
+  if (fractional_bits_ > 0) {
+    fixed_point::truncate_shared<T>(Delta_y_share_.data(), fractional_bits_, Delta_y_share_.size(),
+                                    beavy_provider_.is_my_job(gate_id_));
+    // [Delta_y]_i += [delta_y]_i
+    std::transform(std::begin(Delta_y_share_), std::end(Delta_y_share_),
+                   std::begin(output_->get_secret_share()), std::begin(Delta_y_share_),
+                   std::plus{});
+    // NB: happens in setup phase if no truncation is requested
+  }
+
   // broadcast [Delta_y]_i
   beavy_provider_.broadcast_ints_message(gate_id_, Delta_y_share_);
   // Delta_y = [Delta_y]_i + [Delta_y]_(1-i)
@@ -471,10 +486,12 @@ ArithmeticBEAVYTensorGemm<T>::ArithmeticBEAVYTensorGemm(std::size_t gate_id,
                                                         BEAVYProvider& beavy_provider,
                                                         tensor::GemmOp gemm_op,
                                                         const ArithmeticBEAVYTensorCP<T> input_A,
-                                                        const ArithmeticBEAVYTensorCP<T> input_B)
+                                                        const ArithmeticBEAVYTensorCP<T> input_B,
+                                                        std::size_t fractional_bits)
     : NewGate(gate_id),
       beavy_provider_(beavy_provider),
       gemm_op_(gemm_op),
+      fractional_bits_(fractional_bits),
       input_A_(input_A),
       input_B_(input_B),
       output_(std::make_shared<ArithmeticBEAVYTensor<T>>(gemm_op.get_output_tensor_dims())) {
@@ -519,11 +536,13 @@ void ArithmeticBEAVYTensorGemm<T>::evaluate_setup() {
   mm_rhs_side_->set_input(delta_b_share);
 
   // [Delta_y]_i = [delta_a]_i * [delta_b]_i
-  matrix_multiply(gemm_op_, delta_a_share.data(), delta_b_share.data(),
-                  Delta_y_share_.data());
-  // [Delta_y]_i += [delta_y]_i
-  std::transform(std::begin(Delta_y_share_), std::end(Delta_y_share_), std::begin(delta_y_share),
-                 std::begin(Delta_y_share_), std::plus{});
+  matrix_multiply(gemm_op_, delta_a_share.data(), delta_b_share.data(), Delta_y_share_.data());
+  if (fractional_bits_ == 0) {
+    // [Delta_y]_i += [delta_y]_i
+    std::transform(std::begin(Delta_y_share_), std::end(Delta_y_share_), std::begin(delta_y_share),
+                   std::begin(Delta_y_share_), std::plus{});
+    // NB: happens after truncation if that is requested
+  }
 
   mm_lhs_side_->compute_output();
   mm_rhs_side_->compute_output();
@@ -584,6 +603,17 @@ void ArithmeticBEAVYTensorGemm<T>::evaluate_online() {
     std::transform(std::begin(Delta_y_share_), std::end(Delta_y_share_), std::begin(tmp),
                    std::begin(Delta_y_share_), std::plus{});
   }
+
+  if (fractional_bits_ > 0) {
+    fixed_point::truncate_shared<T>(Delta_y_share_.data(), fractional_bits_, Delta_y_share_.size(),
+                                    beavy_provider_.is_my_job(gate_id_));
+    // [Delta_y]_i += [delta_y]_i
+    std::transform(std::begin(Delta_y_share_), std::end(Delta_y_share_),
+                   std::begin(output_->get_secret_share()), std::begin(Delta_y_share_),
+                   std::plus{});
+    // NB: happens in setup phase if no truncation is requested
+  }
+
   // broadcast [Delta_y]_i
   beavy_provider_.broadcast_ints_message(gate_id_, Delta_y_share_);
   // Delta_y = [Delta_y]_i + [Delta_y]_(1-i)
@@ -607,9 +637,11 @@ template <typename T>
 ArithmeticBEAVYTensorMul<T>::ArithmeticBEAVYTensorMul(std::size_t gate_id,
                                                       BEAVYProvider& beavy_provider,
                                                       const ArithmeticBEAVYTensorCP<T> input_A,
-                                                      const ArithmeticBEAVYTensorCP<T> input_B)
+                                                      const ArithmeticBEAVYTensorCP<T> input_B,
+                                                      std::size_t fractional_bits)
     : NewGate(gate_id),
       beavy_provider_(beavy_provider),
+      fractional_bits_(fractional_bits),
       input_A_(input_A),
       input_B_(input_B),
       output_(std::make_shared<ArithmeticBEAVYTensor<T>>(input_A_->get_dimensions())) {
@@ -653,9 +685,13 @@ void ArithmeticBEAVYTensorMul<T>::evaluate_setup() {
   // [Delta_y]_i = [delta_a]_i * [delta_b]_i
   std::transform(std::begin(delta_a_share), std::end(delta_a_share), std::begin(delta_b_share),
                  std::begin(Delta_y_share_), std::multiplies{});
-  // [Delta_y]_i += [delta_y]_i
-  std::transform(std::begin(Delta_y_share_), std::end(Delta_y_share_), std::begin(delta_y_share),
-                 std::begin(Delta_y_share_), std::plus{});
+
+  if (fractional_bits_ == 0) {
+    // [Delta_y]_i += [delta_y]_i
+    std::transform(std::begin(Delta_y_share_), std::end(Delta_y_share_), std::begin(delta_y_share),
+                   std::begin(Delta_y_share_), std::plus{});
+    // NB: happens after truncation if that is requested
+  }
 
   mult_receiver_->compute_outputs();
   mult_sender_->compute_outputs();
@@ -719,6 +755,17 @@ void ArithmeticBEAVYTensorMul<T>::evaluate_online() {
     std::transform(std::begin(Delta_y_share_), std::end(Delta_y_share_), std::begin(tmp),
                    std::begin(Delta_y_share_), std::plus{});
   }
+
+  if (fractional_bits_ > 0) {
+    fixed_point::truncate_shared<T>(Delta_y_share_.data(), fractional_bits_, Delta_y_share_.size(),
+                                    beavy_provider_.is_my_job(gate_id_));
+    // [Delta_y]_i += [delta_y]_i
+    std::transform(std::begin(Delta_y_share_), std::end(Delta_y_share_),
+                   std::begin(output_->get_secret_share()), std::begin(Delta_y_share_),
+                   std::plus{});
+    // NB: happens in setup phase if no truncation is requested
+  }
+
   // broadcast [Delta_y]_i
   beavy_provider_.broadcast_ints_message(gate_id_, Delta_y_share_);
   // Delta_y = [Delta_y]_i + [Delta_y]_(1-i)
@@ -1055,8 +1102,8 @@ void BooleanXArithmeticBEAVYTensorRelu<T>::evaluate_setup() {
   if constexpr (MOTION_VERBOSE_DEBUG) {
     auto logger = beavy_provider_.get_logger();
     if (logger) {
-      logger->LogTrace(
-          fmt::format("Gate {}: BooleanXArithmeticBEAVYTensorRelu::evaluate_setup start", gate_id_));
+      logger->LogTrace(fmt::format(
+          "Gate {}: BooleanXArithmeticBEAVYTensorRelu::evaluate_setup start", gate_id_));
     }
   }
 
@@ -1077,8 +1124,8 @@ void BooleanXArithmeticBEAVYTensorRelu<T>::evaluate_online() {
   if constexpr (MOTION_VERBOSE_DEBUG) {
     auto logger = beavy_provider_.get_logger();
     if (logger) {
-      logger->LogTrace(
-          fmt::format("Gate {}: BooleanXArithmeticBEAVYTensorRelu::evaluate_online start", gate_id_));
+      logger->LogTrace(fmt::format(
+          "Gate {}: BooleanXArithmeticBEAVYTensorRelu::evaluate_online start", gate_id_));
     }
   }
 

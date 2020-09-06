@@ -172,13 +172,15 @@ class GMWProvider : public GateFactory,
   tensor::TensorCP make_tensor_flatten_op(const tensor::TensorCP input, std::size_t axis) override;
   tensor::TensorCP make_tensor_conv2d_op(const tensor::Conv2DOp& conv_op,
                                          const tensor::TensorCP input,
-                                         const tensor::TensorCP kernel,
-                                         const tensor::TensorCP bias) override;
+                                         const tensor::TensorCP kernel, const tensor::TensorCP bias,
+                                         std::size_t fractional_bits = 0) override;
   using tensor::TensorOpFactory::make_tensor_conv2d_op;
   tensor::TensorCP make_tensor_gemm_op(const tensor::GemmOp& conv_op,
                                        const tensor::TensorCP input_A,
-                                       const tensor::TensorCP input_B) override;
-  tensor::TensorCP make_tensor_sqr_op(const tensor::TensorCP input) override;
+                                       const tensor::TensorCP input_B,
+                                       std::size_t fractional_bits = 0) override;
+  tensor::TensorCP make_tensor_sqr_op(const tensor::TensorCP input,
+                                      std::size_t fractional_bits = 0) override;
   tensor::TensorCP make_tensor_relu_op(const tensor::TensorCP) override;
   template <typename T>
   tensor::TensorCP basic_make_tensor_relu_op(const tensor::TensorCP, const tensor::TensorCP);

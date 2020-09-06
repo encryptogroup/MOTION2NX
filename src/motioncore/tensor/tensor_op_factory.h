@@ -65,14 +65,18 @@ class TensorOpFactory {
   virtual tensor::TensorCP make_tensor_conv2d_op(const tensor::Conv2DOp& conv_op,
                                                  const tensor::TensorCP input,
                                                  const tensor::TensorCP kernel,
-                                                 const tensor::TensorCP bias);
+                                                 const tensor::TensorCP bias,
+                                                 std::size_t truncate_bits = 0);
   virtual tensor::TensorCP make_tensor_conv2d_op(const tensor::Conv2DOp& conv_op,
                                                  const tensor::TensorCP input,
-                                                 const tensor::TensorCP kernel);
+                                                 const tensor::TensorCP kernel,
+                                                 std::size_t truncate_bits = 0);
   virtual tensor::TensorCP make_tensor_gemm_op(const tensor::GemmOp& gemm_op,
                                                const tensor::TensorCP input_A,
-                                               const tensor::TensorCP input_B);
-  virtual tensor::TensorCP make_tensor_sqr_op(const tensor::TensorCP input);
+                                               const tensor::TensorCP input_B,
+                                               std::size_t truncate_bits = 0);
+  virtual tensor::TensorCP make_tensor_sqr_op(const tensor::TensorCP input,
+                                              std::size_t truncate_bits = 0);
   virtual tensor::TensorCP make_tensor_relu_op(const tensor::TensorCP input);
   virtual tensor::TensorCP make_tensor_relu_op(const tensor::TensorCP input_bool,
                                                const tensor::TensorCP input_arith);

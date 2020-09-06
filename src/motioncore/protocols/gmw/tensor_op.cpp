@@ -26,13 +26,14 @@
 
 #include "crypto/motion_base_provider.h"
 #include "crypto/multiplication_triple/linalg_triple_provider.h"
-#include "crypto/multiplication_triple/sp_provider.h"
 #include "crypto/multiplication_triple/sb_provider.h"
+#include "crypto/multiplication_triple/sp_provider.h"
 #include "crypto/oblivious_transfer/ot_flavors.h"
 #include "crypto/oblivious_transfer/ot_provider.h"
 #include "crypto/sharing_randomness_generator.h"
 #include "gmw_provider.h"
 #include "utility/constants.h"
+#include "utility/fixed_point.h"
 #include "utility/linear_algebra.h"
 #include "utility/logger.h"
 
@@ -241,15 +242,14 @@ void ArithmeticGMWTensorFlatten<T>::evaluate_online() {
 template class ArithmeticGMWTensorFlatten<std::uint64_t>;
 
 template <typename T>
-ArithmeticGMWTensorConv2D<T>::ArithmeticGMWTensorConv2D(std::size_t gate_id,
-                                                        GMWProvider& gmw_provider,
-                                                        tensor::Conv2DOp conv_op,
-                                                        const ArithmeticGMWTensorCP<T> input,
-                                                        const ArithmeticGMWTensorCP<T> kernel,
-                                                        const ArithmeticGMWTensorCP<T> bias)
+ArithmeticGMWTensorConv2D<T>::ArithmeticGMWTensorConv2D(
+    std::size_t gate_id, GMWProvider& gmw_provider, tensor::Conv2DOp conv_op,
+    const ArithmeticGMWTensorCP<T> input, const ArithmeticGMWTensorCP<T> kernel,
+    const ArithmeticGMWTensorCP<T> bias, std::size_t fractional_bits)
     : NewGate(gate_id),
       gmw_provider_(gmw_provider),
       conv_op_(conv_op),
+      fractional_bits_(fractional_bits),
       input_(input),
       kernel_(kernel),
       bias_(bias),
@@ -312,6 +312,10 @@ void ArithmeticGMWTensorConv2D<T>::evaluate_online() {
   convolution(conv_op_, de.data(), kernel_buffer.data(), tmp.data());
   std::transform(std::begin(result), std::end(result), std::begin(tmp), std::begin(result),
                  std::plus{});
+  if (fractional_bits_ > 0) {
+    fixed_point::truncate_shared<T>(result.data(), fractional_bits_, result.size(),
+                                    gmw_provider_.is_my_job(gate_id_));
+  }
   output_->get_share() = std::move(result);
   output_->set_online_ready();
 
@@ -330,10 +334,12 @@ template <typename T>
 ArithmeticGMWTensorGemm<T>::ArithmeticGMWTensorGemm(std::size_t gate_id, GMWProvider& gmw_provider,
                                                     tensor::GemmOp gemm_op,
                                                     const ArithmeticGMWTensorCP<T> input_A,
-                                                    const ArithmeticGMWTensorCP<T> input_B)
+                                                    const ArithmeticGMWTensorCP<T> input_B,
+                                                    std::size_t fractional_bits)
     : NewGate(gate_id),
       gmw_provider_(gmw_provider),
       gemm_op_(gemm_op),
+      fractional_bits_(fractional_bits),
       input_A_(input_A),
       input_B_(input_B),
       output_(std::make_shared<ArithmeticGMWTensor<T>>(gemm_op.get_output_tensor_dims())),
@@ -399,6 +405,10 @@ void ArithmeticGMWTensorGemm<T>::evaluate_online() {
   matrix_multiply(gemm_op_, de.data(), input_B_buffer.data(), tmp.data());
   std::transform(std::begin(result), std::end(result), std::begin(tmp), std::begin(result),
                  std::plus{});
+  if (fractional_bits_ > 0) {
+    fixed_point::truncate_shared<T>(result.data(), fractional_bits_, result.size(),
+                                    gmw_provider_.is_my_job(gate_id_));
+  }
   output_->get_share() = std::move(result);
   output_->set_online_ready();
 
@@ -415,10 +425,12 @@ template class ArithmeticGMWTensorGemm<std::uint64_t>;
 
 template <typename T>
 ArithmeticGMWTensorSqr<T>::ArithmeticGMWTensorSqr(std::size_t gate_id, GMWProvider& gmw_provider,
-                                                  const ArithmeticGMWTensorCP<T> input)
+                                                  const ArithmeticGMWTensorCP<T> input,
+                                                  std::size_t fractional_bits)
     : NewGate(gate_id),
       gmw_provider_(gmw_provider),
       data_size_(input->get_dimensions().get_data_size()),
+      fractional_bits_(fractional_bits),
       input_(input),
       output_(std::make_shared<ArithmeticGMWTensor<T>>(input_->get_dimensions())),
       triple_index_(gmw_provider.get_sp_provider().RequestSPs<T>(data_size_)),
@@ -468,6 +480,10 @@ void ArithmeticGMWTensorSqr<T>::evaluate_online() {
   if (gmw_provider_.is_my_job(gate_id_)) {
     std::transform(std::begin(result), std::end(result), std::begin(d), std::begin(result),
                    [](auto res, auto d) { return res - d * d; });
+  }
+  if (fractional_bits_ > 0) {
+    fixed_point::truncate_shared<T>(result.data(), fractional_bits_, result.size(),
+                                    gmw_provider_.is_my_job(gate_id_));
   }
   output_->get_share() = std::move(result);
   output_->set_online_ready();

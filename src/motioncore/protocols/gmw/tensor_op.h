@@ -122,7 +122,7 @@ class ArithmeticGMWTensorConv2D : public NewGate {
   ArithmeticGMWTensorConv2D(std::size_t gate_id, GMWProvider&, tensor::Conv2DOp,
                             const ArithmeticGMWTensorCP<T> input,
                             const ArithmeticGMWTensorCP<T> kernel,
-                            const ArithmeticGMWTensorCP<T> bias);
+                            const ArithmeticGMWTensorCP<T> bias, std::size_t fractional_bits);
   bool need_setup() const noexcept override { return false; }
   bool need_online() const noexcept override { return true; }
   void evaluate_setup() override {}
@@ -132,6 +132,7 @@ class ArithmeticGMWTensorConv2D : public NewGate {
  private:
   GMWProvider& gmw_provider_;
   tensor::Conv2DOp conv_op_;
+  std::size_t fractional_bits_;
   const ArithmeticGMWTensorCP<T> input_;
   const ArithmeticGMWTensorCP<T> kernel_;
   const ArithmeticGMWTensorCP<T> bias_;
@@ -145,7 +146,7 @@ class ArithmeticGMWTensorGemm : public NewGate {
  public:
   ArithmeticGMWTensorGemm(std::size_t gate_id, GMWProvider&, tensor::GemmOp,
                           const ArithmeticGMWTensorCP<T> input_A,
-                          const ArithmeticGMWTensorCP<T> input_B);
+                          const ArithmeticGMWTensorCP<T> input_B, std::size_t fractional_bits);
   bool need_setup() const noexcept override { return false; }
   bool need_online() const noexcept override { return true; }
   void evaluate_setup() override {}
@@ -155,6 +156,7 @@ class ArithmeticGMWTensorGemm : public NewGate {
  private:
   GMWProvider& gmw_provider_;
   tensor::GemmOp gemm_op_;
+  std::size_t fractional_bits_;
   const ArithmeticGMWTensorCP<T> input_A_;
   const ArithmeticGMWTensorCP<T> input_B_;
   std::shared_ptr<ArithmeticGMWTensor<T>> output_;
@@ -165,7 +167,8 @@ class ArithmeticGMWTensorGemm : public NewGate {
 template <typename T>
 class ArithmeticGMWTensorSqr : public NewGate {
  public:
-  ArithmeticGMWTensorSqr(std::size_t gate_id, GMWProvider&, const ArithmeticGMWTensorCP<T> input);
+  ArithmeticGMWTensorSqr(std::size_t gate_id, GMWProvider&, const ArithmeticGMWTensorCP<T> input,
+                         std::size_t fractional_bits);
   bool need_setup() const noexcept override { return false; }
   bool need_online() const noexcept override { return true; }
   void evaluate_setup() override {}
@@ -175,6 +178,7 @@ class ArithmeticGMWTensorSqr : public NewGate {
  private:
   GMWProvider& gmw_provider_;
   std::size_t data_size_;
+  std::size_t fractional_bits_;
   const ArithmeticGMWTensorCP<T> input_;
   std::shared_ptr<ArithmeticGMWTensor<T>> output_;
   std::size_t triple_index_;
