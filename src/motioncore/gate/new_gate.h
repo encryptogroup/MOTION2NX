@@ -30,6 +30,7 @@
 
 namespace MOTION {
 
+struct ExecutionContext;
 enum class MPCProtocol : unsigned int;
 
 class NewGate : public ENCRYPTO::enable_wait_setup, public ENCRYPTO::enable_wait_online {
@@ -39,6 +40,8 @@ class NewGate : public ENCRYPTO::enable_wait_setup, public ENCRYPTO::enable_wait
   virtual bool need_online() const noexcept = 0;
   virtual void evaluate_setup() = 0;
   virtual void evaluate_online() = 0;
+  virtual void evaluate_setup_with_context(const ExecutionContext&) { evaluate_setup(); }
+  virtual void evaluate_online_with_context(const ExecutionContext&) { evaluate_online(); }
   std::size_t get_gate_id() const noexcept { return gate_id_; }
 
  protected:
