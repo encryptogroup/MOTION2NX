@@ -22,6 +22,7 @@
 
 #include "half_gates.h"
 
+#include <parallel/algorithm>
 #include <numeric>
 
 #include "algorithm/algorithm_description.h"
@@ -95,13 +96,23 @@ void HalfGateGarbler::batch_garble_and(ENCRYPTO::block128_vector& key_cs,
                    num_gates);
 }
 
-void HalfGateGarbler::garble_circuit(ENCRYPTO::block128_vector& output_keys,
-                                     ENCRYPTO::block128_vector& garbled_tables,
-                                     std::size_t start_index,
-                                     const ENCRYPTO::block128_vector& input_keys_a,
-                                     const ENCRYPTO::block128_vector& input_keys_b,
-                                     std::size_t num_simd,
-                                     const ENCRYPTO::AlgorithmDescription& algo) const {
+void HalfGateGarbler::batch_garble_and_omp(ENCRYPTO::block128_t* key_cs,
+                                           ENCRYPTO::block128_t* garbled_tables,
+                                           std::size_t start_index,
+                                           const ENCRYPTO::block128_t* key_as,
+                                           const ENCRYPTO::block128_t* key_bs,
+                                           std::size_t num_gates) const {
+#pragma omp parallel for
+  for (std::size_t i = 0; i < num_gates; ++i) {
+    garble_and(key_cs[i], &garbled_tables[2 * i], start_index + i, key_as[i], key_bs[i]);
+  }
+}
+
+void HalfGateGarbler::garble_circuit(
+    ENCRYPTO::block128_vector& output_keys, ENCRYPTO::block128_vector& garbled_tables,
+    std::size_t start_index, const ENCRYPTO::block128_vector& input_keys_a,
+    const ENCRYPTO::block128_vector& input_keys_b, std::size_t num_simd,
+    const ENCRYPTO::AlgorithmDescription& algo, bool parallel) const {
   assert(input_keys_a.size() == algo.n_input_wires_parent_a_ * num_simd);
   assert((!algo.n_input_wires_parent_b_.has_value()) ||
          (input_keys_b.size() == *algo.n_input_wires_parent_b_ * num_simd));
@@ -128,11 +139,22 @@ void HalfGateGarbler::garble_circuit(ENCRYPTO::block128_vector& output_keys,
     if (op.parent_b_.has_value()) {
       const auto* gate_input_keys_b = &wire_keys[*op.parent_b_ * num_simd];
       if (op.type_ == ENCRYPTO::PrimitiveOperationType::XOR) {
-        std::transform(gate_input_keys_a, gate_input_keys_a + num_simd, gate_input_keys_b,
-                       gate_output_keys, [](const auto& ka, const auto& kb) { return ka ^ kb; });
+        if (parallel) {
+          __gnu_parallel::transform(gate_input_keys_a, gate_input_keys_a + num_simd,
+                                    gate_input_keys_b, gate_output_keys,
+                                    [](const auto& ka, const auto& kb) { return ka ^ kb; });
+        } else {
+          std::transform(gate_input_keys_a, gate_input_keys_a + num_simd, gate_input_keys_b,
+                         gate_output_keys, [](const auto& ka, const auto& kb) { return ka ^ kb; });
+        }
       } else if (op.type_ == ENCRYPTO::PrimitiveOperationType::AND) {
-        batch_garble_and(gate_output_keys, &garbled_tables[and_j * 2 * num_simd], start_index,
-                         gate_input_keys_a, gate_input_keys_b, num_simd);
+        if (parallel) {
+          batch_garble_and_omp(gate_output_keys, &garbled_tables[and_j * 2 * num_simd], start_index,
+                               gate_input_keys_a, gate_input_keys_b, num_simd);
+        } else {
+          batch_garble_and(gate_output_keys, &garbled_tables[and_j * 2 * num_simd], start_index,
+                           gate_input_keys_a, gate_input_keys_b, num_simd);
+        }
         ++and_j;
         start_index += num_simd;
       } else {
@@ -140,8 +162,14 @@ void HalfGateGarbler::garble_circuit(ENCRYPTO::block128_vector& output_keys,
       }
     } else {
       if (op.type_ == ENCRYPTO::PrimitiveOperationType::INV) {
-        std::transform(gate_input_keys_a, gate_input_keys_a + num_simd, gate_output_keys,
-                       [this](const auto& k) { return k ^ offset_; });
+        if (parallel) {
+          __gnu_parallel::transform(gate_input_keys_a, gate_input_keys_a + num_simd,
+                                    gate_output_keys,
+                                    [this](const auto& k) { return k ^ offset_; });
+        } else {
+          std::transform(gate_input_keys_a, gate_input_keys_a + num_simd, gate_output_keys,
+                         [this](const auto& k) { return k ^ offset_; });
+        }
       } else {
         throw std::runtime_error("unsupported operation");
       }
@@ -199,13 +227,23 @@ void HalfGateEvaluator::batch_evaluate_and(ENCRYPTO::block128_vector& key_cs,
                      num_gates);
 }
 
-void HalfGateEvaluator::evaluate_circuit(ENCRYPTO::block128_vector& output_keys,
-                                         const ENCRYPTO::block128_vector& garbled_tables,
-                                         std::size_t start_index,
-                                         const ENCRYPTO::block128_vector& input_keys_a,
-                                         const ENCRYPTO::block128_vector& input_keys_b,
-                                         std::size_t num_simd,
-                                         const ENCRYPTO::AlgorithmDescription& algo) const {
+void HalfGateEvaluator::batch_evaluate_and_omp(ENCRYPTO::block128_t* key_cs,
+                                               const ENCRYPTO::block128_t* garbled_tables,
+                                               std::size_t start_index,
+                                               const ENCRYPTO::block128_t* key_as,
+                                               const ENCRYPTO::block128_t* key_bs,
+                                               std::size_t num_gates) const {
+#pragma omp parallel for
+  for (std::size_t i = 0; i < num_gates; ++i) {
+    evaluate_and(key_cs[i], &garbled_tables[2 * i], start_index + i, key_as[i], key_bs[i]);
+  }
+}
+
+void HalfGateEvaluator::evaluate_circuit(
+    ENCRYPTO::block128_vector& output_keys, const ENCRYPTO::block128_vector& garbled_tables,
+    std::size_t start_index, const ENCRYPTO::block128_vector& input_keys_a,
+    const ENCRYPTO::block128_vector& input_keys_b, std::size_t num_simd,
+    const ENCRYPTO::AlgorithmDescription& algo, bool parallel) const {
   assert(input_keys_a.size() == algo.n_input_wires_parent_a_ * num_simd);
   assert((!algo.n_input_wires_parent_b_.has_value()) ||
          (input_keys_b.size() == *algo.n_input_wires_parent_b_ * num_simd));
@@ -223,11 +261,22 @@ void HalfGateEvaluator::evaluate_circuit(ENCRYPTO::block128_vector& output_keys,
     if (op.parent_b_.has_value()) {
       const auto* gate_input_keys_b = &wire_keys[*op.parent_b_ * num_simd];
       if (op.type_ == ENCRYPTO::PrimitiveOperationType::XOR) {
-        std::transform(gate_input_keys_a, gate_input_keys_a + num_simd, gate_input_keys_b,
-                       gate_output_keys, [](const auto& ka, const auto& kb) { return ka ^ kb; });
+        if (parallel) {
+          __gnu_parallel::transform(gate_input_keys_a, gate_input_keys_a + num_simd,
+                                    gate_input_keys_b, gate_output_keys,
+                                    [](const auto& ka, const auto& kb) { return ka ^ kb; });
+        } else {
+          std::transform(gate_input_keys_a, gate_input_keys_a + num_simd, gate_input_keys_b,
+                         gate_output_keys, [](const auto& ka, const auto& kb) { return ka ^ kb; });
+        }
       } else if (op.type_ == ENCRYPTO::PrimitiveOperationType::AND) {
-        batch_evaluate_and(gate_output_keys, &garbled_tables[and_j * 2 * num_simd], start_index,
-                           gate_input_keys_a, gate_input_keys_b, num_simd);
+        if (parallel) {
+          batch_evaluate_and_omp(gate_output_keys, &garbled_tables[and_j * 2 * num_simd],
+                                 start_index, gate_input_keys_a, gate_input_keys_b, num_simd);
+        } else {
+          batch_evaluate_and(gate_output_keys, &garbled_tables[and_j * 2 * num_simd], start_index,
+                             gate_input_keys_a, gate_input_keys_b, num_simd);
+        }
         ++and_j;
         start_index += num_simd;
       } else {

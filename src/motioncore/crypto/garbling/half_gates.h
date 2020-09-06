@@ -53,10 +53,13 @@ class HalfGateGarbler {
   void batch_garble_and(ENCRYPTO::block128_vector& key_c, ENCRYPTO::block128_t* garbled_table,
                         std::size_t index, const ENCRYPTO::block128_vector& key_a,
                         const ENCRYPTO::block128_vector& key_b) const;
+  void batch_garble_and_omp(ENCRYPTO::block128_t* key_c, ENCRYPTO::block128_t* garbled_table,
+                            std::size_t index, const ENCRYPTO::block128_t* key_a,
+                            const ENCRYPTO::block128_t* key_b, std::size_t num_gates) const;
   void garble_circuit(ENCRYPTO::block128_vector& key_c, ENCRYPTO::block128_vector& garbled_tables,
                       std::size_t index, const ENCRYPTO::block128_vector& key_a,
                       const ENCRYPTO::block128_vector& key_b, std::size_t num_simd,
-                      const ENCRYPTO::AlgorithmDescription&) const;
+                      const ENCRYPTO::AlgorithmDescription&, bool parallel = false) const;
 
  private:
   ENCRYPTO::block128_t offset_;
@@ -78,11 +81,15 @@ class HalfGateEvaluator {
                           const ENCRYPTO::block128_t* garbled_table, std::size_t index,
                           const ENCRYPTO::block128_vector& key_a,
                           const ENCRYPTO::block128_vector& key_b) const;
+  void batch_evaluate_and_omp(ENCRYPTO::block128_t* key_c,
+                              const ENCRYPTO::block128_t* garbled_table, std::size_t index,
+                              const ENCRYPTO::block128_t* key_a, const ENCRYPTO::block128_t* key_b,
+                              std::size_t num_gates) const;
   void evaluate_circuit(ENCRYPTO::block128_vector& key_c,
                         const ENCRYPTO::block128_vector& garbled_tables, std::size_t index,
                         const ENCRYPTO::block128_vector& key_a,
                         const ENCRYPTO::block128_vector& key_b, std::size_t num_simd,
-                        const ENCRYPTO::AlgorithmDescription&) const;
+                        const ENCRYPTO::AlgorithmDescription&, bool parallel = false) const;
 
  private:
   ENCRYPTO::block128_t hash_key_;

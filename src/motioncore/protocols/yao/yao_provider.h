@@ -139,13 +139,13 @@ class YaoProvider : public GateFactory,
                               const ENCRYPTO::block128_vector& input_keys_a,
                               const ENCRYPTO::block128_vector& input_keys_b,
                               ENCRYPTO::block128_vector& tables,
-                              ENCRYPTO::block128_vector& keys_out) const;
+                              ENCRYPTO::block128_vector& keys_out, bool parallel = false) const;
   void evaluate_garbled_circuit(std::size_t gate_id, std::size_t num_simd,
                                 const ENCRYPTO::AlgorithmDescription&,
                                 const ENCRYPTO::block128_vector& input_keys_a,
                                 const ENCRYPTO::block128_vector& input_keys_b,
                                 const ENCRYPTO::block128_vector& tables,
-                                ENCRYPTO::block128_vector& keys_out) const;
+                                ENCRYPTO::block128_vector& keys_out, bool parallel = false) const;
   constexpr static std::size_t garbled_table_size = 2;
 
   Crypto::MotionBaseProvider& get_motion_base_provider() const noexcept {

@@ -409,10 +409,11 @@ void YaoProvider::create_garbled_circuit(std::size_t gate_id, std::size_t num_si
                                          const ENCRYPTO::block128_vector& input_keys_a,
                                          const ENCRYPTO::block128_vector& input_keys_b,
                                          ENCRYPTO::block128_vector& tables,
-                                         ENCRYPTO::block128_vector& output_keys) const {
+                                         ENCRYPTO::block128_vector& output_keys,
+                                         bool parallel) const {
   assert(hg_garbler_);
   hg_garbler_->garble_circuit(output_keys, tables, gate_id, input_keys_a, input_keys_b, num_simd,
-                              algo);
+                              algo, parallel);
 }
 
 void YaoProvider::evaluate_garbled_circuit(std::size_t gate_id, std::size_t num_simd,
@@ -420,10 +421,11 @@ void YaoProvider::evaluate_garbled_circuit(std::size_t gate_id, std::size_t num_
                                            const ENCRYPTO::block128_vector& input_keys_a,
                                            const ENCRYPTO::block128_vector& input_keys_b,
                                            const ENCRYPTO::block128_vector& tables,
-                                           ENCRYPTO::block128_vector& output_keys) const {
+                                           ENCRYPTO::block128_vector& output_keys,
+                                           bool parallel) const {
   assert(hg_evaluator_);
   hg_evaluator_->evaluate_circuit(output_keys, tables, gate_id, input_keys_a, input_keys_b,
-                                  num_simd, algo);
+                                  num_simd, algo, parallel);
 }
 
 static std::vector<std::shared_ptr<NewWire>> cast_wires(gmw::BooleanGMWWireVector&& wires) {
