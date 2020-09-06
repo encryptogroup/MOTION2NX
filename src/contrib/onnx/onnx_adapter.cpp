@@ -35,13 +35,18 @@
 namespace MOTION::onnx {
 
 OnnxAdapter::OnnxAdapter(tensor::NetworkBuilder& network_builder, MPCProtocol arithmetic_protocol,
-                         MPCProtocol boolean_protocol, std::size_t fractional_bits,
-                         bool is_model_provider)
+                         MPCProtocol boolean_protocol, std::size_t bit_size,
+                         std::size_t fractional_bits, bool is_model_provider)
     : network_builder_(network_builder),
       arithmetic_protocol_(arithmetic_protocol),
       boolean_protocol_(boolean_protocol),
+      bit_size_(bit_size),
       fractional_bits_(fractional_bits),
-      is_model_provider_(is_model_provider) {}
+      is_model_provider_(is_model_provider) {
+  if (bit_size_ != 64 && bit_size_ != 32) {
+    throw std::invalid_argument(fmt::format("unsupported bit size: {}", bit_size_));
+  }
+}
 
 void OnnxAdapter::load_model(const std::string& path) {
   ::onnx::ModelProto model;
@@ -85,12 +90,24 @@ void OnnxAdapter::visit_initializer(const ::onnx::TensorProto& tensor) {
   tensor::TensorDimensions tensor_dims = to_tensor_dims(tensor.dims());
   tensor::TensorCP tensor_share;
   auto& tensor_op_factory = network_builder_.get_tensor_op_factory(arithmetic_protocol_);
-  if (is_model_provider_) {
-    auto result = tensor_op_factory.make_arithmetic_64_tensor_input_my(tensor_dims);
-    tensor_share = std::move(result.second);
-    input_promises_.emplace(tensor.name(), std::make_pair(tensor_dims, std::move(result.first)));
+  if (bit_size_ == 64) {
+    if (is_model_provider_) {
+      auto result = tensor_op_factory.make_arithmetic_64_tensor_input_my(tensor_dims);
+      tensor_share = std::move(result.second);
+      input_promises_64_.emplace(tensor.name(),
+                                 std::make_pair(tensor_dims, std::move(result.first)));
+    } else {
+      tensor_share = tensor_op_factory.make_arithmetic_64_tensor_input_other(tensor_dims);
+    }
   } else {
-    tensor_share = tensor_op_factory.make_arithmetic_64_tensor_input_other(tensor_dims);
+    if (is_model_provider_) {
+      auto result = tensor_op_factory.make_arithmetic_32_tensor_input_my(tensor_dims);
+      tensor_share = std::move(result.second);
+      input_promises_32_.emplace(tensor.name(),
+                                 std::make_pair(tensor_dims, std::move(result.first)));
+    } else {
+      tensor_share = tensor_op_factory.make_arithmetic_32_tensor_input_other(tensor_dims);
+    }
   }
   arithmetic_tensor_map_.insert({tensor.name(), std::move(tensor_share)});
   initializer_set_.insert(tensor.name());
@@ -149,13 +166,24 @@ void OnnxAdapter::visit_input(const ::onnx::ValueInfoProto& value_info) {
   tensor::TensorDimensions tensor_dims = to_tensor_dims(tensor_shape.dim());
   tensor::TensorCP tensor_share;
   auto& tensor_op_factory = network_builder_.get_tensor_op_factory(arithmetic_protocol_);
-  if (is_model_provider_) {
-    tensor_share = tensor_op_factory.make_arithmetic_64_tensor_input_other(tensor_dims);
+  if (bit_size_ == 64) {
+    if (is_model_provider_) {
+      tensor_share = tensor_op_factory.make_arithmetic_64_tensor_input_other(tensor_dims);
+    } else {
+      auto result = tensor_op_factory.make_arithmetic_64_tensor_input_my(tensor_dims);
+      tensor_share = std::move(result.second);
+      input_promises_64_.emplace(value_info.name(),
+                                 std::make_pair(tensor_dims, std::move(result.first)));
+    }
   } else {
-    auto result = tensor_op_factory.make_arithmetic_64_tensor_input_my(tensor_dims);
-    tensor_share = std::move(result.second);
-    input_promises_.emplace(value_info.name(),
-                            std::make_pair(tensor_dims, std::move(result.first)));
+    if (is_model_provider_) {
+      tensor_share = tensor_op_factory.make_arithmetic_32_tensor_input_other(tensor_dims);
+    } else {
+      auto result = tensor_op_factory.make_arithmetic_32_tensor_input_my(tensor_dims);
+      tensor_share = std::move(result.second);
+      input_promises_32_.emplace(value_info.name(),
+                                 std::make_pair(tensor_dims, std::move(result.first)));
+    }
   }
   arithmetic_tensor_map_[value_info.name()] = std::move(tensor_share);
 }
@@ -167,8 +195,13 @@ void OnnxAdapter::visit_output(const ::onnx::ValueInfoProto& value_info) {
   if (is_model_provider_) {
     tensor_op_factory.make_arithmetic_tensor_output_other(tensor_share);
   } else {
-    auto future = tensor_op_factory.make_arithmetic_64_tensor_output_my(tensor_share);
-    output_futures_[name] = std::make_pair(tensor_share->get_dimensions(), std::move(future));
+    if (bit_size_ == 64) {
+      auto future = tensor_op_factory.make_arithmetic_64_tensor_output_my(tensor_share);
+      output_futures_64_[name] = std::make_pair(tensor_share->get_dimensions(), std::move(future));
+    } else {
+      auto future = tensor_op_factory.make_arithmetic_32_tensor_output_my(tensor_share);
+      output_futures_32_[name] = std::make_pair(tensor_share->get_dimensions(), std::move(future));
+    }
   }
 }
 

@@ -41,7 +41,8 @@ namespace onnx {
 class OnnxAdapter : public OnnxVisitor {
  public:
   OnnxAdapter(tensor::NetworkBuilder& network_builder, MPCProtocol arithmetic_protocol,
-              MPCProtocol boolean_protocol, std::size_t fractional_bits, bool is_model_provider);
+              MPCProtocol boolean_protocol, std::size_t bit_size, std::size_t fractional_bits,
+              bool is_model_provider);
   void load_model(const std::string& path);
   void visit_initializer(const ::onnx::TensorProto&) override;
   void visit_input(const ::onnx::ValueInfoProto&) override;
@@ -56,13 +57,20 @@ class OnnxAdapter : public OnnxVisitor {
   tensor::TensorCP get_as_arithmetic_tensor(const std::string&);
   tensor::TensorCP get_as_boolean_tensor(const std::string&);
 
-  auto& get_input_promises() noexcept { return input_promises_; }
-  auto& get_output_futures() noexcept { return output_futures_; }
+  template <typename T>
+  std::unordered_map<std::string, std::pair<tensor::TensorDimensions,
+                                            ENCRYPTO::ReusableFiberPromise<std::vector<T>>>>&
+  get_input_promises() noexcept;
+  template <typename T>
+  std::unordered_map<std::string, std::pair<tensor::TensorDimensions,
+                                            ENCRYPTO::ReusableFiberFuture<std::vector<T>>>>&
+  get_output_futures() noexcept;
 
  private:
   tensor::NetworkBuilder& network_builder_;
   MPCProtocol arithmetic_protocol_;
   MPCProtocol boolean_protocol_;
+  std::size_t bit_size_;
   std::size_t fractional_bits_;
   bool is_model_provider_;
 
@@ -71,13 +79,47 @@ class OnnxAdapter : public OnnxVisitor {
   std::unordered_map<std::string, tensor::TensorCP> boolean_tensor_map_;
   std::unordered_map<std::string,
                      std::pair<tensor::TensorDimensions,
+                               ENCRYPTO::ReusableFiberPromise<std::vector<std::uint32_t>>>>
+      input_promises_32_;
+  std::unordered_map<std::string,
+                     std::pair<tensor::TensorDimensions,
+                               ENCRYPTO::ReusableFiberFuture<std::vector<std::uint32_t>>>>
+      output_futures_32_;
+  std::unordered_map<std::string,
+                     std::pair<tensor::TensorDimensions,
                                ENCRYPTO::ReusableFiberPromise<std::vector<std::uint64_t>>>>
-      input_promises_;
+      input_promises_64_;
   std::unordered_map<std::string,
                      std::pair<tensor::TensorDimensions,
                                ENCRYPTO::ReusableFiberFuture<std::vector<std::uint64_t>>>>
-      output_futures_;
+      output_futures_64_;
 };
+
+template <typename T>
+std::unordered_map<std::string, std::pair<tensor::TensorDimensions,
+                                          ENCRYPTO::ReusableFiberPromise<std::vector<T>>>>&
+OnnxAdapter::get_input_promises() noexcept {
+  if constexpr (std::is_same_v<T, std::uint32_t>) {
+    return input_promises_32_;
+  } else if constexpr (std::is_same_v<T, std::uint64_t>) {
+    return input_promises_64_;
+  } else {
+    assert(false);
+  }
+}
+
+template <typename T>
+std::unordered_map<std::string, std::pair<tensor::TensorDimensions,
+                                          ENCRYPTO::ReusableFiberFuture<std::vector<T>>>>&
+OnnxAdapter::get_output_futures() noexcept {
+  if constexpr (std::is_same_v<T, std::uint32_t>) {
+    return output_futures_32_;
+  } else if constexpr (std::is_same_v<T, std::uint64_t>) {
+    return output_futures_64_;
+  } else {
+    assert(false);
+  }
+}
 
 }  // namespace onnx
 }  // namespace MOTION

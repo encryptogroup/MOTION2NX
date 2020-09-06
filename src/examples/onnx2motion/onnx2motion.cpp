@@ -53,6 +53,7 @@ struct Options {
   bool json;
   std::size_t num_repetitions;
   MOTION::MPCProtocol protocol;
+  std::size_t bit_size;
   std::size_t fractional_bits;
   std::size_t my_id;
   MOTION::Communication::tcp_parties_config tcp_config;
@@ -74,6 +75,8 @@ std::optional<Options> parse_program_options(int argc, char* argv[]) {
     ("json", po::bool_switch()->default_value(false), "output data in JSON format")
     ("protocol", po::value<std::string>()->required(), "2PC protocol (GMW or BEAVY)")
     ("repetitions", po::value<std::size_t>()->default_value(1), "number of repetitions")
+    ("bit-size", po::value<std::size_t>()->default_value(64),
+     "number of bits per number (32 or 64)")
     ("fractional-bits", po::value<std::size_t>()->default_value(16),
      "number of fractional bits for fixed-point arithmetic")
     ("no-run", po::bool_switch()->default_value(false),
@@ -107,6 +110,7 @@ std::optional<Options> parse_program_options(int argc, char* argv[]) {
   options.my_id = vm["my-id"].as<std::size_t>();
   options.json = vm["json"].as<bool>();
   options.num_repetitions = vm["repetitions"].as<std::size_t>();
+  options.bit_size = vm["bit-size"].as<std::size_t>();
   options.fractional_bits = vm["fractional-bits"].as<std::size_t>();
   options.no_run = vm["no-run"].as<bool>();
   options.fake_triples = vm["fake-triples"].as<bool>();
@@ -168,27 +172,46 @@ std::unique_ptr<MOTION::Communication::CommunicationLayer> setup_communication(
                                                                      helper.setup_connections());
 }
 
+void set_inputs(MOTION::onnx::OnnxAdapter& onnx_adapter) {
+  const auto set_promises = [&onnx_adapter](auto dummy) {
+    using T = decltype(dummy);
+    for (auto& pair : onnx_adapter.get_input_promises<T>()) {
+      auto& [tensor_dims, promise] = pair.second;
+      promise.set_value(MOTION::Helpers::RandomVector<T>(tensor_dims.get_data_size()));
+    }
+  };
+  set_promises(std::uint32_t{});
+  set_promises(std::uint64_t{});
+}
+
+void collect_outputs(MOTION::onnx::OnnxAdapter& onnx_adapter) {
+  const auto get_futures = [&onnx_adapter](auto dummy) {
+    using T = decltype(dummy);
+    for (auto& pair : onnx_adapter.get_output_futures<T>()) {
+      auto& [tensor_dims, future] = pair.second;
+      future.get();
+    }
+  };
+  get_futures(std::uint32_t{});
+  get_futures(std::uint64_t{});
+}
+
 void run_model(const Options& options, MOTION::TwoPartyTensorBackend& backend) {
   MOTION::onnx::OnnxAdapter onnx_adapter(backend, options.protocol, MOTION::MPCProtocol::Yao,
-                                         options.fractional_bits, options.my_id == 0);
+                                         options.bit_size, options.fractional_bits,
+                                         options.my_id == 0);
   onnx_adapter.load_model(options.model_path);
 
   if (options.no_run) {
     return;
   }
 
-  for (auto& pair : onnx_adapter.get_input_promises()) {
-    auto& [tensor_dims, promise] = pair.second;
-    promise.set_value(MOTION::Helpers::RandomVector<std::uint64_t>(tensor_dims.get_data_size()));
-  }
+  set_inputs(onnx_adapter);
 
   backend.run();
 
   if (options.my_id == 1) {
-    for (auto& pair : onnx_adapter.get_output_futures()) {
-      auto& [tensor_dims, future] = pair.second;
-      future.get();
-    }
+    collect_outputs(onnx_adapter);
   }
 }
 
