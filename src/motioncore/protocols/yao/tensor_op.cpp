@@ -20,6 +20,8 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+#include <parallel/algorithm>
+
 #include "algorithm/circuit_loader.h"
 #include "crypto/motion_base_provider.h"
 #include "crypto/oblivious_transfer/ot_flavors.h"
@@ -80,6 +82,7 @@ void ArithmeticGMWToYaoTensorConversionGarbler<T>::evaluate_setup() {
     ENCRYPTO::block128_vector ot_inputs(2 * bit_size_ * data_size_);
     const auto R = yao_provider_.get_global_offset();
     const auto total_size = bit_size_ * data_size_;
+#pragma omp parallel for
     for (std::size_t i = 0; i < total_size; ++i) {
       ot_inputs[2 * i] = evaluator_input_keys_[i];
       ot_inputs[2 * i + 1] = evaluator_input_keys_[i] ^ R;
@@ -89,7 +92,8 @@ void ArithmeticGMWToYaoTensorConversionGarbler<T>::evaluate_setup() {
 
   // garble addition circuit
   yao_provider_.create_garbled_circuit(gate_id_, data_size_, addition_algo_, garbler_input_keys_,
-                                       evaluator_input_keys_, garbled_tables_, output_->get_keys());
+                                       evaluator_input_keys_, garbled_tables_, output_->get_keys(),
+                                       true);
   yao_provider_.CommMixin::send_blocks_message(1, gate_id_, std::move(garbled_tables_), 1);
   output_->set_setup_ready();
 
@@ -121,6 +125,7 @@ void ArithmeticGMWToYaoTensorConversionGarbler<T>::evaluate_online() {
     const auto R = yao_provider_.get_global_offset();
     // implicit transpose of input data
     // now we have all the first bist, then all the second bits, and so on
+#pragma omp parallel for
     for (std::size_t int_i = 0; int_i < data_size_; ++int_i) {
       T value = share[int_i];
       for (std::size_t bit_j = 0; bit_j < bit_size_; ++bit_j) {
@@ -229,7 +234,7 @@ void ArithmeticGMWToYaoTensorConversionEvaluator<T>::evaluate_online() {
     garbled_tables_ = garbled_tables_future_.get();
     yao_provider_.evaluate_garbled_circuit(gate_id_, data_size_, addition_algo_,
                                            garbler_input_keys_, evaluator_input_keys_,
-                                           garbled_tables_, output_->get_keys());
+                                           garbled_tables_, output_->get_keys(), true);
     output_->set_online_ready();
   }
 
@@ -277,8 +282,8 @@ void YaoToArithmeticGMWTensorConversionGarbler<T>::evaluate_setup() {
     auto& rng = mbp.get_their_randomness_generator(1);
     auto& share = output_->get_share();
     share = rng.GetUnsigned<T>(gate_id_, data_size_);
-    std::transform(std::begin(share), std::end(share), std::begin(mask), std::begin(share),
-                   std::minus{});
+    __gnu_parallel::transform(std::begin(share), std::end(share), std::begin(mask),
+                              std::begin(share), std::minus{});
     output_->set_online_ready();
   }
   mask_input_keys_ = ENCRYPTO::block128_vector::make_random(bit_size_ * data_size_);
@@ -288,6 +293,7 @@ void YaoToArithmeticGMWTensorConversionGarbler<T>::evaluate_setup() {
     const auto& R = yao_provider_.get_global_offset();
     auto bit_vectors = ENCRYPTO::ToInput(mask);
     assert(bit_vectors.size() == bit_size_);
+#pragma omp parallel for
     for (std::size_t bit_j = 0; bit_j < bit_size_; ++bit_j) {
       const auto& bv = bit_vectors[bit_j];
       assert(bv.GetSize() == data_size_);
@@ -303,7 +309,7 @@ void YaoToArithmeticGMWTensorConversionGarbler<T>::evaluate_setup() {
     // garble addition circuit
     input_->wait_setup();
     yao_provider_.create_garbled_circuit(gate_id_, data_size_, addition_algo_, input_->get_keys(),
-                                         mask_input_keys_, garbled_tables_, output_keys_);
+                                         mask_input_keys_, garbled_tables_, output_keys_, true);
     yao_provider_.CommMixin::send_blocks_message(1, gate_id_, std::move(garbled_tables_), 1);
     // send output information
     ENCRYPTO::BitVector<> output_info(bit_size_ * data_size_);
@@ -383,7 +389,7 @@ void YaoToArithmeticGMWTensorConversionEvaluator<T>::evaluate_online() {
   ENCRYPTO::block128_vector output_keys;
   input_->wait_online();
   yao_provider_.evaluate_garbled_circuit(gate_id_, data_size_, addition_algo_, input_->get_keys(),
-                                         mask_input_keys, garbled_tables, output_keys);
+                                         mask_input_keys, garbled_tables, output_keys, true);
   // decode output
   {
     auto padded_data_size = padded_size(data_size_, bit_size_);
@@ -398,6 +404,7 @@ void YaoToArithmeticGMWTensorConversionEvaluator<T>::evaluate_online() {
     std::vector<T> masked_value_int(padded_data_size);
     {
       // XXX stupid implementation
+#pragma omp parallel for
       for (std::size_t int_i = 0; int_i < data_size_; ++int_i) {
         T& value = masked_value_int[int_i];
         for (std::size_t bit_j = 0; bit_j < bit_size_; ++bit_j) {
@@ -417,8 +424,9 @@ void YaoToArithmeticGMWTensorConversionEvaluator<T>::evaluate_online() {
     // }
 
     auto& share = output_->get_share();
-    std::transform(std::begin(masked_value_int), std::begin(masked_value_int) + data_size_, std::begin(share),
-                   std::begin(share), std::minus{});
+    __gnu_parallel::transform(std::begin(masked_value_int),
+                              std::begin(masked_value_int) + data_size_, std::begin(share),
+                              std::begin(share), std::minus{});
     output_->set_online_ready();
   }
 
@@ -462,6 +470,7 @@ void YaoToBooleanGMWTensorConversionGarbler::evaluate_setup() {
   input_->wait_setup();
   auto& input_keys = input_->get_keys();
   auto& output_share = output_->get_share();
+#pragma omp parallel for
   for (std::size_t bit_j = 0; bit_j < bit_size_; ++bit_j) {
     get_lsbs_from_keys(output_share[bit_j], input_keys.data() + bit_j * data_size_, data_size_);
   }
@@ -504,6 +513,7 @@ void YaoToBooleanGMWTensorConversionEvaluator::evaluate_online() {
   input_->wait_online();
   auto& input_keys = input_->get_keys();
   auto& output_share = output_->get_share();
+#pragma omp parallel for
   for (std::size_t bit_j = 0; bit_j < bit_size_; ++bit_j) {
     get_lsbs_from_keys(output_share[bit_j], input_keys.data() + bit_j * data_size_, data_size_);
   }
@@ -560,7 +570,8 @@ void ArithmeticBEAVYToYaoTensorConversionGarbler<T>::evaluate_setup() {
 
   // garble addition circuit
   yao_provider_.create_garbled_circuit(gate_id_, data_size_, addition_algo_, garbler_input_keys_,
-                                       evaluator_input_keys_, garbled_tables_, output_->get_keys());
+                                       evaluator_input_keys_, garbled_tables_, output_->get_keys(),
+                                       true);
   yao_provider_.CommMixin::send_blocks_message(1, gate_id_, std::move(garbled_tables_), 1);
   output_->set_setup_ready();
 
@@ -594,6 +605,7 @@ void ArithmeticBEAVYToYaoTensorConversionGarbler<T>::evaluate_online() {
     const auto R = yao_provider_.get_global_offset();
     // implicit transpose of input data
     // now we have all the first bist, then all the second bits, and so on
+#pragma omp parallel for
     for (std::size_t int_i = 0; int_i < data_size_; ++int_i) {
       T value = public_share[int_i] - secret_share[int_i];
       for (std::size_t bit_j = 0; bit_j < bit_size_; ++bit_j) {
@@ -659,8 +671,8 @@ void ArithmeticBEAVYToYaoTensorConversionEvaluator<T>::evaluate_setup() {
     input_->wait_setup();
     std::vector<T> share(padded_size(data_size_, bit_size_));
     const auto& my_secret_share = input_->get_secret_share();
-    std::transform(std::begin(my_secret_share), std::end(my_secret_share), std::begin(share),
-                   std::negate{});
+    __gnu_parallel::transform(std::begin(my_secret_share), std::end(my_secret_share),
+                              std::begin(share), std::negate{});
     ENCRYPTO::BitVector<> ot_choices;
     {
       // XXX stupid implementation
@@ -722,7 +734,7 @@ void ArithmeticBEAVYToYaoTensorConversionEvaluator<T>::evaluate_online() {
     garbled_tables_ = garbled_tables_future_.get();
     yao_provider_.evaluate_garbled_circuit(gate_id_, data_size_, addition_algo_,
                                            garbler_input_keys_, evaluator_input_keys_,
-                                           garbled_tables_, output_->get_keys());
+                                           garbled_tables_, output_->get_keys(), true);
     output_->set_online_ready();
   }
 
@@ -782,9 +794,10 @@ void YaoToArithmeticBEAVYTensorConversionGarbler<T>::evaluate_setup() {
     std::copy_n(std::begin(random_ints), data_size_, std::begin(public_share));
     secret_share.resize(data_size_);
     // the secret_share is delta'_0 - delta_0 = delta'_0 + delta_1 - Delta + r
-    for (std::size_t simd_j = 0; simd_j < data_size_; ++simd_j) {
-      secret_share[simd_j] = random_ints[2 * data_size_ + simd_j] +
-                             random_ints[data_size_ + simd_j] - random_ints[simd_j] + mask[simd_j];
+#pragma omp parallel for
+    for (std::size_t int_i = 0; int_i < data_size_; ++int_i) {
+      secret_share[int_i] = random_ints[2 * data_size_ + int_i] + random_ints[data_size_ + int_i] -
+                            random_ints[int_i] + mask[int_i];
     }
     output_->set_setup_ready();
   }
@@ -795,6 +808,7 @@ void YaoToArithmeticBEAVYTensorConversionGarbler<T>::evaluate_setup() {
     const auto& R = yao_provider_.get_global_offset();
     auto bit_vectors = ENCRYPTO::ToInput(mask);
     assert(bit_vectors.size() == bit_size_);
+#pragma omp parallel for
     for (std::size_t bit_j = 0; bit_j < bit_size_; ++bit_j) {
       const auto& bv = bit_vectors[bit_j];
       assert(bv.GetSize() == data_size_);
@@ -810,7 +824,7 @@ void YaoToArithmeticBEAVYTensorConversionGarbler<T>::evaluate_setup() {
     // garble addition circuit
     input_->wait_setup();
     yao_provider_.create_garbled_circuit(gate_id_, data_size_, addition_algo_, input_->get_keys(),
-                                         mask_input_keys_, garbled_tables_, output_keys_);
+                                         mask_input_keys_, garbled_tables_, output_keys_, true);
     yao_provider_.CommMixin::send_blocks_message(1, gate_id_, std::move(garbled_tables_), 1);
     // send output information
     ENCRYPTO::BitVector<> output_info(bit_size_ * data_size_);
@@ -842,8 +856,9 @@ void YaoToArithmeticBEAVYTensorConversionGarbler<T>::evaluate_online() {
   // receive public share of shared masked value
   auto& public_share = output_->get_public_share();
   auto masked_value_public_share = masked_value_public_share_future_.get();
-  std::transform(std::begin(masked_value_public_share), std::end(masked_value_public_share),
-                 std::begin(public_share), std::begin(public_share), std::minus{});
+  __gnu_parallel::transform(std::begin(masked_value_public_share),
+                            std::end(masked_value_public_share), std::begin(public_share),
+                            std::begin(public_share), std::minus{});
   output_->set_online_ready();
 
   if constexpr (MOTION_VERBOSE_DEBUG) {
@@ -905,14 +920,16 @@ void YaoToArithmeticBEAVYTensorConversionEvaluator<T>::evaluate_setup() {
   // initialize public_share with Delta (Delta' - Delta is computed in the online phase)
   std::copy_n(std::begin(random_ints), data_size_, std::begin(public_share));
   secret_share.resize(data_size_);
+#pragma omp parallel for
   for (std::size_t int_j = 0; int_j < data_size_; ++int_j) {
     secret_share[int_j] = masked_value_secret_share_[int_j] - random_ints[data_size_ + int_j];
   }
   // prepared public_share of masked value (add masked value to this in online phase)
   masked_value_public_share_.resize(data_size_);
-  std::transform(std::begin(masked_value_secret_share_), std::end(masked_value_secret_share_),
-                 std::begin(random_ints) + 2 * data_size_, std::begin(masked_value_public_share_),
-                 std::plus{});
+  __gnu_parallel::transform(std::begin(masked_value_secret_share_),
+                            std::end(masked_value_secret_share_),
+                            std::begin(random_ints) + 2 * data_size_,
+                            std::begin(masked_value_public_share_), std::plus{});
 
   output_->set_setup_ready();
 
@@ -941,7 +958,7 @@ void YaoToArithmeticBEAVYTensorConversionEvaluator<T>::evaluate_online() {
   ENCRYPTO::block128_vector output_keys;
   input_->wait_online();
   yao_provider_.evaluate_garbled_circuit(gate_id_, data_size_, addition_algo_, input_->get_keys(),
-                                         mask_input_keys, garbled_tables, output_keys);
+                                         mask_input_keys, garbled_tables, output_keys, true);
   // decode output
   {
     auto padded_data_size = padded_size(data_size_, bit_size_);
@@ -956,6 +973,7 @@ void YaoToArithmeticBEAVYTensorConversionEvaluator<T>::evaluate_online() {
     std::vector<T> masked_value_int(padded_data_size);
     {
       // XXX stupid implementation
+#pragma omp parallel for
       for (std::size_t int_i = 0; int_i < data_size_; ++int_i) {
         T& value = masked_value_int[int_i];
         for (std::size_t bit_j = 0; bit_j < bit_size_; ++bit_j) {
@@ -975,13 +993,14 @@ void YaoToArithmeticBEAVYTensorConversionEvaluator<T>::evaluate_online() {
     // }
 
     // reshare masked value in Arithemtic BEAVY and subtract shared mask
-    std::transform(std::begin(masked_value_int), std::end(masked_value_int),
-                   std::begin(masked_value_public_share_), std::begin(masked_value_public_share_),
-                   std::plus{});
+    __gnu_parallel::transform(std::begin(masked_value_int), std::end(masked_value_int),
+                              std::begin(masked_value_public_share_),
+                              std::begin(masked_value_public_share_), std::plus{});
     yao_provider_.send_ints_message(0, gate_id_, masked_value_public_share_);
     auto& public_share = output_->get_public_share();
-    std::transform(std::begin(masked_value_public_share_), std::end(masked_value_public_share_),
-                   std::begin(public_share), std::begin(public_share), std::minus{});
+    __gnu_parallel::transform(std::begin(masked_value_public_share_),
+                              std::end(masked_value_public_share_), std::begin(public_share),
+                              std::begin(public_share), std::minus{});
     output_->set_online_ready();
   }
 
@@ -1024,6 +1043,7 @@ void YaoToBooleanBEAVYTensorConversionGarbler::evaluate_setup() {
   const auto& keys = input_->get_keys();
   auto& sshares = output_->get_secret_share();
   assert(sshares.size() == bit_size_);
+#pragma omp parallel for
   for (std::size_t bit_j = 0; bit_j < bit_size_; ++bit_j) {
     ENCRYPTO::BitVector<> lsbs;
     get_lsbs_from_keys(lsbs, keys.data() + bit_j * data_size_, data_size_);
@@ -1052,6 +1072,7 @@ void YaoToBooleanBEAVYTensorConversionGarbler::evaluate_online() {
   const auto public_share = public_share_future_.get();
   auto& pshares = output_->get_public_share();
   assert(pshares.size() == bit_size_);
+#pragma omp parallel for
   for (std::size_t bit_j = 0; bit_j < bit_size_; ++bit_j) {
     pshares[bit_j] = public_share.Subset(bit_j * data_size_, (bit_j + 1) * data_size_);
   }
@@ -1088,8 +1109,11 @@ void YaoToBooleanBEAVYTensorConversionEvaluator::evaluate_setup() {
     }
   }
 
-  for (auto& sshare : output_->get_secret_share()) {
-    sshare = ENCRYPTO::BitVector<>::Random(data_size_);
+  auto& sshares = output_->get_secret_share();
+  assert(sshares.size() == bit_size_);
+#pragma omp parallel for
+  for (std::size_t bit_j = 0; bit_j < bit_size_; ++bit_j) {
+    sshares[bit_j] = ENCRYPTO::BitVector<>::Random(data_size_);
   }
   output_->set_setup_ready();
 
@@ -1162,7 +1186,7 @@ void YaoTensorReluGarbler::evaluate_setup() {
 
   // garble ReLU circuit
   yao_provider_.create_garbled_circuit(gate_id_, data_size_, relu_algo_, input_->get_keys(), {},
-                                       garbled_tables_, output_->get_keys());
+                                       garbled_tables_, output_->get_keys(), true);
   yao_provider_.send_blocks_message(gate_id_, std::move(garbled_tables_));
   output_->set_setup_ready();
 
@@ -1200,7 +1224,7 @@ void YaoTensorReluEvaluator::evaluate_online() {
   // evaluate ReLU circuit
   const auto garbled_tables = garbled_tables_future_.get();
   yao_provider_.evaluate_garbled_circuit(gate_id_, data_size_, relu_algo_, input_->get_keys(), {},
-                                         garbled_tables, output_->get_keys());
+                                         garbled_tables, output_->get_keys(), true);
   output_->set_online_ready();
 
   if constexpr (MOTION_VERBOSE_DEBUG) {
@@ -1244,7 +1268,7 @@ void YaoTensorMaxPoolGarbler::evaluate_setup() {
   ENCRYPTO::block128_vector out_keys;
   maxpool_rearrange_keys_in(in_keys, input_->get_keys(), bit_size_, maxpool_op_);
   yao_provider_.create_garbled_circuit(gate_id_, maxpool_op_.compute_output_size(), maxpool_algo_,
-                                       in_keys, {}, garbled_tables_, out_keys);
+                                       in_keys, {}, garbled_tables_, out_keys, true);
   yao_provider_.send_blocks_message(gate_id_, std::move(garbled_tables_));
   maxpool_rearrange_keys_out(output_->get_keys(), out_keys, bit_size_, maxpool_op_);
 
@@ -1292,7 +1316,7 @@ void YaoTensorMaxPoolEvaluator::evaluate_online() {
   ENCRYPTO::block128_vector out_keys;
   maxpool_rearrange_keys_in(in_keys, input_->get_keys(), bit_size_, maxpool_op_);
   yao_provider_.evaluate_garbled_circuit(gate_id_, maxpool_op_.compute_output_size(), maxpool_algo_,
-                                         in_keys, {}, garbled_tables, out_keys);
+                                         in_keys, {}, garbled_tables, out_keys, true);
   maxpool_rearrange_keys_out(output_->get_keys(), out_keys, bit_size_, maxpool_op_);
   output_->set_online_ready();
 
