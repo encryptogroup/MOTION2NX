@@ -22,7 +22,9 @@
 
 #include "tensor_op_executor.h"
 
+#include <fmt/format.h>
 #include <iostream>
+#include <omp.h>
 
 #include "base/gate_register.h"
 #include "gate/new_gate.h"
@@ -32,13 +34,21 @@
 
 namespace MOTION {
 
-TensorOpExecutor::TensorOpExecutor(GateRegister &reg, std::function<void(void)> preprocessing_fctn,
-                           std::shared_ptr<Logger> logger)
+TensorOpExecutor::TensorOpExecutor(GateRegister& reg, std::function<void(void)> preprocessing_fctn,
+                                   std::size_t num_threads, std::shared_ptr<Logger> logger)
     : register_(reg),
       preprocessing_fctn_(std::move(preprocessing_fctn)),
+      num_threads_(num_threads),
       logger_(std::move(logger)) {}
 
 void TensorOpExecutor::evaluate_setup_online(Statistics::RunTimeStats &stats) {
+  if (num_threads_ > 0) {
+    if (logger_) {
+      logger_->LogInfo(fmt::format("Set OpenMP threads to {}", num_threads_));
+    }
+    omp_set_num_threads(num_threads_);
+  }
+
   stats.record_start<Statistics::RunTimeStats::StatID::evaluate>();
 
   preprocessing_fctn_();

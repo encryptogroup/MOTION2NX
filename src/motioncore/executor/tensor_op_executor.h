@@ -38,7 +38,7 @@ struct RunTimeStats;
 class TensorOpExecutor {
  public:
   TensorOpExecutor(GateRegister &, std::function<void()> preprocessing_fctn,
-                   std::shared_ptr<Logger>);
+                   std::size_t num_threads, std::shared_ptr<Logger>);
 
   // Run the setup phases first for all gates before starting with the online
   // phases.
@@ -49,6 +49,7 @@ class TensorOpExecutor {
  private:
   GateRegister &register_;
   std::function<void()> preprocessing_fctn_;
+  std::size_t num_threads_;
   std::shared_ptr<Logger> logger_;
 };
 

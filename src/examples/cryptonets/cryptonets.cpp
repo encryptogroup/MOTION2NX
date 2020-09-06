@@ -46,6 +46,7 @@
 namespace po = boost::program_options;
 
 struct Options {
+  std::size_t threads;
   std::size_t num_repetitions;
   MOTION::MPCProtocol protocol;
   std::size_t fractional_bits;
@@ -65,6 +66,7 @@ std::optional<Options> parse_program_options(int argc, char* argv[]) {
     ("my-id", po::value<std::size_t>()->required(), "my party id")
     ("party", po::value<std::vector<std::string>>()->multitoken(),
      "(party id, IP, port), e.g., --party 1,127.0.0.1,7777")
+    ("threads", po::value<std::size_t>()->default_value(0), "number of threads to use for gate evaluation")
     ("protocol", po::value<std::string>()->required(), "2PC protocol (GMW or BEAVY)")
     ("fractional-bits", po::value<std::size_t>()->default_value(16),
      "number of fractional bits for fixed-point arithmetic")
@@ -93,6 +95,7 @@ std::optional<Options> parse_program_options(int argc, char* argv[]) {
   }
 
   options.my_id = vm["my-id"].as<std::size_t>();
+  options.threads = vm["threads"].as<std::size_t>();
   options.num_repetitions = vm["repetitions"].as<std::size_t>();
   options.fractional_bits = vm["fractional-bits"].as<std::size_t>();
   if (options.my_id > 1) {
@@ -261,7 +264,7 @@ int main(int argc, char* argv[]) {
     auto logger = std::make_shared<MOTION::Logger>(options->my_id,
                                                    boost::log::trivial::severity_level::trace);
     comm_layer->set_logger(logger);
-    MOTION::TwoPartyTensorBackend backend(*comm_layer, logger);
+    MOTION::TwoPartyTensorBackend backend(*comm_layer, options->threads, logger);
     run_cryptonets(*options, backend);
     comm_layer->shutdown();
   } catch (std::runtime_error& e) {

@@ -50,6 +50,7 @@
 namespace po = boost::program_options;
 
 struct Options {
+  std::size_t threads;
   bool json;
   std::size_t num_repetitions;
   MOTION::MPCProtocol protocol;
@@ -72,6 +73,7 @@ std::optional<Options> parse_program_options(int argc, char* argv[]) {
     ("my-id", po::value<std::size_t>()->required(), "my party id")
     ("party", po::value<std::vector<std::string>>()->multitoken(),
      "(party id, IP, port), e.g., --party 1,127.0.0.1,7777")
+    ("threads", po::value<std::size_t>()->default_value(0), "number of threads to use for gate evaluation")
     ("json", po::bool_switch()->default_value(false), "output data in JSON format")
     ("protocol", po::value<std::string>()->required(), "2PC protocol (GMW or BEAVY)")
     ("repetitions", po::value<std::size_t>()->default_value(1), "number of repetitions")
@@ -108,6 +110,7 @@ std::optional<Options> parse_program_options(int argc, char* argv[]) {
   }
 
   options.my_id = vm["my-id"].as<std::size_t>();
+  options.threads = vm["threads"].as<std::size_t>();
   options.json = vm["json"].as<bool>();
   options.num_repetitions = vm["repetitions"].as<std::size_t>();
   options.bit_size = vm["bit-size"].as<std::size_t>();
@@ -222,6 +225,7 @@ void print_stats(const Options& options,
   if (options.json) {
     auto obj = MOTION::Statistics::to_json(filename, run_time_stats, comm_stats);
     obj.emplace("party_id", options.my_id);
+    obj.emplace("threads", options.threads);
     obj.emplace("protocol", MOTION::ToString(options.protocol));
     obj.emplace("model_path", options.model_path);
     obj.emplace("fake_triples", options.fake_triples);
@@ -245,7 +249,8 @@ int main(int argc, char* argv[]) {
     MOTION::Statistics::AccumulatedRunTimeStats run_time_stats;
     MOTION::Statistics::AccumulatedCommunicationStats comm_stats;
     for (std::size_t i = 0; i < options->num_repetitions; ++i) {
-      MOTION::TwoPartyTensorBackend backend(*comm_layer, logger, options->fake_triples);
+      MOTION::TwoPartyTensorBackend backend(*comm_layer, options->threads, logger,
+                                            options->fake_triples);
       run_model(*options, backend);
       comm_layer->sync();
       comm_stats.add(comm_layer->get_transport_statistics());
