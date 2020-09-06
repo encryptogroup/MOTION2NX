@@ -144,6 +144,7 @@ void ArithmeticGMWToYaoTensorConversionGarbler<T>::evaluate_online() {
   }
 }
 
+template class ArithmeticGMWToYaoTensorConversionGarbler<std::uint32_t>;
 template class ArithmeticGMWToYaoTensorConversionGarbler<std::uint64_t>;
 
 // A -> Y Evaluator side
@@ -241,6 +242,7 @@ void ArithmeticGMWToYaoTensorConversionEvaluator<T>::evaluate_online() {
   }
 }
 
+template class ArithmeticGMWToYaoTensorConversionEvaluator<std::uint32_t>;
 template class ArithmeticGMWToYaoTensorConversionEvaluator<std::uint64_t>;
 
 // Y -> A Garbler side
@@ -320,6 +322,7 @@ void YaoToArithmeticGMWTensorConversionGarbler<T>::evaluate_setup() {
   }
 }
 
+template class YaoToArithmeticGMWTensorConversionGarbler<std::uint32_t>;
 template class YaoToArithmeticGMWTensorConversionGarbler<std::uint64_t>;
 
 // Y -> A Evaluator side
@@ -428,6 +431,7 @@ void YaoToArithmeticGMWTensorConversionEvaluator<T>::evaluate_online() {
   }
 }
 
+template class YaoToArithmeticGMWTensorConversionEvaluator<std::uint32_t>;
 template class YaoToArithmeticGMWTensorConversionEvaluator<std::uint64_t>;
 
 // Y -> B Garbler side
@@ -610,6 +614,7 @@ void ArithmeticBEAVYToYaoTensorConversionGarbler<T>::evaluate_online() {
   }
 }
 
+template class ArithmeticBEAVYToYaoTensorConversionGarbler<std::uint32_t>;
 template class ArithmeticBEAVYToYaoTensorConversionGarbler<std::uint64_t>;
 
 // BEAVY A -> Y Evaluator side
@@ -730,6 +735,7 @@ void ArithmeticBEAVYToYaoTensorConversionEvaluator<T>::evaluate_online() {
   }
 }
 
+template class ArithmeticBEAVYToYaoTensorConversionEvaluator<std::uint32_t>;
 template class ArithmeticBEAVYToYaoTensorConversionEvaluator<std::uint64_t>;
 
 // Y -> BEAVY A Garbler side
@@ -849,6 +855,7 @@ void YaoToArithmeticBEAVYTensorConversionGarbler<T>::evaluate_online() {
   }
 }
 
+template class YaoToArithmeticBEAVYTensorConversionGarbler<std::uint32_t>;
 template class YaoToArithmeticBEAVYTensorConversionGarbler<std::uint64_t>;
 
 // Y -> BEAVY A Evaluator side
@@ -987,6 +994,7 @@ void YaoToArithmeticBEAVYTensorConversionEvaluator<T>::evaluate_online() {
   }
 }
 
+template class YaoToArithmeticBEAVYTensorConversionEvaluator<std::uint32_t>;
 template class YaoToArithmeticBEAVYTensorConversionEvaluator<std::uint64_t>;
 
 // Y -> beta Garbler side

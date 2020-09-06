@@ -150,24 +150,36 @@ class ArithmeticBEAVYTensorTest : public BEAVYTensorTest {
   make_arithmetic_T_tensor_input_my(std::size_t party_id,
                                     const MOTION::tensor::TensorDimensions& dims) {
     auto& bp = *beavy_providers_.at(party_id);
-    static_assert(ENCRYPTO::bit_size_v<T> == 64);
-    return bp.make_arithmetic_64_tensor_input_my(dims);
+    if constexpr (ENCRYPTO::bit_size_v<T> == 64) {
+      return bp.make_arithmetic_64_tensor_input_my(dims);
+    } else {
+      static_assert(ENCRYPTO::bit_size_v<T> == 32);
+      return bp.make_arithmetic_32_tensor_input_my(dims);
+    }
   }
   MOTION::tensor::TensorCP make_arithmetic_T_tensor_input_other(
       std::size_t party_id, const MOTION::tensor::TensorDimensions& dims) {
     auto& bp = *beavy_providers_.at(party_id);
-    static_assert(ENCRYPTO::bit_size_v<T> == 64);
-    return bp.make_arithmetic_64_tensor_input_other(dims);
+    if constexpr (ENCRYPTO::bit_size_v<T> == 64) {
+      return bp.make_arithmetic_64_tensor_input_other(dims);
+    } else {
+      static_assert(ENCRYPTO::bit_size_v<T> == 32);
+      return bp.make_arithmetic_32_tensor_input_other(dims);
+    }
   }
   ENCRYPTO::ReusableFiberFuture<MOTION::IntegerValues<T>> make_arithmetic_T_tensor_output_my(
       std::size_t party_id, const MOTION::tensor::TensorCP& in) {
     auto& bp = *beavy_providers_.at(party_id);
-    static_assert(ENCRYPTO::bit_size_v<T> == 64);
-    return bp.make_arithmetic_64_tensor_output_my(in);
+    if constexpr (ENCRYPTO::bit_size_v<T> == 64) {
+      return bp.make_arithmetic_64_tensor_output_my(in);
+    } else {
+      static_assert(ENCRYPTO::bit_size_v<T> == 32);
+      return bp.make_arithmetic_32_tensor_output_my(in);
+    }
   }
 };
 
-using integer_types = ::testing::Types<std::uint64_t>;
+using integer_types = ::testing::Types<std::uint32_t, std::uint64_t>;
 TYPED_TEST_SUITE(ArithmeticBEAVYTensorTest, integer_types);
 
 TYPED_TEST(ArithmeticBEAVYTensorTest, Input) {

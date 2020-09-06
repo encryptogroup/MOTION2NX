@@ -48,11 +48,16 @@ class TensorOpFactory {
   virtual std::string get_provider_name() const noexcept = 0;
 
   // arithmetic inputs
+  virtual std::pair<ENCRYPTO::ReusableFiberPromise<IntegerValues<std::uint32_t>>, TensorCP>
+  make_arithmetic_32_tensor_input_my(const TensorDimensions&);
   virtual std::pair<ENCRYPTO::ReusableFiberPromise<IntegerValues<std::uint64_t>>, TensorCP>
   make_arithmetic_64_tensor_input_my(const TensorDimensions&);
+  virtual TensorCP make_arithmetic_32_tensor_input_other(const TensorDimensions&);
   virtual TensorCP make_arithmetic_64_tensor_input_other(const TensorDimensions&);
 
   // arithmetic outputs
+  virtual ENCRYPTO::ReusableFiberFuture<IntegerValues<std::uint32_t>>
+  make_arithmetic_32_tensor_output_my(const TensorCP&);
   virtual ENCRYPTO::ReusableFiberFuture<IntegerValues<std::uint64_t>>
   make_arithmetic_64_tensor_output_my(const TensorCP&);
   virtual void make_arithmetic_tensor_output_other(const TensorCP&);

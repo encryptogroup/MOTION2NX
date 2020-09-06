@@ -827,6 +827,10 @@ template tensor::TensorCP YaoProvider::basic_make_convert_from_arithmetic_gmw_te
 
 tensor::TensorCP YaoProvider::make_convert_from_arithmetic_gmw_tensor(const tensor::TensorCP in) {
   switch (in->get_bit_size()) {
+    case 32: {
+      return basic_make_convert_from_arithmetic_gmw_tensor<std::uint32_t>(std::move(in));
+      break;
+    }
     case 64: {
       return basic_make_convert_from_arithmetic_gmw_tensor<std::uint64_t>(std::move(in));
       break;
@@ -863,6 +867,10 @@ template tensor::TensorCP YaoProvider::basic_make_convert_to_arithmetic_gmw_tens
 
 tensor::TensorCP YaoProvider::make_convert_to_arithmetic_gmw_tensor(const tensor::TensorCP in) {
   switch (in->get_bit_size()) {
+    case 32: {
+      return basic_make_convert_to_arithmetic_gmw_tensor<std::uint32_t>(std::move(in));
+      break;
+    }
     case 64: {
       return basic_make_convert_to_arithmetic_gmw_tensor<std::uint64_t>(std::move(in));
       break;
@@ -918,6 +926,10 @@ YaoProvider::basic_make_convert_from_arithmetic_beavy_tensor<std::uint64_t>(cons
 
 tensor::TensorCP YaoProvider::make_convert_from_arithmetic_beavy_tensor(const tensor::TensorCP in) {
   switch (in->get_bit_size()) {
+    case 32: {
+      return basic_make_convert_from_arithmetic_beavy_tensor<std::uint32_t>(std::move(in));
+      break;
+    }
     case 64: {
       return basic_make_convert_from_arithmetic_beavy_tensor<std::uint64_t>(std::move(in));
       break;
@@ -954,6 +966,10 @@ template tensor::TensorCP YaoProvider::basic_make_convert_to_arithmetic_beavy_te
 
 tensor::TensorCP YaoProvider::make_convert_to_arithmetic_beavy_tensor(const tensor::TensorCP in) {
   switch (in->get_bit_size()) {
+    case 32: {
+      return basic_make_convert_to_arithmetic_beavy_tensor<std::uint32_t>(std::move(in));
+      break;
+    }
     case 64: {
       return basic_make_convert_to_arithmetic_beavy_tensor<std::uint64_t>(std::move(in));
       break;

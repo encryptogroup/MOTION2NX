@@ -738,9 +738,19 @@ tensor::TensorCP BEAVYProvider::basic_make_arithmetic_tensor_input_other(
 template tensor::TensorCP BEAVYProvider::basic_make_arithmetic_tensor_input_other<std::uint64_t>(
     const tensor::TensorDimensions&);
 
+std::pair<ENCRYPTO::ReusableFiberPromise<IntegerValues<std::uint32_t>>, tensor::TensorCP>
+BEAVYProvider::make_arithmetic_32_tensor_input_my(const tensor::TensorDimensions& dims) {
+  return basic_make_arithmetic_tensor_input_my<std::uint32_t>(dims);
+}
+
 std::pair<ENCRYPTO::ReusableFiberPromise<IntegerValues<std::uint64_t>>, tensor::TensorCP>
 BEAVYProvider::make_arithmetic_64_tensor_input_my(const tensor::TensorDimensions& dims) {
   return basic_make_arithmetic_tensor_input_my<std::uint64_t>(dims);
+}
+
+tensor::TensorCP BEAVYProvider::make_arithmetic_32_tensor_input_other(
+    const tensor::TensorDimensions& dims) {
+  return basic_make_arithmetic_tensor_input_other<std::uint32_t>(dims);
 }
 
 tensor::TensorCP BEAVYProvider::make_arithmetic_64_tensor_input_other(
@@ -766,6 +776,11 @@ BEAVYProvider::basic_make_arithmetic_tensor_output_my(const tensor::TensorCP& in
 template ENCRYPTO::ReusableFiberFuture<IntegerValues<std::uint64_t>>
 BEAVYProvider::basic_make_arithmetic_tensor_output_my(const tensor::TensorCP&);
 
+ENCRYPTO::ReusableFiberFuture<IntegerValues<std::uint32_t>>
+BEAVYProvider::make_arithmetic_32_tensor_output_my(const tensor::TensorCP& in) {
+  return basic_make_arithmetic_tensor_output_my<std::uint32_t>(in);
+}
+
 ENCRYPTO::ReusableFiberFuture<IntegerValues<std::uint64_t>>
 BEAVYProvider::make_arithmetic_64_tensor_output_my(const tensor::TensorCP& in) {
   return basic_make_arithmetic_tensor_output_my<std::uint64_t>(in);
@@ -775,6 +790,12 @@ void BEAVYProvider::make_arithmetic_tensor_output_other(const tensor::TensorCP& 
   std::unique_ptr<NewGate> gate;
   auto gate_id = gate_register_.get_next_gate_id();
   switch (in->get_bit_size()) {
+    case 32: {
+      gate = std::make_unique<ArithmeticBEAVYTensorOutput<std::uint32_t>>(
+          gate_id, *this, std::dynamic_pointer_cast<const ArithmeticBEAVYTensor<std::uint32_t>>(in),
+          1 - my_id_);
+      break;
+    }
     case 64: {
       gate = std::make_unique<ArithmeticBEAVYTensorOutput<std::uint64_t>>(
           gate_id, *this, std::dynamic_pointer_cast<const ArithmeticBEAVYTensor<std::uint64_t>>(in),
@@ -805,6 +826,9 @@ tensor::TensorCP BEAVYProvider::make_tensor_flatten_op(const tensor::TensorCP in
     return tensor_op;
   };
   switch (bit_size) {
+    case 32:
+      gate = make_op(std::uint32_t{});
+      break;
     case 64:
       gate = make_op(std::uint64_t{});
       break;
@@ -860,6 +884,9 @@ tensor::TensorCP BEAVYProvider::make_tensor_conv2d_op(const tensor::Conv2DOp& co
     return tensor_op;
   };
   switch (bit_size) {
+    case 32:
+      gate = make_op(std::uint32_t{});
+      break;
     case 64:
       gate = make_op(std::uint64_t{});
       break;
@@ -900,6 +927,9 @@ tensor::TensorCP BEAVYProvider::make_tensor_gemm_op(const tensor::GemmOp& gemm_o
     return tensor_op;
   };
   switch (bit_size) {
+    case 32:
+      gate = make_op(std::uint32_t{});
+      break;
     case 64:
       gate = make_op(std::uint64_t{});
       break;
@@ -925,6 +955,9 @@ tensor::TensorCP BEAVYProvider::make_tensor_sqr_op(const tensor::TensorCP input,
     return tensor_op;
   };
   switch (bit_size) {
+    case 32:
+      gate = make_op(std::uint32_t{});
+      break;
     case 64:
       gate = make_op(std::uint64_t{});
       break;
@@ -964,6 +997,10 @@ template tensor::TensorCP BEAVYProvider::basic_make_convert_boolean_to_arithmeti
 tensor::TensorCP BEAVYProvider::make_convert_boolean_to_arithmetic_beavy_tensor(
     const tensor::TensorCP in) {
   switch (in->get_bit_size()) {
+    case 32: {
+      return basic_make_convert_boolean_to_arithmetic_beavy_tensor<std::uint32_t>(std::move(in));
+      break;
+    }
     case 64: {
       return basic_make_convert_boolean_to_arithmetic_beavy_tensor<std::uint64_t>(std::move(in));
       break;

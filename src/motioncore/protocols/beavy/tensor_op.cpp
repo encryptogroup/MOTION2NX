@@ -119,6 +119,7 @@ void ArithmeticBEAVYTensorInputSender<T>::evaluate_online() {
   }
 }
 
+template class ArithmeticBEAVYTensorInputSender<std::uint32_t>;
 template class ArithmeticBEAVYTensorInputSender<std::uint64_t>;
 
 template <typename T>
@@ -183,6 +184,7 @@ void ArithmeticBEAVYTensorInputReceiver<T>::evaluate_online() {
   }
 }
 
+template class ArithmeticBEAVYTensorInputReceiver<std::uint32_t>;
 template class ArithmeticBEAVYTensorInputReceiver<std::uint64_t>;
 
 template <typename T>
@@ -273,6 +275,7 @@ ENCRYPTO::ReusableFiberFuture<std::vector<T>> ArithmeticBEAVYTensorOutput<T>::ge
   }
 }
 
+template class ArithmeticBEAVYTensorOutput<std::uint32_t>;
 template class ArithmeticBEAVYTensorOutput<std::uint64_t>;
 
 template <typename T>
@@ -330,6 +333,7 @@ void ArithmeticBEAVYTensorFlatten<T>::evaluate_online() {
   }
 }
 
+template class ArithmeticBEAVYTensorFlatten<std::uint32_t>;
 template class ArithmeticBEAVYTensorFlatten<std::uint64_t>;
 
 template <typename T>
@@ -479,6 +483,7 @@ void ArithmeticBEAVYTensorConv2D<T>::evaluate_online() {
   }
 }
 
+template class ArithmeticBEAVYTensorConv2D<std::uint32_t>;
 template class ArithmeticBEAVYTensorConv2D<std::uint64_t>;
 
 template <typename T>
@@ -631,6 +636,7 @@ void ArithmeticBEAVYTensorGemm<T>::evaluate_online() {
   }
 }
 
+template class ArithmeticBEAVYTensorGemm<std::uint32_t>;
 template class ArithmeticBEAVYTensorGemm<std::uint64_t>;
 
 template <typename T>
@@ -783,6 +789,7 @@ void ArithmeticBEAVYTensorMul<T>::evaluate_online() {
   }
 }
 
+template class ArithmeticBEAVYTensorMul<std::uint32_t>;
 template class ArithmeticBEAVYTensorMul<std::uint64_t>;
 
 template <typename T>
@@ -932,6 +939,7 @@ void BooleanToArithmeticBEAVYTensorConversion<T>::evaluate_online() {
   }
 }
 
+template class BooleanToArithmeticBEAVYTensorConversion<std::uint32_t>;
 template class BooleanToArithmeticBEAVYTensorConversion<std::uint64_t>;
 
 BooleanBEAVYTensorRelu::BooleanBEAVYTensorRelu(std::size_t gate_id, BEAVYProvider& beavy_provider,
@@ -1141,6 +1149,7 @@ void BooleanXArithmeticBEAVYTensorRelu<T>::evaluate_online() {
   }
 }
 
+template class BooleanXArithmeticBEAVYTensorRelu<std::uint32_t>;
 template class BooleanXArithmeticBEAVYTensorRelu<std::uint64_t>;
 
 }  // namespace MOTION::proto::beavy

@@ -157,12 +157,17 @@ class GMWProvider : public GateFactory,
       const WireVector&);
 
   // implementation of TensorOpFactory
+  std::pair<ENCRYPTO::ReusableFiberPromise<IntegerValues<std::uint32_t>>, tensor::TensorCP>
+  make_arithmetic_32_tensor_input_my(const tensor::TensorDimensions&) override;
   std::pair<ENCRYPTO::ReusableFiberPromise<IntegerValues<std::uint64_t>>, tensor::TensorCP>
   make_arithmetic_64_tensor_input_my(const tensor::TensorDimensions&) override;
 
+  tensor::TensorCP make_arithmetic_32_tensor_input_other(const tensor::TensorDimensions&) override;
   tensor::TensorCP make_arithmetic_64_tensor_input_other(const tensor::TensorDimensions&) override;
 
   // arithmetic outputs
+  ENCRYPTO::ReusableFiberFuture<IntegerValues<std::uint32_t>> make_arithmetic_32_tensor_output_my(
+      const tensor::TensorCP&) override;
   ENCRYPTO::ReusableFiberFuture<IntegerValues<std::uint64_t>> make_arithmetic_64_tensor_output_my(
       const tensor::TensorCP&) override;
 

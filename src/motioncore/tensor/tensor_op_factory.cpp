@@ -28,15 +28,32 @@
 
 namespace MOTION::tensor {
 
+std::pair<ENCRYPTO::ReusableFiberPromise<IntegerValues<std::uint32_t>>, TensorCP>
+TensorOpFactory::make_arithmetic_32_tensor_input_my(const TensorDimensions&) {
+  throw std::logic_error(
+      fmt::format("{} does not support arithmetic 32 bit inputs", get_provider_name()));
+}
+
 std::pair<ENCRYPTO::ReusableFiberPromise<IntegerValues<std::uint64_t>>, TensorCP>
 TensorOpFactory::make_arithmetic_64_tensor_input_my(const TensorDimensions&) {
   throw std::logic_error(
       fmt::format("{} does not support arithmetic 64 bit inputs", get_provider_name()));
 }
 
+TensorCP TensorOpFactory::make_arithmetic_32_tensor_input_other(const TensorDimensions&) {
+  throw std::logic_error(
+      fmt::format("{} does not support arithmetic 32 bit inputs", get_provider_name()));
+}
+
 TensorCP TensorOpFactory::make_arithmetic_64_tensor_input_other(const TensorDimensions&) {
   throw std::logic_error(
       fmt::format("{} does not support arithmetic 64 bit inputs", get_provider_name()));
+}
+
+ENCRYPTO::ReusableFiberFuture<IntegerValues<std::uint32_t>>
+TensorOpFactory::make_arithmetic_32_tensor_output_my(const TensorCP&) {
+  throw std::logic_error(
+      fmt::format("{} does not support arithmetic 32 bit outputs", get_provider_name()));
 }
 
 ENCRYPTO::ReusableFiberFuture<IntegerValues<std::uint64_t>>

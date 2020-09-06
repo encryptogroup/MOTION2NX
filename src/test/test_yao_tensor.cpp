@@ -208,20 +208,32 @@ class YaoArithmeticGMWTensorTest : public YaoTensorTest {
   make_arithmetic_T_tensor_input_my(std::size_t party_id,
                                     const MOTION::tensor::TensorDimensions& dims) {
     auto& gp = *gmw_providers_.at(party_id);
-    static_assert(ENCRYPTO::bit_size_v<T> == 64);
-    return gp.make_arithmetic_64_tensor_input_my(dims);
+    if constexpr (ENCRYPTO::bit_size_v<T> == 64) {
+      return gp.make_arithmetic_64_tensor_input_my(dims);
+    } else {
+      static_assert(ENCRYPTO::bit_size_v<T> == 32);
+      return gp.make_arithmetic_32_tensor_input_my(dims);
+    }
   }
   MOTION::tensor::TensorCP make_arithmetic_T_tensor_input_other(
       std::size_t party_id, const MOTION::tensor::TensorDimensions& dims) {
     auto& gp = *gmw_providers_.at(party_id);
-    static_assert(ENCRYPTO::bit_size_v<T> == 64);
-    return gp.make_arithmetic_64_tensor_input_other(dims);
+    if constexpr (ENCRYPTO::bit_size_v<T> == 64) {
+      return gp.make_arithmetic_64_tensor_input_other(dims);
+    } else {
+      static_assert(ENCRYPTO::bit_size_v<T> == 32);
+      return gp.make_arithmetic_32_tensor_input_other(dims);
+    }
   }
   ENCRYPTO::ReusableFiberFuture<MOTION::IntegerValues<T>> make_arithmetic_T_tensor_output_my(
       std::size_t party_id, const MOTION::tensor::TensorCP& in) {
     auto& gp = *gmw_providers_.at(party_id);
-    static_assert(ENCRYPTO::bit_size_v<T> == 64);
-    return gp.make_arithmetic_64_tensor_output_my(in);
+    if constexpr (ENCRYPTO::bit_size_v<T> == 64) {
+      return gp.make_arithmetic_64_tensor_output_my(in);
+    } else {
+      static_assert(ENCRYPTO::bit_size_v<T> == 32);
+      return gp.make_arithmetic_32_tensor_output_my(in);
+    }
   }
 };
 
@@ -688,26 +700,38 @@ class YaoArithmeticBEAVYTensorTest : public YaoTensorTest {
   std::pair<ENCRYPTO::ReusableFiberPromise<MOTION::IntegerValues<T>>, MOTION::tensor::TensorCP>
   make_arithmetic_T_tensor_input_my(std::size_t party_id,
                                     const MOTION::tensor::TensorDimensions& dims) {
-    auto& gp = *beavy_providers_.at(party_id);
-    static_assert(ENCRYPTO::bit_size_v<T> == 64);
-    return gp.make_arithmetic_64_tensor_input_my(dims);
+    auto& bp = *beavy_providers_.at(party_id);
+    if constexpr (ENCRYPTO::bit_size_v<T> == 64) {
+      return bp.make_arithmetic_64_tensor_input_my(dims);
+    } else {
+      static_assert(ENCRYPTO::bit_size_v<T> == 32);
+      return bp.make_arithmetic_32_tensor_input_my(dims);
+    }
   }
   MOTION::tensor::TensorCP make_arithmetic_T_tensor_input_other(
       std::size_t party_id, const MOTION::tensor::TensorDimensions& dims) {
-    auto& gp = *beavy_providers_.at(party_id);
-    static_assert(ENCRYPTO::bit_size_v<T> == 64);
-    return gp.make_arithmetic_64_tensor_input_other(dims);
+    auto& bp = *beavy_providers_.at(party_id);
+    if constexpr (ENCRYPTO::bit_size_v<T> == 64) {
+      return bp.make_arithmetic_64_tensor_input_other(dims);
+    } else {
+      static_assert(ENCRYPTO::bit_size_v<T> == 32);
+      return bp.make_arithmetic_32_tensor_input_other(dims);
+    }
   }
   ENCRYPTO::ReusableFiberFuture<MOTION::IntegerValues<T>> make_arithmetic_T_tensor_output_my(
       std::size_t party_id, const MOTION::tensor::TensorCP& in) {
-    auto& gp = *beavy_providers_.at(party_id);
-    static_assert(ENCRYPTO::bit_size_v<T> == 64);
-    return gp.make_arithmetic_64_tensor_output_my(in);
+    auto& bp = *beavy_providers_.at(party_id);
+    if constexpr (ENCRYPTO::bit_size_v<T> == 64) {
+      return bp.make_arithmetic_64_tensor_output_my(in);
+    } else {
+      static_assert(ENCRYPTO::bit_size_v<T> == 32);
+      return bp.make_arithmetic_32_tensor_output_my(in);
+    }
   }
 };
 
-using integer_types = ::testing::Types<std::uint64_t>;
-TYPED_TEST_SUITE(YaoArithmeticBEAVYTensorTest, integer_types);
+using integer_types_beavy = ::testing::Types<std::uint32_t, std::uint64_t>;
+TYPED_TEST_SUITE(YaoArithmeticBEAVYTensorTest, integer_types_beavy);
 
 TYPED_TEST(YaoArithmeticBEAVYTensorTest, ConversionToYao) {
   MOTION::tensor::TensorDimensions dims = {

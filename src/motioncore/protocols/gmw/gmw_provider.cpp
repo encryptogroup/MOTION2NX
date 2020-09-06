@@ -622,9 +622,19 @@ tensor::TensorCP GMWProvider::basic_make_arithmetic_tensor_input_other(
 template tensor::TensorCP GMWProvider::basic_make_arithmetic_tensor_input_other<std::uint64_t>(
     const tensor::TensorDimensions&);
 
+std::pair<ENCRYPTO::ReusableFiberPromise<IntegerValues<std::uint32_t>>, tensor::TensorCP>
+GMWProvider::make_arithmetic_32_tensor_input_my(const tensor::TensorDimensions& dims) {
+  return basic_make_arithmetic_tensor_input_my<std::uint32_t>(dims);
+}
+
 std::pair<ENCRYPTO::ReusableFiberPromise<IntegerValues<std::uint64_t>>, tensor::TensorCP>
 GMWProvider::make_arithmetic_64_tensor_input_my(const tensor::TensorDimensions& dims) {
   return basic_make_arithmetic_tensor_input_my<std::uint64_t>(dims);
+}
+
+tensor::TensorCP GMWProvider::make_arithmetic_32_tensor_input_other(
+    const tensor::TensorDimensions& dims) {
+  return basic_make_arithmetic_tensor_input_other<std::uint32_t>(dims);
 }
 
 tensor::TensorCP GMWProvider::make_arithmetic_64_tensor_input_other(
@@ -650,6 +660,11 @@ ENCRYPTO::ReusableFiberFuture<IntegerValues<T>> GMWProvider::basic_make_arithmet
 template ENCRYPTO::ReusableFiberFuture<IntegerValues<std::uint64_t>>
 GMWProvider::basic_make_arithmetic_tensor_output_my(const tensor::TensorCP&);
 
+ENCRYPTO::ReusableFiberFuture<IntegerValues<std::uint32_t>>
+GMWProvider::make_arithmetic_32_tensor_output_my(const tensor::TensorCP& in) {
+  return basic_make_arithmetic_tensor_output_my<std::uint32_t>(in);
+}
+
 ENCRYPTO::ReusableFiberFuture<IntegerValues<std::uint64_t>>
 GMWProvider::make_arithmetic_64_tensor_output_my(const tensor::TensorCP& in) {
   return basic_make_arithmetic_tensor_output_my<std::uint64_t>(in);
@@ -659,6 +674,12 @@ void GMWProvider::make_arithmetic_tensor_output_other(const tensor::TensorCP& in
   std::unique_ptr<NewGate> gate;
   auto gate_id = gate_register_.get_next_gate_id();
   switch (in->get_bit_size()) {
+    case 32: {
+      gate = std::make_unique<ArithmeticGMWTensorOutput<std::uint32_t>>(
+          gate_id, *this, std::dynamic_pointer_cast<const ArithmeticGMWTensor<std::uint32_t>>(in),
+          1 - my_id_);
+      break;
+    }
     case 64: {
       gate = std::make_unique<ArithmeticGMWTensorOutput<std::uint64_t>>(
           gate_id, *this, std::dynamic_pointer_cast<const ArithmeticGMWTensor<std::uint64_t>>(in),
@@ -689,6 +710,9 @@ tensor::TensorCP GMWProvider::make_tensor_flatten_op(const tensor::TensorCP inpu
     return tensor_op;
   };
   switch (bit_size) {
+    case 32:
+      gate = make_op(std::uint32_t{});
+      break;
     case 64:
       gate = make_op(std::uint64_t{});
       break;
@@ -744,6 +768,9 @@ tensor::TensorCP GMWProvider::make_tensor_conv2d_op(const tensor::Conv2DOp& conv
     return tensor_op;
   };
   switch (bit_size) {
+    case 32:
+      gate = make_conv_op(std::uint32_t{});
+      break;
     case 64:
       gate = make_conv_op(std::uint64_t{});
       break;
@@ -784,6 +811,9 @@ tensor::TensorCP GMWProvider::make_tensor_gemm_op(const tensor::GemmOp& gemm_op,
     return tensor_op;
   };
   switch (bit_size) {
+    case 32:
+      gate = make_op(std::uint32_t{});
+      break;
     case 64:
       gate = make_op(std::uint64_t{});
       break;
@@ -809,6 +839,9 @@ tensor::TensorCP GMWProvider::make_tensor_sqr_op(const tensor::TensorCP input,
     return tensor_op;
   };
   switch (bit_size) {
+    case 32:
+      gate = make_op(std::uint32_t{});
+      break;
     case 64:
       gate = make_op(std::uint64_t{});
       break;
@@ -855,6 +888,9 @@ tensor::TensorCP GMWProvider::make_tensor_relu_op(const tensor::TensorCP in_bool
     throw std::invalid_argument("bit size mismatch");
   }
   switch (bit_size) {
+    case 32:
+      return basic_make_tensor_relu_op<std::uint32_t>(in_bool, in_arith);
+      break;
     case 64:
       return basic_make_tensor_relu_op<std::uint64_t>(in_bool, in_arith);
       break;

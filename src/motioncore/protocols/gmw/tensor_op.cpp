@@ -22,6 +22,7 @@
 
 #include "tensor_op.h"
 
+#include <cstdint>
 #include <stdexcept>
 
 #include "crypto/motion_base_provider.h"
@@ -110,6 +111,7 @@ void ArithmeticGMWTensorInputSender<T>::evaluate_online() {
   }
 }
 
+template class ArithmeticGMWTensorInputSender<std::uint32_t>;
 template class ArithmeticGMWTensorInputSender<std::uint64_t>;
 
 template <typename T>
@@ -148,6 +150,7 @@ void ArithmeticGMWTensorInputReceiver<T>::evaluate_setup() {
   }
 }
 
+template class ArithmeticGMWTensorInputReceiver<std::uint32_t>;
 template class ArithmeticGMWTensorInputReceiver<std::uint64_t>;
 
 template <typename T>
@@ -204,6 +207,7 @@ ENCRYPTO::ReusableFiberFuture<std::vector<T>> ArithmeticGMWTensorOutput<T>::get_
   }
 }
 
+template class ArithmeticGMWTensorOutput<std::uint32_t>;
 template class ArithmeticGMWTensorOutput<std::uint64_t>;
 
 template <typename T>
@@ -239,6 +243,7 @@ void ArithmeticGMWTensorFlatten<T>::evaluate_online() {
   }
 }
 
+template class ArithmeticGMWTensorFlatten<std::uint32_t>;
 template class ArithmeticGMWTensorFlatten<std::uint64_t>;
 
 template <typename T>
@@ -328,6 +333,7 @@ void ArithmeticGMWTensorConv2D<T>::evaluate_online() {
   }
 }
 
+template class ArithmeticGMWTensorConv2D<std::uint32_t>;
 template class ArithmeticGMWTensorConv2D<std::uint64_t>;
 
 template <typename T>
@@ -421,6 +427,7 @@ void ArithmeticGMWTensorGemm<T>::evaluate_online() {
   }
 }
 
+template class ArithmeticGMWTensorGemm<std::uint32_t>;
 template class ArithmeticGMWTensorGemm<std::uint64_t>;
 
 template <typename T>
@@ -497,6 +504,7 @@ void ArithmeticGMWTensorSqr<T>::evaluate_online() {
   }
 }
 
+template class ArithmeticGMWTensorSqr<std::uint32_t>;
 template class ArithmeticGMWTensorSqr<std::uint64_t>;
 
 template <typename T>
@@ -582,6 +590,7 @@ void BooleanToArithmeticGMWTensorConversion<T>::evaluate_online() {
   }
 }
 
+template class BooleanToArithmeticGMWTensorConversion<std::uint32_t>;
 template class BooleanToArithmeticGMWTensorConversion<std::uint64_t>;
 
 BooleanGMWTensorRelu::BooleanGMWTensorRelu(std::size_t gate_id, GMWProvider& gmw_provider,
@@ -761,6 +770,7 @@ void BooleanXArithmeticGMWTensorRelu<T>::evaluate_online() {
   }
 }
 
+template class BooleanXArithmeticGMWTensorRelu<std::uint32_t>;
 template class BooleanXArithmeticGMWTensorRelu<std::uint64_t>;
 
 }  // namespace MOTION::proto::gmw
