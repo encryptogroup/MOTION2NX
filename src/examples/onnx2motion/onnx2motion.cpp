@@ -53,6 +53,7 @@ struct Options {
   bool json;
   std::size_t num_repetitions;
   MOTION::MPCProtocol protocol;
+  std::size_t fractional_bits;
   std::size_t my_id;
   MOTION::Communication::tcp_parties_config tcp_config;
   std::string model_path;
@@ -73,6 +74,8 @@ std::optional<Options> parse_program_options(int argc, char* argv[]) {
     ("json", po::bool_switch()->default_value(false), "output data in JSON format")
     ("protocol", po::value<std::string>()->required(), "2PC protocol (GMW or BEAVY)")
     ("repetitions", po::value<std::size_t>()->default_value(1), "number of repetitions")
+    ("fractional-bits", po::value<std::size_t>()->default_value(16),
+     "number of fractional bits for fixed-point arithmetic")
     ("no-run", po::bool_switch()->default_value(false),
      "just build the network, but not execute it")
     ("fake-triples", po::bool_switch()->default_value(false),
@@ -104,6 +107,7 @@ std::optional<Options> parse_program_options(int argc, char* argv[]) {
   options.my_id = vm["my-id"].as<std::size_t>();
   options.json = vm["json"].as<bool>();
   options.num_repetitions = vm["repetitions"].as<std::size_t>();
+  options.fractional_bits = vm["fractional-bits"].as<std::size_t>();
   options.no_run = vm["no-run"].as<bool>();
   options.fake_triples = vm["fake-triples"].as<bool>();
   if (options.my_id > 1) {
@@ -166,7 +170,7 @@ std::unique_ptr<MOTION::Communication::CommunicationLayer> setup_communication(
 
 void run_model(const Options& options, MOTION::TwoPartyTensorBackend& backend) {
   MOTION::onnx::OnnxAdapter onnx_adapter(backend, options.protocol, MOTION::MPCProtocol::Yao,
-                                         options.my_id == 0);
+                                         options.fractional_bits, options.my_id == 0);
   onnx_adapter.load_model(options.model_path);
 
   if (options.no_run) {

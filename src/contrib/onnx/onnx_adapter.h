@@ -41,7 +41,7 @@ namespace onnx {
 class OnnxAdapter : public OnnxVisitor {
  public:
   OnnxAdapter(tensor::NetworkBuilder& network_builder, MPCProtocol arithmetic_protocol,
-              MPCProtocol boolean_protocol, bool is_model_provider);
+              MPCProtocol boolean_protocol, std::size_t fractional_bits, bool is_model_provider);
   void load_model(const std::string& path);
   void visit_initializer(const ::onnx::TensorProto&) override;
   void visit_input(const ::onnx::ValueInfoProto&) override;
@@ -63,6 +63,7 @@ class OnnxAdapter : public OnnxVisitor {
   tensor::NetworkBuilder& network_builder_;
   MPCProtocol arithmetic_protocol_;
   MPCProtocol boolean_protocol_;
+  std::size_t fractional_bits_;
   bool is_model_provider_;
 
   std::unordered_set<std::string> initializer_set_;

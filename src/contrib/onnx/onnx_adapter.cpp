@@ -35,10 +35,12 @@
 namespace MOTION::onnx {
 
 OnnxAdapter::OnnxAdapter(tensor::NetworkBuilder& network_builder, MPCProtocol arithmetic_protocol,
-                         MPCProtocol boolean_protocol, bool is_model_provider)
+                         MPCProtocol boolean_protocol, std::size_t fractional_bits,
+                         bool is_model_provider)
     : network_builder_(network_builder),
       arithmetic_protocol_(arithmetic_protocol),
       boolean_protocol_(boolean_protocol),
+      fractional_bits_(fractional_bits),
       is_model_provider_(is_model_provider) {}
 
 void OnnxAdapter::load_model(const std::string& path) {
@@ -244,8 +246,8 @@ void OnnxAdapter::visit_gemm(const ::onnx::NodeProto& node) {
   }
   gemm_op.output_shape_ = gemm_op.compute_output_shape();
   assert(gemm_op.verify());
-  const auto output_tensor =
-      tensor_op_factory.make_tensor_gemm_op(gemm_op, input_a_tensor, input_b_tensor);
+  const auto output_tensor = tensor_op_factory.make_tensor_gemm_op(
+      gemm_op, input_a_tensor, input_b_tensor, fractional_bits_);
   arithmetic_tensor_map_[output_name] = output_tensor;
 }
 
@@ -345,8 +347,8 @@ void OnnxAdapter::visit_conv(const ::onnx::NodeProto& node) {
     conv_op.output_shape_ = conv_op.compute_output_shape();
     assert(conv_op.verify());
   }
-  const auto output_tensor =
-      tensor_op_factory.make_tensor_conv2d_op(conv_op, input_tensor, kernel_tensor);
+  const auto output_tensor = tensor_op_factory.make_tensor_conv2d_op(
+      conv_op, input_tensor, kernel_tensor, fractional_bits_);
   arithmetic_tensor_map_[output_name] = output_tensor;
 }
 
@@ -360,7 +362,7 @@ void OnnxAdapter::visit_mul(const ::onnx::NodeProto& node) {
 
   auto& tensor_op_factory = network_builder_.get_tensor_op_factory(arithmetic_protocol_);
   const auto input_tensor = get_as_arithmetic_tensor(input_name);
-  const auto output_tensor = tensor_op_factory.make_tensor_sqr_op(input_tensor);
+  const auto output_tensor = tensor_op_factory.make_tensor_sqr_op(input_tensor, fractional_bits_);
   arithmetic_tensor_map_[output_name] = output_tensor;
 }
 

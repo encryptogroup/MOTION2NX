@@ -48,6 +48,7 @@ namespace po = boost::program_options;
 struct Options {
   std::size_t num_repetitions;
   MOTION::MPCProtocol protocol;
+  std::size_t fractional_bits;
   std::size_t my_id;
   MOTION::Communication::tcp_parties_config tcp_config;
   bool relu;
@@ -65,6 +66,8 @@ std::optional<Options> parse_program_options(int argc, char* argv[]) {
     ("party", po::value<std::vector<std::string>>()->multitoken(),
      "(party id, IP, port), e.g., --party 1,127.0.0.1,7777")
     ("protocol", po::value<std::string>()->required(), "2PC protocol (GMW or BEAVY)")
+    ("fractional-bits", po::value<std::size_t>()->default_value(16),
+     "number of fractional bits for fixed-point arithmetic")
     ("repetitions", po::value<std::size_t>()->default_value(1), "number of repetitions")
     ("relu", po::bool_switch(&options.relu)->default_value(false), "use ReLU instead of squaring as activation function");
   // clang-format on
@@ -91,6 +94,7 @@ std::optional<Options> parse_program_options(int argc, char* argv[]) {
 
   options.my_id = vm["my-id"].as<std::size_t>();
   options.num_repetitions = vm["repetitions"].as<std::size_t>();
+  options.fractional_bits = vm["fractional-bits"].as<std::size_t>();
   if (options.my_id > 1) {
     std::cerr << "my-id must be one of 0 and 1\n";
     return std::nullopt;
@@ -182,7 +186,9 @@ ENCRYPTO::ReusableFiberFuture<std::vector<std::uint64_t>> build_cryptonets(
 
   std::function<MOTION::tensor::TensorCP(const MOTION::tensor::TensorCP&)> make_activation;
   if (!options.relu) {
-    make_activation = [&](const auto& input) { return arithmetic_tof.make_tensor_sqr_op(input); };
+    make_activation = [&](const auto& input) {
+      return arithmetic_tof.make_tensor_sqr_op(input, options.fractional_bits);
+    };
   } else {
     make_activation = [&](const auto& input) {
       const auto boolean_tensor = boolean_tof.make_tensor_conversion(boolean_protocol, input);
@@ -217,15 +223,15 @@ ENCRYPTO::ReusableFiberFuture<std::vector<std::uint64_t>> build_cryptonets(
         arithmetic_tof.make_arithmetic_64_tensor_input_other(fully_connected_weights_dims);
   }
 
-  auto conv_output =
-      arithmetic_tof.make_tensor_conv2d_op(conv_op, input_tensor, conv_weights_tensor);
+  auto conv_output = arithmetic_tof.make_tensor_conv2d_op(
+      conv_op, input_tensor, conv_weights_tensor, options.fractional_bits);
   auto act_1_output = make_activation(conv_output);
   auto flatten_output = arithmetic_tof.make_tensor_flatten_op(act_1_output, 0);
-  auto squashed_output =
-      arithmetic_tof.make_tensor_gemm_op(gemm_op_1, flatten_output, squashed_weights_tensor);
+  auto squashed_output = arithmetic_tof.make_tensor_gemm_op(
+      gemm_op_1, flatten_output, squashed_weights_tensor, options.fractional_bits);
   auto act_2_output = make_activation(squashed_output);
-  auto fully_connected_output =
-      arithmetic_tof.make_tensor_gemm_op(gemm_op_2, act_2_output, fully_connected_weights_tensor);
+  auto fully_connected_output = arithmetic_tof.make_tensor_gemm_op(
+      gemm_op_2, act_2_output, fully_connected_weights_tensor, options.fractional_bits);
 
   ENCRYPTO::ReusableFiberFuture<std::vector<std::uint64_t>> output_future;
   if (options.my_id == 0) {
