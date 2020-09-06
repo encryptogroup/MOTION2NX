@@ -24,6 +24,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <parallel/algorithm>
 #include <stdexcept>
 
 #include "algorithm/circuit_loader.h"
@@ -103,8 +104,8 @@ void ArithmeticGMWTensorInputSender<T>::evaluate_online() {
 
   // compute my share
   auto& share = output_->get_share();
-  std::transform(std::begin(input), std::end(input), std::begin(share), std::begin(share),
-                 std::minus{});
+  __gnu_parallel::transform(std::begin(input), std::end(input), std::begin(share),
+                            std::begin(share), std::minus{});
   output_->set_online_ready();
 
   if constexpr (MOTION_VERBOSE_DEBUG) {
@@ -186,8 +187,9 @@ void ArithmeticGMWTensorOutput<T>::evaluate_online() {
   if (output_owner_ == my_id) {
     auto other_share = share_future_.get();
     assert(other_share.size() == input_->get_dimensions().get_data_size());
-    std::transform(std::begin(other_share), std::end(other_share), std::begin(input_->get_share()),
-                   std::begin(other_share), std::plus{});
+    __gnu_parallel::transform(std::begin(other_share), std::end(other_share),
+                              std::begin(input_->get_share()), std::begin(other_share),
+                              std::plus{});
     output_promise_.set_value(std::move(other_share));
   } else {
     gmw_provider_.send_ints_message(1 - my_id, gate_id_, input_->get_share());
@@ -295,16 +297,16 @@ void ArithmeticGMWTensorConv2D<T>::evaluate_online() {
 
   //  mask inputs
   std::vector<T> de(input_size + kernel_size);
-  auto it = std::transform(std::begin(input_buffer), std::end(input_buffer), std::begin(triple.a_),
-                           std::begin(de), std::minus{});
-  std::transform(std::begin(kernel_buffer), std::end(kernel_buffer), std::begin(triple.b_), it,
-                 std::minus{});
+  auto it = __gnu_parallel::transform(std::begin(input_buffer), std::end(input_buffer),
+                                      std::begin(triple.a_), std::begin(de), std::minus{});
+  __gnu_parallel::transform(std::begin(kernel_buffer), std::end(kernel_buffer),
+                            std::begin(triple.b_), it, std::minus{});
   gmw_provider_.send_ints_message(1 - my_id, gate_id_, de);
 
   // compute d, e
   auto other_share = share_future_.get();
-  std::transform(std::begin(de), std::end(de), std::begin(other_share), std::begin(de),
-                 std::plus{});
+  __gnu_parallel::transform(std::begin(de), std::end(de), std::begin(other_share), std::begin(de),
+                            std::plus{});
 
   // result = c ...
   std::vector<T> result(std::move(triple.c_));
@@ -312,16 +314,16 @@ void ArithmeticGMWTensorConv2D<T>::evaluate_online() {
   // ... - d * e ...
   if (gmw_provider_.is_my_job(gate_id_)) {
     convolution(conv_op_, de.data(), de.data() + input_size, tmp.data());
-    std::transform(std::begin(result), std::end(result), std::begin(tmp), std::begin(result),
-                   std::minus{});
+    __gnu_parallel::transform(std::begin(result), std::end(result), std::begin(tmp),
+                              std::begin(result), std::minus{});
   }
   // ... + e * x + d * y
   convolution(conv_op_, input_buffer.data(), de.data() + input_size, tmp.data());
-  std::transform(std::begin(result), std::end(result), std::begin(tmp), std::begin(result),
-                 std::plus{});
+  __gnu_parallel::transform(std::begin(result), std::end(result), std::begin(tmp),
+                            std::begin(result), std::plus{});
   convolution(conv_op_, de.data(), kernel_buffer.data(), tmp.data());
-  std::transform(std::begin(result), std::end(result), std::begin(tmp), std::begin(result),
-                 std::plus{});
+  __gnu_parallel::transform(std::begin(result), std::end(result), std::begin(tmp),
+                            std::begin(result), std::plus{});
   if (fractional_bits_ > 0) {
     fixed_point::truncate_shared<T>(result.data(), fractional_bits_, result.size(),
                                     gmw_provider_.is_my_job(gate_id_));
@@ -388,16 +390,16 @@ void ArithmeticGMWTensorGemm<T>::evaluate_online() {
 
   //  mask inputs
   std::vector<T> de(input_A_size + input_B_size);
-  auto it = std::transform(std::begin(input_A_buffer), std::end(input_A_buffer),
-                           std::begin(triple.a_), std::begin(de), std::minus{});
-  std::transform(std::begin(input_B_buffer), std::end(input_B_buffer), std::begin(triple.b_), it,
-                 std::minus{});
+  auto it = __gnu_parallel::transform(std::begin(input_A_buffer), std::end(input_A_buffer),
+                                      std::begin(triple.a_), std::begin(de), std::minus{});
+  __gnu_parallel::transform(std::begin(input_B_buffer), std::end(input_B_buffer),
+                            std::begin(triple.b_), it, std::minus{});
   gmw_provider_.send_ints_message(1 - my_id, gate_id_, de);
 
   // compute d, e
   auto other_share = share_future_.get();
-  std::transform(std::begin(de), std::end(de), std::begin(other_share), std::begin(de),
-                 std::plus{});
+  __gnu_parallel::transform(std::begin(de), std::end(de), std::begin(other_share), std::begin(de),
+                            std::plus{});
 
   // result = c ...
   std::vector<T> result(std::move(triple.c_));
@@ -406,16 +408,16 @@ void ArithmeticGMWTensorGemm<T>::evaluate_online() {
   // ... - d * e ...
   if (gmw_provider_.is_my_job(gate_id_)) {
     matrix_multiply(gemm_op_, de.data(), de.data() + input_A_size, tmp.data());
-    std::transform(std::begin(result), std::end(result), std::begin(tmp), std::begin(result),
-                   std::minus{});
+    __gnu_parallel::transform(std::begin(result), std::end(result), std::begin(tmp),
+                              std::begin(result), std::minus{});
   }
   // ... + e * x + d * y
   matrix_multiply(gemm_op_, input_A_buffer.data(), de.data() + input_A_size, tmp.data());
-  std::transform(std::begin(result), std::end(result), std::begin(tmp), std::begin(result),
-                 std::plus{});
+  __gnu_parallel::transform(std::begin(result), std::end(result), std::begin(tmp),
+                            std::begin(result), std::plus{});
   matrix_multiply(gemm_op_, de.data(), input_B_buffer.data(), tmp.data());
-  std::transform(std::begin(result), std::end(result), std::begin(tmp), std::begin(result),
-                 std::plus{});
+  __gnu_parallel::transform(std::begin(result), std::end(result), std::begin(tmp),
+                            std::begin(result), std::plus{});
   if (fractional_bits_ > 0) {
     fixed_point::truncate_shared<T>(result.data(), fractional_bits_, result.size(),
                                     gmw_provider_.is_my_job(gate_id_));
@@ -470,28 +472,29 @@ void ArithmeticGMWTensorSqr<T>::evaluate_online() {
 
   //  mask inputs
   std::vector<T> d(data_size_);
-  std::transform(std::begin(input_buffer), std::end(input_buffer), &all_triples.a[triple_index_],
-                 std::begin(d), std::minus{});
+  __gnu_parallel::transform(std::begin(input_buffer), std::end(input_buffer),
+                            &all_triples.a[triple_index_], std::begin(d), std::minus{});
   gmw_provider_.send_ints_message(1 - my_id, gate_id_, d);
 
   // compute d
   auto other_share = share_future_.get();
-  std::transform(std::begin(d), std::end(d), std::begin(other_share), std::begin(d), std::plus{});
+  __gnu_parallel::transform(std::begin(d), std::end(d), std::begin(other_share), std::begin(d),
+                            std::plus{});
 
   std::vector<T> result(data_size_);
 
   // result = 2 * d * x
-  std::transform(std::begin(d), std::end(d), std::begin(input_buffer), std::begin(result),
-                 [](auto d, auto x) { return 2 * d * x; });
+  __gnu_parallel::transform(std::begin(d), std::end(d), std::begin(input_buffer),
+                            std::begin(result), [](auto d, auto x) { return 2 * d * x; });
 
   // ... + c ...
-  std::transform(std::begin(result), std::end(result), &all_triples.c[triple_index_],
-                 std::begin(result), std::plus{});
+  __gnu_parallel::transform(std::begin(result), std::end(result), &all_triples.c[triple_index_],
+                            std::begin(result), std::plus{});
 
   // ... - d^2
   if (gmw_provider_.is_my_job(gate_id_)) {
-    std::transform(std::begin(result), std::end(result), std::begin(d), std::begin(result),
-                   [](auto res, auto d) { return res - d * d; });
+    __gnu_parallel::transform(std::begin(result), std::end(result), std::begin(d),
+                              std::begin(result), [](auto res, auto d) { return res - d * d; });
   }
   if (fractional_bits_ > 0) {
     fixed_point::truncate_shared<T>(result.data(), fractional_bits_, result.size(),
@@ -573,8 +576,9 @@ void BooleanToArithmeticGMWTensorConversion<T>::evaluate_online() {
 
   // remove mask in arithmetic sharing
   auto& output = output_->get_share();
-  for (std::size_t bit_j = 0; bit_j < bit_size_; ++bit_j) {
-    for (std::size_t int_i = 0; int_i < data_size_; ++int_i) {
+#pragma omp parallel for
+  for (std::size_t int_i = 0; int_i < data_size_; ++int_i) {
+    for (std::size_t bit_j = 0; bit_j < bit_size_; ++bit_j) {
       auto t_ij = T(t.Get(idx(bit_j, int_i)));
       auto r_ij = sbs[idx(bit_j, int_i)];
       T value = r_ij - 2 * t_ij * r_ij;
@@ -673,12 +677,14 @@ void BooleanGMWTensorRelu::evaluate_online() {
   };
 
   auto masked_inv_msb = get_de_subset(bit_size_ - 1);
+#pragma omp parallel for
   for (std::size_t bit_j = 0; bit_j < bit_size_ - 1; ++bit_j) {
     output_share[bit_j] = triple.c_[bit_j];
     output_share[bit_j] ^= inv_msb_share & get_de_subset(bit_j);
     output_share[bit_j] ^= masked_inv_msb & input_share[bit_j];
   }
   if (gmw_provider_.is_my_job(gate_id_)) {
+#pragma omp parallel for
     for (std::size_t bit_j = 0; bit_j < bit_size_ - 1; ++bit_j) {
       output_share[bit_j] ^= masked_inv_msb & get_de_subset(bit_j);
     }
@@ -744,6 +750,7 @@ void BooleanXArithmeticGMWTensorRelu<T>::evaluate_online() {
   ot_receiver_->SendCorrections();
   {
     std::vector<T> ot_inputs(data_size_);
+#pragma omp parallel for
     for (std::size_t int_i = 0; int_i < data_size_; ++int_i) {
       if (inv_msb_share.Get(int_i)) {
         ot_inputs[int_i] = -ashare[int_i];
@@ -759,6 +766,7 @@ void BooleanXArithmeticGMWTensorRelu<T>::evaluate_online() {
   ot_sender_->ComputeOutputs();
   out_share = ot_receiver_->GetOutputs();
   const auto sender_outputs = ot_sender_->GetOutputs();
+#pragma omp parallel for
   for (std::size_t int_i = 0; int_i < data_size_; ++int_i) {
     out_share[int_i] -= sender_outputs[int_i];
     if (inv_msb_share.Get(int_i)) {
@@ -848,6 +856,7 @@ static void prepare_wires(std::size_t bit_size, const tensor::MaxPoolOp& maxpool
     return channel * (output_shape[1] * output_shape[2]) + row * output_shape[2] + column;
   };
 
+#pragma omp parallel for
   for (std::size_t bit_j = 0; bit_j < bit_size; ++bit_j) {
     const auto& in_share = input_shares[bit_j];
     for (std::size_t channel_i = 0; channel_i < output_shape[0]; ++channel_i) {

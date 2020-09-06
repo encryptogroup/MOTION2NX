@@ -22,6 +22,7 @@
 
 #include "tensor_op.h"
 
+#include <parallel/algorithm>
 #include <stdexcept>
 
 #include "algorithm/circuit_loader.h"
@@ -79,8 +80,8 @@ void ArithmeticBEAVYTensorInputSender<T>::evaluate_setup() {
   auto& mbp = beavy_provider_.get_motion_base_provider();
   auto& rng = mbp.get_my_randomness_generator(1 - my_id);
   rng.GetUnsigned<T>(input_id_, data_size, my_public_share.data());
-  std::transform(std::begin(my_public_share), std::end(my_public_share),
-                 std::begin(my_secret_share), std::begin(my_public_share), std::plus{});
+  __gnu_parallel::transform(std::begin(my_public_share), std::end(my_public_share),
+                            std::begin(my_secret_share), std::begin(my_public_share), std::plus{});
 
   if constexpr (MOTION_VERBOSE_DEBUG) {
     auto logger = beavy_provider_.get_logger();
@@ -109,8 +110,8 @@ void ArithmeticBEAVYTensorInputSender<T>::evaluate_online() {
 
   // compute public share
   auto& my_public_share = output_->get_public_share();
-  std::transform(std::begin(input), std::end(input), std::begin(my_public_share),
-                 std::begin(my_public_share), std::plus{});
+  __gnu_parallel::transform(std::begin(input), std::end(input), std::begin(my_public_share),
+                            std::begin(my_public_share), std::plus{});
   output_->set_online_ready();
   beavy_provider_.broadcast_ints_message(gate_id_, my_public_share);
 
@@ -224,8 +225,8 @@ void ArithmeticBEAVYTensorOutput<T>::evaluate_setup() {
     secret_shares_ = secret_share_future_.get();
     assert(my_secret_share.size() == input_->get_dimensions().get_data_size());
     assert(secret_shares_.size() == input_->get_dimensions().get_data_size());
-    std::transform(std::begin(secret_shares_), std::end(secret_shares_),
-                   std::begin(my_secret_share), std::begin(secret_shares_), std::plus{});
+    __gnu_parallel::transform(std::begin(secret_shares_), std::end(secret_shares_),
+                              std::begin(my_secret_share), std::begin(secret_shares_), std::plus{});
   } else {
     beavy_provider_.send_ints_message<T>(1 - my_id, gate_id_, my_secret_share);
   }
@@ -255,8 +256,8 @@ void ArithmeticBEAVYTensorOutput<T>::evaluate_online() {
     const auto& public_share = input_->get_public_share();
     assert(public_share.size() == input_->get_dimensions().get_data_size());
     assert(secret_shares_.size() == input_->get_dimensions().get_data_size());
-    std::transform(std::begin(public_share), std::end(public_share), std::begin(secret_shares_),
-                   std::begin(secret_shares_), std::minus{});
+    __gnu_parallel::transform(std::begin(public_share), std::end(public_share),
+                              std::begin(secret_shares_), std::begin(secret_shares_), std::minus{});
     output_promise_.set_value(std::move(secret_shares_));
   }
 
@@ -395,8 +396,8 @@ void ArithmeticBEAVYTensorConv2D<T>::evaluate_setup() {
 
   if (fractional_bits_ == 0) {
     // [Delta_y]_i += [delta_y]_i
-    std::transform(std::begin(Delta_y_share_), std::end(Delta_y_share_), std::begin(delta_y_share),
-                   std::begin(Delta_y_share_), std::plus{});
+    __gnu_parallel::transform(std::begin(Delta_y_share_), std::end(Delta_y_share_),
+                              std::begin(delta_y_share), std::begin(Delta_y_share_), std::plus{});
     // NB: happens after truncation if that is requested
   }
 
@@ -407,11 +408,11 @@ void ArithmeticBEAVYTensorConv2D<T>::evaluate_setup() {
   // [[delta_b]_i * [delta_a]_(1-i)]_i
   auto delta_ab_share2 = conv_kernel_side_->get_output();
   // [Delta_y]_i += [[delta_a]_i * [delta_b]_(1-i)]_i
-  std::transform(std::begin(Delta_y_share_), std::end(Delta_y_share_), std::begin(delta_ab_share1),
-                 std::begin(Delta_y_share_), std::plus{});
+  __gnu_parallel::transform(std::begin(Delta_y_share_), std::end(Delta_y_share_),
+                            std::begin(delta_ab_share1), std::begin(Delta_y_share_), std::plus{});
   // [Delta_y]_i += [[delta_b]_i * [delta_a]_(1-i)]_i
-  std::transform(std::begin(Delta_y_share_), std::end(Delta_y_share_), std::begin(delta_ab_share2),
-                 std::begin(Delta_y_share_), std::plus{});
+  __gnu_parallel::transform(std::begin(Delta_y_share_), std::end(Delta_y_share_),
+                            std::begin(delta_ab_share2), std::begin(Delta_y_share_), std::plus{});
 
   if constexpr (MOTION_VERBOSE_DEBUG) {
     auto logger = beavy_provider_.get_logger();
@@ -445,36 +446,37 @@ void ArithmeticBEAVYTensorConv2D<T>::evaluate_online() {
 
   // [Delta_y]_i -= Delta_a * [delta_b]_i
   convolution(conv_op_, Delta_a.data(), delta_b_share.data(), tmp.data());
-  std::transform(std::begin(Delta_y_share_), std::end(Delta_y_share_), std::begin(tmp),
-                 std::begin(Delta_y_share_), std::minus{});
+  __gnu_parallel::transform(std::begin(Delta_y_share_), std::end(Delta_y_share_), std::begin(tmp),
+                            std::begin(Delta_y_share_), std::minus{});
 
   // [Delta_y]_i -= Delta_b * [delta_a]_i
   convolution(conv_op_, delta_a_share.data(), Delta_b.data(), tmp.data());
-  std::transform(std::begin(Delta_y_share_), std::end(Delta_y_share_), std::begin(tmp),
-                 std::begin(Delta_y_share_), std::minus{});
+  __gnu_parallel::transform(std::begin(Delta_y_share_), std::end(Delta_y_share_), std::begin(tmp),
+                            std::begin(Delta_y_share_), std::minus{});
 
   // [Delta_y]_i += Delta_ab (== Delta_a * Delta_b)
   if (beavy_provider_.is_my_job(gate_id_)) {
     convolution(conv_op_, Delta_a.data(), Delta_b.data(), tmp.data());
-    std::transform(std::begin(Delta_y_share_), std::end(Delta_y_share_), std::begin(tmp),
-                   std::begin(Delta_y_share_), std::plus{});
+    __gnu_parallel::transform(std::begin(Delta_y_share_), std::end(Delta_y_share_), std::begin(tmp),
+                              std::begin(Delta_y_share_), std::plus{});
   }
 
   if (fractional_bits_ > 0) {
     fixed_point::truncate_shared<T>(Delta_y_share_.data(), fractional_bits_, Delta_y_share_.size(),
                                     beavy_provider_.is_my_job(gate_id_));
     // [Delta_y]_i += [delta_y]_i
-    std::transform(std::begin(Delta_y_share_), std::end(Delta_y_share_),
-                   std::begin(output_->get_secret_share()), std::begin(Delta_y_share_),
-                   std::plus{});
+    __gnu_parallel::transform(std::begin(Delta_y_share_), std::end(Delta_y_share_),
+                              std::begin(output_->get_secret_share()), std::begin(Delta_y_share_),
+                              std::plus{});
     // NB: happens in setup phase if no truncation is requested
   }
 
   // broadcast [Delta_y]_i
   beavy_provider_.broadcast_ints_message(gate_id_, Delta_y_share_);
   // Delta_y = [Delta_y]_i + [Delta_y]_(1-i)
-  std::transform(std::begin(Delta_y_share_), std::end(Delta_y_share_),
-                 std::begin(share_future_.get()), std::begin(Delta_y_share_), std::plus{});
+  __gnu_parallel::transform(std::begin(Delta_y_share_), std::end(Delta_y_share_),
+                            std::begin(share_future_.get()), std::begin(Delta_y_share_),
+                            std::plus{});
   output_->get_public_share() = std::move(Delta_y_share_);
   output_->set_online_ready();
 
@@ -546,10 +548,11 @@ void ArithmeticBEAVYTensorGemm<T>::evaluate_setup() {
 
   // [Delta_y]_i = [delta_a]_i * [delta_b]_i
   matrix_multiply(gemm_op_, delta_a_share.data(), delta_b_share.data(), Delta_y_share_.data());
+
   if (fractional_bits_ == 0) {
     // [Delta_y]_i += [delta_y]_i
-    std::transform(std::begin(Delta_y_share_), std::end(Delta_y_share_), std::begin(delta_y_share),
-                   std::begin(Delta_y_share_), std::plus{});
+    __gnu_parallel::transform(std::begin(Delta_y_share_), std::end(Delta_y_share_),
+                              std::begin(delta_y_share), std::begin(Delta_y_share_), std::plus{});
     // NB: happens after truncation if that is requested
   }
 
@@ -560,11 +563,11 @@ void ArithmeticBEAVYTensorGemm<T>::evaluate_setup() {
   // [[delta_b]_i * [delta_a]_(1-i)]_i
   auto delta_ab_share2 = mm_rhs_side_->get_output();
   // [Delta_y]_i += [[delta_a]_i * [delta_b]_(1-i)]_i
-  std::transform(std::begin(Delta_y_share_), std::end(Delta_y_share_), std::begin(delta_ab_share1),
-                 std::begin(Delta_y_share_), std::plus{});
+  __gnu_parallel::transform(std::begin(Delta_y_share_), std::end(Delta_y_share_),
+                            std::begin(delta_ab_share1), std::begin(Delta_y_share_), std::plus{});
   // [Delta_y]_i += [[delta_b]_i * [delta_a]_(1-i)]_i
-  std::transform(std::begin(Delta_y_share_), std::end(Delta_y_share_), std::begin(delta_ab_share2),
-                 std::begin(Delta_y_share_), std::plus{});
+  __gnu_parallel::transform(std::begin(Delta_y_share_), std::end(Delta_y_share_),
+                            std::begin(delta_ab_share2), std::begin(Delta_y_share_), std::plus{});
 
   if constexpr (MOTION_VERBOSE_DEBUG) {
     auto logger = beavy_provider_.get_logger();
@@ -598,36 +601,37 @@ void ArithmeticBEAVYTensorGemm<T>::evaluate_online() {
 
   // [Delta_y]_i -= Delta_a * [delta_b]_i
   matrix_multiply(gemm_op_, Delta_a.data(), delta_b_share.data(), tmp.data());
-  std::transform(std::begin(Delta_y_share_), std::end(Delta_y_share_), std::begin(tmp),
-                 std::begin(Delta_y_share_), std::minus{});
+  __gnu_parallel::transform(std::begin(Delta_y_share_), std::end(Delta_y_share_), std::begin(tmp),
+                            std::begin(Delta_y_share_), std::minus{});
 
   // [Delta_y]_i -= Delta_b * [delta_a]_i
   matrix_multiply(gemm_op_, delta_a_share.data(), Delta_b.data(), tmp.data());
-  std::transform(std::begin(Delta_y_share_), std::end(Delta_y_share_), std::begin(tmp),
-                 std::begin(Delta_y_share_), std::minus{});
+  __gnu_parallel::transform(std::begin(Delta_y_share_), std::end(Delta_y_share_), std::begin(tmp),
+                            std::begin(Delta_y_share_), std::minus{});
 
   // [Delta_y]_i += Delta_ab (== Delta_a * Delta_b)
   if (beavy_provider_.is_my_job(gate_id_)) {
     matrix_multiply(gemm_op_, Delta_a.data(), Delta_b.data(), tmp.data());
-    std::transform(std::begin(Delta_y_share_), std::end(Delta_y_share_), std::begin(tmp),
-                   std::begin(Delta_y_share_), std::plus{});
+    __gnu_parallel::transform(std::begin(Delta_y_share_), std::end(Delta_y_share_), std::begin(tmp),
+                              std::begin(Delta_y_share_), std::plus{});
   }
 
   if (fractional_bits_ > 0) {
     fixed_point::truncate_shared<T>(Delta_y_share_.data(), fractional_bits_, Delta_y_share_.size(),
                                     beavy_provider_.is_my_job(gate_id_));
     // [Delta_y]_i += [delta_y]_i
-    std::transform(std::begin(Delta_y_share_), std::end(Delta_y_share_),
-                   std::begin(output_->get_secret_share()), std::begin(Delta_y_share_),
-                   std::plus{});
+    __gnu_parallel::transform(std::begin(Delta_y_share_), std::end(Delta_y_share_),
+                              std::begin(output_->get_secret_share()), std::begin(Delta_y_share_),
+                              std::plus{});
     // NB: happens in setup phase if no truncation is requested
   }
 
   // broadcast [Delta_y]_i
   beavy_provider_.broadcast_ints_message(gate_id_, Delta_y_share_);
   // Delta_y = [Delta_y]_i + [Delta_y]_(1-i)
-  std::transform(std::begin(Delta_y_share_), std::end(Delta_y_share_),
-                 std::begin(share_future_.get()), std::begin(Delta_y_share_), std::plus{});
+  __gnu_parallel::transform(std::begin(Delta_y_share_), std::end(Delta_y_share_),
+                            std::begin(share_future_.get()), std::begin(Delta_y_share_),
+                            std::plus{});
   output_->get_public_share() = std::move(Delta_y_share_);
   output_->set_online_ready();
 
@@ -693,13 +697,14 @@ void ArithmeticBEAVYTensorMul<T>::evaluate_setup() {
   mult_sender_->set_inputs(delta_b_share);
 
   // [Delta_y]_i = [delta_a]_i * [delta_b]_i
-  std::transform(std::begin(delta_a_share), std::end(delta_a_share), std::begin(delta_b_share),
-                 std::begin(Delta_y_share_), std::multiplies{});
+  __gnu_parallel::transform(std::begin(delta_a_share), std::end(delta_a_share),
+                            std::begin(delta_b_share), std::begin(Delta_y_share_),
+                            std::multiplies{});
 
   if (fractional_bits_ == 0) {
     // [Delta_y]_i += [delta_y]_i
-    std::transform(std::begin(Delta_y_share_), std::end(Delta_y_share_), std::begin(delta_y_share),
-                   std::begin(Delta_y_share_), std::plus{});
+    __gnu_parallel::transform(std::begin(Delta_y_share_), std::end(Delta_y_share_),
+                              std::begin(delta_y_share), std::begin(Delta_y_share_), std::plus{});
     // NB: happens after truncation if that is requested
   }
 
@@ -710,11 +715,11 @@ void ArithmeticBEAVYTensorMul<T>::evaluate_setup() {
   // [[delta_b]_i * [delta_a]_(1-i)]_i
   auto delta_ab_share2 = mult_sender_->get_outputs();
   // [Delta_y]_i += [[delta_a]_i * [delta_b]_(1-i)]_i
-  std::transform(std::begin(Delta_y_share_), std::end(Delta_y_share_), std::begin(delta_ab_share1),
-                 std::begin(Delta_y_share_), std::plus{});
+  __gnu_parallel::transform(std::begin(Delta_y_share_), std::end(Delta_y_share_),
+                            std::begin(delta_ab_share1), std::begin(Delta_y_share_), std::plus{});
   // [Delta_y]_i += [[delta_b]_i * [delta_a]_(1-i)]_i
-  std::transform(std::begin(Delta_y_share_), std::end(Delta_y_share_), std::begin(delta_ab_share2),
-                 std::begin(Delta_y_share_), std::plus{});
+  __gnu_parallel::transform(std::begin(Delta_y_share_), std::end(Delta_y_share_),
+                            std::begin(delta_ab_share2), std::begin(Delta_y_share_), std::plus{});
 
   if constexpr (MOTION_VERBOSE_DEBUG) {
     auto logger = beavy_provider_.get_logger();
@@ -747,40 +752,41 @@ void ArithmeticBEAVYTensorMul<T>::evaluate_online() {
   // after setup phase, `Delta_y_share_` contains [delta_y]_i + [delta_ab]_i
 
   // [Delta_y]_i -= Delta_a * [delta_b]_i
-  std::transform(std::begin(Delta_a), std::end(Delta_a), std::begin(delta_b_share), std::begin(tmp),
-                 std::multiplies{});
-  std::transform(std::begin(Delta_y_share_), std::end(Delta_y_share_), std::begin(tmp),
-                 std::begin(Delta_y_share_), std::minus{});
+  __gnu_parallel::transform(std::begin(Delta_a), std::end(Delta_a), std::begin(delta_b_share),
+                            std::begin(tmp), std::multiplies{});
+  __gnu_parallel::transform(std::begin(Delta_y_share_), std::end(Delta_y_share_), std::begin(tmp),
+                            std::begin(Delta_y_share_), std::minus{});
 
   // [Delta_y]_i -= Delta_b * [delta_a]_i
-  std::transform(std::begin(Delta_b), std::end(Delta_b), std::begin(delta_a_share), std::begin(tmp),
-                 std::multiplies{});
-  std::transform(std::begin(Delta_y_share_), std::end(Delta_y_share_), std::begin(tmp),
-                 std::begin(Delta_y_share_), std::minus{});
+  __gnu_parallel::transform(std::begin(Delta_b), std::end(Delta_b), std::begin(delta_a_share),
+                            std::begin(tmp), std::multiplies{});
+  __gnu_parallel::transform(std::begin(Delta_y_share_), std::end(Delta_y_share_), std::begin(tmp),
+                            std::begin(Delta_y_share_), std::minus{});
 
   // [Delta_y]_i += Delta_ab (== Delta_a * Delta_b)
   if (beavy_provider_.is_my_job(gate_id_)) {
-    std::transform(std::begin(Delta_a), std::end(Delta_a), std::begin(Delta_b), std::begin(tmp),
-                   std::multiplies{});
-    std::transform(std::begin(Delta_y_share_), std::end(Delta_y_share_), std::begin(tmp),
-                   std::begin(Delta_y_share_), std::plus{});
+    __gnu_parallel::transform(std::begin(Delta_a), std::end(Delta_a), std::begin(Delta_b),
+                              std::begin(tmp), std::multiplies{});
+    __gnu_parallel::transform(std::begin(Delta_y_share_), std::end(Delta_y_share_), std::begin(tmp),
+                              std::begin(Delta_y_share_), std::plus{});
   }
 
   if (fractional_bits_ > 0) {
     fixed_point::truncate_shared<T>(Delta_y_share_.data(), fractional_bits_, Delta_y_share_.size(),
                                     beavy_provider_.is_my_job(gate_id_));
     // [Delta_y]_i += [delta_y]_i
-    std::transform(std::begin(Delta_y_share_), std::end(Delta_y_share_),
-                   std::begin(output_->get_secret_share()), std::begin(Delta_y_share_),
-                   std::plus{});
+    __gnu_parallel::transform(std::begin(Delta_y_share_), std::end(Delta_y_share_),
+                              std::begin(output_->get_secret_share()), std::begin(Delta_y_share_),
+                              std::plus{});
     // NB: happens in setup phase if no truncation is requested
   }
 
   // broadcast [Delta_y]_i
   beavy_provider_.broadcast_ints_message(gate_id_, Delta_y_share_);
   // Delta_y = [Delta_y]_i + [Delta_y]_(1-i)
-  std::transform(std::begin(Delta_y_share_), std::end(Delta_y_share_),
-                 std::begin(share_future_.get()), std::begin(Delta_y_share_), std::plus{});
+  __gnu_parallel::transform(std::begin(Delta_y_share_), std::end(Delta_y_share_),
+                            std::begin(share_future_.get()), std::begin(Delta_y_share_),
+                            std::plus{});
   output_->get_public_share() = std::move(Delta_y_share_);
   output_->set_online_ready();
 
@@ -839,6 +845,7 @@ void BooleanToArithmeticBEAVYTensorConversion<T>::evaluate_setup() {
   std::vector<T> ot_output;
   if (ot_sender_ != nullptr) {
     std::vector<T> correlations(bit_size_ * data_size_);
+#pragma omp parallel for
     for (std::size_t bit_j = 0; bit_j < bit_size_; ++bit_j) {
       for (std::size_t int_i = 0; int_i < data_size_; ++int_i) {
         if (sshares[bit_j].Get(int_i)) {
@@ -850,6 +857,7 @@ void BooleanToArithmeticBEAVYTensorConversion<T>::evaluate_setup() {
     ot_sender_->SendMessages();
     ot_sender_->ComputeOutputs();
     ot_output = ot_sender_->GetOutputs();
+#pragma omp parallel for
     for (std::size_t bit_j = 0; bit_j < bit_size_; ++bit_j) {
       for (std::size_t int_i = 0; int_i < data_size_; ++int_i) {
         T bit = sshares[bit_j].Get(int_i);
@@ -867,6 +875,7 @@ void BooleanToArithmeticBEAVYTensorConversion<T>::evaluate_setup() {
     ot_receiver_->SendCorrections();
     ot_receiver_->ComputeOutputs();
     ot_output = ot_receiver_->GetOutputs();
+#pragma omp parallel for
     for (std::size_t bit_j = 0; bit_j < bit_size_; ++bit_j) {
       for (std::size_t int_i = 0; int_i < data_size_; ++int_i) {
         T bit = sshares[bit_j].Get(int_i);
@@ -901,6 +910,7 @@ void BooleanToArithmeticBEAVYTensorConversion<T>::evaluate_online() {
   input_->wait_online();
   const auto& pshares = input_->get_public_share();
 
+#pragma omp parallel for
   for (std::size_t bit_j = 0; bit_j < bit_size_; ++bit_j) {
     for (std::size_t int_i = 0; int_i < data_size_; ++int_i) {
       if (pshares[bit_j].Get(int_i)) {
@@ -911,26 +921,28 @@ void BooleanToArithmeticBEAVYTensorConversion<T>::evaluate_online() {
 
   auto tmp = output_->get_secret_share();
   if (beavy_provider_.is_my_job(gate_id_)) {
-    for (std::size_t bit_j = 0; bit_j < bit_size_; ++bit_j) {
-      for (std::size_t simd_j = 0; simd_j < data_size_; ++simd_j) {
-        const auto p = arithmetized_public_share[bit_j * data_size_ + simd_j];
-        const auto s = arithmetized_secret_share_[bit_j * data_size_ + simd_j];
-        tmp[simd_j] += (p + (1 - 2 * p) * s) << bit_j;
+#pragma omp parallel for
+    for (std::size_t int_i = 0; int_i < data_size_; ++int_i) {
+      for (std::size_t bit_j = 0; bit_j < bit_size_; ++bit_j) {
+        const auto p = arithmetized_public_share[bit_j * data_size_ + int_i];
+        const auto s = arithmetized_secret_share_[bit_j * data_size_ + int_i];
+        tmp[int_i] += (p + (1 - 2 * p) * s) << bit_j;
       }
     }
   } else {
-    for (std::size_t bit_j = 0; bit_j < bit_size_; ++bit_j) {
-      for (std::size_t simd_j = 0; simd_j < data_size_; ++simd_j) {
-        const auto p = arithmetized_public_share[bit_j * data_size_ + simd_j];
-        const auto s = arithmetized_secret_share_[bit_j * data_size_ + simd_j];
-        tmp[simd_j] += ((1 - 2 * p) * s) << bit_j;
+#pragma omp parallel for
+    for (std::size_t int_i = 0; int_i < data_size_; ++int_i) {
+      for (std::size_t bit_j = 0; bit_j < bit_size_; ++bit_j) {
+        const auto p = arithmetized_public_share[bit_j * data_size_ + int_i];
+        const auto s = arithmetized_secret_share_[bit_j * data_size_ + int_i];
+        tmp[int_i] += ((1 - 2 * p) * s) << bit_j;
       }
     }
   }
   beavy_provider_.send_ints_message(1 - my_id, gate_id_, tmp);
   const auto other_share = share_future_.get();
-  std::transform(std::begin(tmp), std::end(tmp), std::begin(other_share), std::begin(tmp),
-                 std::plus{});
+  __gnu_parallel::transform(std::begin(tmp), std::end(tmp), std::begin(other_share),
+                            std::begin(tmp), std::plus{});
   output_->get_public_share() = std::move(tmp);
   output_->set_online_ready();
 
@@ -977,6 +989,7 @@ void BooleanBEAVYTensorRelu::evaluate_setup() {
   // generate the secret shares
   auto& out_sshares = output_->get_secret_share();
   assert(out_sshares.size() == bit_size_);
+#pragma omp parallel for
   for (std::size_t bit_j = 0; bit_j < bit_size_ - 1; ++bit_j) {
     out_sshares[bit_j] = ENCRYPTO::BitVector<>::Random(data_size_);
   }
@@ -1069,6 +1082,7 @@ void BooleanBEAVYTensorRelu::evaluate_online() {
   Delta_y_share_ ^= share_future_.get();
 
   auto& out_pshares = output_->get_public_share();
+#pragma omp parallel for
   for (std::size_t bit_j = 0; bit_j < bit_size_ - 1; ++bit_j) {
     out_pshares[bit_j] = Delta_y_share_.Subset(bit_j * data_size_, (bit_j + 1) * data_size_);
   }
@@ -1209,6 +1223,7 @@ void BooleanXArithmeticBEAVYTensorRelu<T>::evaluate_online() {
   const auto& sshare = output_->get_secret_share();
   std::vector<T> pshare(data_size_);
 
+#pragma omp parallel for
   for (std::size_t int_i = 0; int_i < data_size_; ++int_i) {
     T Delta_b = !msb_pshare.Get(int_i);
     auto Delta_n = int_pshare[int_i];
@@ -1222,8 +1237,8 @@ void BooleanXArithmeticBEAVYTensorRelu<T>::evaluate_online() {
 
   beavy_provider_.broadcast_ints_message(gate_id_, pshare);
   const auto other_pshare = share_future_.get();
-  std::transform(std::begin(pshare), std::end(pshare), std::begin(other_pshare), std::begin(pshare),
-                 std::plus{});
+  __gnu_parallel::transform(std::begin(pshare), std::end(pshare), std::begin(other_pshare),
+                            std::begin(pshare), std::plus{});
 
   output_->get_public_share() = std::move(pshare);
   output_->set_online_ready();
@@ -1313,6 +1328,7 @@ static void prepare_wires(std::size_t bit_size, const tensor::MaxPoolOp& maxpool
     return channel * (output_shape[1] * output_shape[2]) + row * output_shape[2] + column;
   };
 
+#pragma omp parallel for
   for (std::size_t bit_j = 0; bit_j < bit_size; ++bit_j) {
     const auto& in_share = input_shares[bit_j];
     for (std::size_t channel_i = 0; channel_i < output_shape[0]; ++channel_i) {
