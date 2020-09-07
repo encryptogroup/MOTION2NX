@@ -132,16 +132,20 @@ const ENCRYPTO::AlgorithmDescription& CircuitLoader::load_relu_circuit(std::size
   return algo_cache_[name];
 }
 
-const ENCRYPTO::AlgorithmDescription& CircuitLoader::load_gt_circuit(std::size_t bit_size) {
+const ENCRYPTO::AlgorithmDescription& CircuitLoader::load_gt_circuit(std::size_t bit_size,
+                                                                     bool depth_optimized) {
   if (bit_size != 8 && bit_size != 16 && bit_size != 32 && bit_size != 64) {
     throw std::logic_error(fmt::format("unsupported bit size: {}", bit_size));
   }
-  const auto name = fmt::format("__circuit_loader_builtin__gt_{}_bit", bit_size);
+  const auto name = fmt::format("__circuit_loader_builtin__gt_{}_bit_{}", bit_size,
+                                depth_optimized ? "depth" : "size");
   auto it = algo_cache_.find(name);
   if (it != std::end(algo_cache_)) {
     return it->second;
   }
-  auto algo = load_circuit(fmt::format("int_gt{}_size.bristol", bit_size), CircuitFormat::Bristol);
+  auto algo =
+      load_circuit(fmt::format("int_gt{}_{}.bristol", bit_size, depth_optimized ? "depth" : "size"),
+                   CircuitFormat::Bristol);
 
   // remove unnecessary outputs ...
   algo.n_gates_ -= bit_size + 1;
@@ -153,16 +157,18 @@ const ENCRYPTO::AlgorithmDescription& CircuitLoader::load_gt_circuit(std::size_t
   return algo_cache_[name] = std::move(algo);
 }
 
-const ENCRYPTO::AlgorithmDescription& CircuitLoader::load_gtmux_circuit(std::size_t bit_size) {
+const ENCRYPTO::AlgorithmDescription& CircuitLoader::load_gtmux_circuit(std::size_t bit_size,
+                                                                        bool depth_optimized) {
   if (bit_size != 8 && bit_size != 16 && bit_size != 32 && bit_size != 64) {
     throw std::logic_error(fmt::format("unsupported bit size: {}", bit_size));
   }
-  const auto name = fmt::format("__circuit_loader_builtin__gtmux_{}_bit", bit_size);
+  const auto name = fmt::format("__circuit_loader_builtin__gtmux_{}_bit_{}", bit_size,
+                                depth_optimized ? "depth" : "size");
   auto it = algo_cache_.find(name);
   if (it != std::end(algo_cache_)) {
     return it->second;
   }
-  const auto& gt_algo = load_gt_circuit(bit_size);
+  const auto& gt_algo = load_gt_circuit(bit_size, depth_optimized);
   auto algo = gt_algo;
 
   // X >= Y <-> X - Y >= 0 <-> msb(X - Y) = 0  -> choose X
@@ -314,9 +320,11 @@ const ENCRYPTO::AlgorithmDescription& CircuitLoader::load_tree_circuit(const std
 }
 
 const ENCRYPTO::AlgorithmDescription& CircuitLoader::load_maxpool_circuit(std::size_t bit_size,
-                                                                          std::size_t num_inputs) {
-  const auto name = fmt::format("__circuit_loader_builtin__gtmux_{}_bit", bit_size);
-  load_gtmux_circuit(bit_size);
+                                                                          std::size_t num_inputs,
+                                                                          bool depth_optimized) {
+  const auto name = fmt::format("__circuit_loader_builtin__gtmux_{}_bit_{}", bit_size,
+                                depth_optimized ? "depth" : "size");
+  load_gtmux_circuit(bit_size, depth_optimized);
   return load_tree_circuit(name, bit_size, num_inputs);
 }
 
