@@ -237,7 +237,7 @@ class YaoArithmeticGMWTensorTest : public YaoTensorTest {
   }
 };
 
-using integer_types = ::testing::Types<std::uint64_t>;
+using integer_types = ::testing::Types<std::uint32_t, std::uint64_t>;
 TYPED_TEST_SUITE(YaoArithmeticGMWTensorTest, integer_types);
 
 TYPED_TEST(YaoArithmeticGMWTensorTest, ConversionToYao) {
@@ -625,16 +625,32 @@ TYPED_TEST(YaoArithmeticGMWTensorTest, MaxPool) {
   //   829, 975,
   //   829, 975,
   // };
-  const std::vector<TypeParam> input = {
-     9752516871661491360u,  4662446014583943733u, 11447746383552160793u,  6355249606212339500u,
-    18175355885135292618u,  7196435132770689189u,  2104876926157817893u, 14012399909055774597u,
-    18122604083447938486u,  2509168573361965776u, 17592664428622712039u,  2487988269217325321u,
-     7153114465142520673u, 16795418668493668102u, 11793396511977302258u,  1400963290576875662u};
-  const std::vector<TypeParam> expected_output = {
-    7196435132770689189u, 6355249606212339500u,
-    7196435132770689189u, 2487988269217325321u,
-    7153114465142520673u, 2487988269217325321u,
-  };
+  std::vector<TypeParam> input;
+  std::vector<TypeParam> expected_output;
+  if constexpr (std::is_same_v<TypeParam, std::uint64_t>) {
+    input = {
+       9752516871661491360u,  4662446014583943733u, 11447746383552160793u,  6355249606212339500u,
+      18175355885135292618u,  7196435132770689189u,  2104876926157817893u, 14012399909055774597u,
+      18122604083447938486u,  2509168573361965776u, 17592664428622712039u,  2487988269217325321u,
+       7153114465142520673u, 16795418668493668102u, 11793396511977302258u,  1400963290576875662u};
+    expected_output = {
+      7196435132770689189u, 6355249606212339500u,
+      7196435132770689189u, 2487988269217325321u,
+      7153114465142520673u, 2487988269217325321u,
+    };
+  } else if constexpr (std::is_same_v<TypeParam, std::uint32_t>) {
+    input = {
+      0xfc9af2d7u, 0x80a495efu, 0x521b859cu, 0xf6c040d6u,
+      0x220aee7du, 0x100cb900u, 0x33541084u, 0xa8971444u,
+      0xb1f10b19u, 0x7ef65ca4u, 0x121716d5u, 0x997ffefau,
+      0x84a54d02u, 0xb9d7c593u, 0x369fedbfu, 0xd79ed530u
+    };
+    expected_output = {
+      0x220aee7du, 0x521b859cu,
+      0x7ef65ca4u, 0x33541084u,
+      0x7ef65ca4u, 0x369fedbfu,
+    };
+  }
   // clang-format on
 
   auto [input_promise, tensor_in_0] = this->make_arithmetic_T_tensor_input_my(0, dims);
