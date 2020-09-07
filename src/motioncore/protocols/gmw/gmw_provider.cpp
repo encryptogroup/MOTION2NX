@@ -21,6 +21,7 @@
 // SOFTWARE.
 
 #include <cstdint>
+#include <memory>
 #include <stdexcept>
 #include <unordered_map>
 #include "gmw_provider.h"
@@ -320,8 +321,18 @@ void GMWProvider::make_arithmetic_output_gate_other(std::size_t output_owner,
   gate_register_.register_gate(std::move(gate));
 }
 
-std::vector<std::shared_ptr<NewWire>> GMWProvider::make_unary_gate(
-    ENCRYPTO::PrimitiveOperationType op, const std::vector<std::shared_ptr<NewWire>>& in_a) {
+std::pair<NewGateP, WireVector> GMWProvider::construct_unary_gate(
+    ENCRYPTO::PrimitiveOperationType op, const WireVector& in_a) {
+  switch (op) {
+    case ENCRYPTO::PrimitiveOperationType::INV:
+      return construct_inv_gate(in_a);
+    default:
+      throw std::logic_error(fmt::format("GMW does not support the unary operation {}", op));
+  }
+}
+
+WireVector GMWProvider::make_unary_gate(ENCRYPTO::PrimitiveOperationType op,
+                                        const WireVector& in_a) {
   switch (op) {
     case ENCRYPTO::PrimitiveOperationType::INV:
       return make_inv_gate(in_a);
@@ -334,9 +345,20 @@ std::vector<std::shared_ptr<NewWire>> GMWProvider::make_unary_gate(
   }
 }
 
-std::vector<std::shared_ptr<NewWire>> GMWProvider::make_binary_gate(
-    ENCRYPTO::PrimitiveOperationType op, const std::vector<std::shared_ptr<NewWire>>& in_a,
-    const std::vector<std::shared_ptr<NewWire>>& in_b) {
+std::pair<NewGateP, WireVector> GMWProvider::construct_binary_gate(
+    ENCRYPTO::PrimitiveOperationType op, const WireVector& in_a, const WireVector& in_b) {
+  switch (op) {
+    case ENCRYPTO::PrimitiveOperationType::XOR:
+      return construct_xor_gate(in_a, in_b);
+    case ENCRYPTO::PrimitiveOperationType::AND:
+      return construct_and_gate(in_a, in_b);
+    default:
+      throw std::logic_error(fmt::format("GMW does not support the binary operation {}", op));
+  }
+}
+
+WireVector GMWProvider::make_binary_gate(ENCRYPTO::PrimitiveOperationType op,
+                                         const WireVector& in_a, const WireVector& in_b) {
   switch (op) {
     case ENCRYPTO::PrimitiveOperationType::XOR:
       return make_xor_gate(in_a, in_b);
@@ -351,18 +373,25 @@ std::vector<std::shared_ptr<NewWire>> GMWProvider::make_binary_gate(
   }
 }
 
-WireVector GMWProvider::make_inv_gate(const WireVector& in_a) {
+std::pair<std::unique_ptr<NewGate>, WireVector> GMWProvider::construct_inv_gate(
+    const WireVector& in_a) {
   auto gate_id = gate_register_.get_next_gate_id();
   auto gate = std::make_unique<BooleanGMWINVGate>(gate_id, *this, cast_wires(in_a));
   auto output = gate->get_output_wires();
-  gate_register_.register_gate(std::move(gate));
-  return cast_wires(std::move(output));
+  return {std::move(gate), cast_wires(std::move(output))};
 }
 
-WireVector GMWProvider::make_xor_gate(const WireVector& in_a, const WireVector& in_b) {
+WireVector GMWProvider::make_inv_gate(const WireVector& in_a) {
+  auto [gate, output] = construct_inv_gate(in_a);
+  gate_register_.register_gate(std::move(gate));
+  return output;
+}
+
+std::pair<std::unique_ptr<NewGate>, WireVector> GMWProvider::construct_xor_gate(
+    const WireVector& in_a, const WireVector& in_b) {
   // assume, at most one of the inputs is a plain wire
   if (in_a.at(0)->get_protocol() == MPCProtocol::BooleanPlain) {
-    return make_xor_gate(in_b, in_a);
+    return construct_xor_gate(in_b, in_a);
   }
   assert(in_a.at(0)->get_protocol() == MPCProtocol::BooleanGMW);
   BooleanGMWWireVector output;
@@ -371,19 +400,25 @@ WireVector GMWProvider::make_xor_gate(const WireVector& in_a, const WireVector& 
     auto gate = std::make_unique<BooleanGMWXORPlainGate>(gate_id, *this, cast_wires(in_a),
                                                          cast_to_plain_wires(in_b));
     output = gate->get_output_wires();
-    gate_register_.register_gate(std::move(gate));
+    return {std::move(gate), cast_wires(std::move(output))};
   } else {
     auto gate = std::make_unique<BooleanGMWXORGate>(gate_id, cast_wires(in_a), cast_wires(in_b));
     output = gate->get_output_wires();
-    gate_register_.register_gate(std::move(gate));
+    return {std::move(gate), cast_wires(std::move(output))};
   }
-  return cast_wires(std::move(output));
 }
 
-WireVector GMWProvider::make_and_gate(const WireVector& in_a, const WireVector& in_b) {
+WireVector GMWProvider::make_xor_gate(const WireVector& in_a, const WireVector& in_b) {
+  auto [gate, output] = construct_xor_gate(in_a, in_b);
+  gate_register_.register_gate(std::move(gate));
+  return output;
+}
+
+std::pair<std::unique_ptr<NewGate>, WireVector> GMWProvider::construct_and_gate(
+    const WireVector& in_a, const WireVector& in_b) {
   // assume, at most one of the inputs is a plain wire
   if (in_a.at(0)->get_protocol() == MPCProtocol::BooleanPlain) {
-    return make_and_gate(in_b, in_a);
+    return construct_and_gate(in_b, in_a);
   }
   assert(in_a.at(0)->get_protocol() == MPCProtocol::BooleanGMW);
   BooleanGMWWireVector output;
@@ -392,14 +427,19 @@ WireVector GMWProvider::make_and_gate(const WireVector& in_a, const WireVector& 
     auto gate = std::make_unique<BooleanGMWANDPlainGate>(gate_id, *this, cast_wires(in_a),
                                                          cast_to_plain_wires(in_b));
     output = gate->get_output_wires();
-    gate_register_.register_gate(std::move(gate));
+    return {std::move(gate), cast_wires(std::move(output))};
   } else {
     auto gate =
         std::make_unique<BooleanGMWANDGate>(gate_id, *this, cast_wires(in_a), cast_wires(in_b));
     output = gate->get_output_wires();
-    gate_register_.register_gate(std::move(gate));
+    return {std::move(gate), cast_wires(std::move(output))};
   }
-  return cast_wires(std::move(output));
+}
+
+WireVector GMWProvider::make_and_gate(const WireVector& in_a, const WireVector& in_b) {
+  auto [gate, output] = construct_and_gate(in_a, in_b);
+  gate_register_.register_gate(std::move(gate));
+  return output;
 }
 
 static std::size_t check_arithmetic_wire(const WireVector& in) {
