@@ -918,6 +918,10 @@ template tensor::TensorCP GMWProvider::basic_make_convert_boolean_to_arithmetic_
 tensor::TensorCP GMWProvider::make_convert_boolean_to_arithmetic_gmw_tensor(
     const tensor::TensorCP in) {
   switch (in->get_bit_size()) {
+    case 32: {
+      return basic_make_convert_boolean_to_arithmetic_gmw_tensor<std::uint32_t>(std::move(in));
+      break;
+    }
     case 64: {
       return basic_make_convert_boolean_to_arithmetic_gmw_tensor<std::uint64_t>(std::move(in));
       break;
