@@ -900,8 +900,6 @@ void BooleanGMWTensorMaxPool::evaluate_online() {
   }
   output_->set_online_ready();
 
-  std::cerr << "complete\n";
-
   if constexpr (MOTION_VERBOSE_DEBUG) {
     auto logger = gmw_provider_.get_logger();
     if (logger) {
