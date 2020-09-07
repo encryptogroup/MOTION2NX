@@ -36,6 +36,7 @@
 #include "crypto/sharing_randomness_generator.h"
 #include "utility/constants.h"
 #include "utility/fixed_point.h"
+#include "utility/helpers.h"
 #include "utility/linear_algebra.h"
 #include "utility/logger.h"
 #include "wire.h"
@@ -1100,9 +1101,17 @@ BooleanXArithmeticBEAVYTensorRelu<T>::BooleanXArithmeticBEAVYTensorRelu(
     throw std::invalid_argument("bit size mismatch");
   }
   const auto my_id = beavy_provider_.get_my_id();
-  auto& otp = beavy_provider_.get_ot_manager().get_provider(1 - my_id);
-  ot_sender_ = otp.RegisterSendACOT<T>(data_size_);
-  ot_receiver_ = otp.RegisterReceiveACOT<T>(data_size_);
+  auto& ap = beavy_provider_.get_arith_manager().get_provider(1 - my_id);
+  if (beavy_provider_.is_my_job(gate_id_)) {
+    mult_int_side_ = ap.register_bit_integer_multiplication_int_side<T>(data_size_, 2);
+    mult_bit_side_ = ap.register_bit_integer_multiplication_bit_side<T>(data_size_, 1);
+  } else {
+    mult_int_side_ = ap.register_bit_integer_multiplication_int_side<T>(data_size_, 1);
+    mult_bit_side_ = ap.register_bit_integer_multiplication_bit_side<T>(data_size_, 2);
+  }
+  delta_b_share_.resize(data_size_);
+  delta_b_x_delta_n_share_.resize(data_size_);
+  share_future_ = beavy_provider_.register_for_ints_message<T>(1 - my_id, gate_id_, data_size_);
 }
 
 template <typename T>
@@ -1118,8 +1127,57 @@ void BooleanXArithmeticBEAVYTensorRelu<T>::evaluate_setup() {
     }
   }
 
-  // TODO
-  throw std::logic_error("not yet implemented");
+  output_->get_secret_share() = Helpers::RandomVector<T>(data_size_);
+  output_->set_setup_ready();
+
+  input_bool_->wait_setup();
+  input_arith_->wait_setup();
+  const auto& int_sshare = input_arith_->get_secret_share();
+  assert(int_sshare.size() == data_size_);
+  const auto& msb_sshare = input_bool_->get_secret_share()[bit_size_ - 1];
+  assert(msb_sshare.GetSize() == data_size_);
+
+  std::vector<T> msb_sshare_as_ints(data_size_);
+  for (std::size_t int_i = 0; int_i < data_size_; ++int_i) {
+    msb_sshare_as_ints[int_i] = msb_sshare.Get(int_i);
+  }
+
+  mult_bit_side_->set_inputs(msb_sshare);
+
+  if (beavy_provider_.is_my_job(gate_id_)) {
+    std::vector<T> mult_inputs(2 * data_size_);
+    for (std::size_t int_i = 0; int_i < data_size_; ++int_i) {
+      mult_inputs[2 * int_i] = msb_sshare_as_ints[int_i];
+      mult_inputs[2 * int_i + 1] =
+          int_sshare[int_i] - 2 * msb_sshare_as_ints[int_i] * int_sshare[int_i];
+    }
+    mult_int_side_->set_inputs(std::move(mult_inputs));
+  } else {
+    std::vector<T> mult_inputs(data_size_);
+    std::transform(std::begin(int_sshare), std::end(int_sshare), std::begin(msb_sshare_as_ints),
+                   std::begin(mult_inputs), [](auto n, auto b) { return n - 2 * b * n; });
+    mult_int_side_->set_inputs(std::move(mult_inputs));
+  }
+
+  mult_bit_side_->compute_outputs();
+  mult_int_side_->compute_outputs();
+  auto mult_bit_side_out = mult_bit_side_->get_outputs();
+  auto mult_int_side_out = mult_int_side_->get_outputs();
+
+  // compute [delta_b]^A and [delta_b * delta_n]^A
+  if (beavy_provider_.is_my_job(gate_id_)) {
+    for (std::size_t int_i = 0; int_i < data_size_; ++int_i) {
+      delta_b_share_[int_i] = msb_sshare_as_ints[int_i] - 2 * mult_int_side_out[2 * int_i];
+      delta_b_x_delta_n_share_[int_i] = msb_sshare_as_ints[int_i] * int_sshare[int_i] +
+                                        mult_int_side_out[2 * int_i + 1] + mult_bit_side_out[int_i];
+    }
+  } else {
+    for (std::size_t int_i = 0; int_i < data_size_; ++int_i) {
+      delta_b_share_[int_i] = msb_sshare_as_ints[int_i] - 2 * mult_bit_side_out[2 * int_i];
+      delta_b_x_delta_n_share_[int_i] = msb_sshare_as_ints[int_i] * int_sshare[int_i] +
+                                        mult_bit_side_out[2 * int_i + 1] + mult_int_side_out[int_i];
+    }
+  }
 
   if constexpr (MOTION_VERBOSE_DEBUG) {
     auto logger = beavy_provider_.get_logger();
@@ -1140,8 +1198,35 @@ void BooleanXArithmeticBEAVYTensorRelu<T>::evaluate_online() {
     }
   }
 
-  // TODO
-  throw std::logic_error("not yet implemented");
+  input_bool_->wait_online();
+  input_arith_->wait_online();
+  const auto& int_sshare = input_arith_->get_secret_share();
+  const auto& int_pshare = input_arith_->get_public_share();
+  assert(int_pshare.size() == data_size_);
+  const auto& msb_pshare = input_bool_->get_public_share()[bit_size_ - 1];
+  assert(msb_pshare.GetSize() == data_size_);
+
+  const auto& sshare = output_->get_secret_share();
+  std::vector<T> pshare(data_size_);
+
+  for (std::size_t int_i = 0; int_i < data_size_; ++int_i) {
+    T Delta_b = !msb_pshare.Get(int_i);
+    auto Delta_n = int_pshare[int_i];
+    pshare[int_i] = delta_b_share_[int_i] * (Delta_n - 2 * Delta_b * Delta_n) -
+                    Delta_b * int_sshare[int_i] -
+                    delta_b_x_delta_n_share_[int_i] * (1 - 2 * Delta_b) + sshare[int_i];
+    if (beavy_provider_.is_my_job(gate_id_)) {
+      pshare[int_i] += Delta_b * Delta_n;
+    }
+  }
+
+  beavy_provider_.broadcast_ints_message(gate_id_, pshare);
+  const auto other_pshare = share_future_.get();
+  std::transform(std::begin(pshare), std::end(pshare), std::begin(other_pshare), std::begin(pshare),
+                 std::plus{});
+
+  output_->get_public_share() = std::move(pshare);
+  output_->set_online_ready();
 
   if constexpr (MOTION_VERBOSE_DEBUG) {
     auto logger = beavy_provider_.get_logger();

@@ -44,6 +44,10 @@ class XCOTBitReceiver;
 
 namespace MOTION {
 template <typename T>
+class BitIntegerMultiplicationIntSide;
+template <typename T>
+class BitIntegerMultiplicationBitSide;
+template <typename T>
 class ConvolutionInputSide;
 template <typename T>
 class ConvolutionKernelSide;
@@ -291,8 +295,11 @@ class BooleanXArithmeticBEAVYTensorRelu : public NewGate {
   const BooleanBEAVYTensorCP input_bool_;
   const ArithmeticBEAVYTensorCP<T> input_arith_;
   ArithmeticBEAVYTensorP<T> output_;
-  std::unique_ptr<ENCRYPTO::ObliviousTransfer::ACOTSender<T>> ot_sender_;
-  std::unique_ptr<ENCRYPTO::ObliviousTransfer::ACOTReceiver<T>> ot_receiver_;
+  std::unique_ptr<BitIntegerMultiplicationIntSide<T>> mult_int_side_;
+  std::unique_ptr<BitIntegerMultiplicationBitSide<T>> mult_bit_side_;
+  std::vector<T> delta_b_share_;
+  std::vector<T> delta_b_x_delta_n_share_;
+  ENCRYPTO::ReusableFiberFuture<std::vector<T>> share_future_;
 };
 
 class BooleanBEAVYTensorMaxPool : public NewGate {

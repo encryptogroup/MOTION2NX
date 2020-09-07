@@ -190,9 +190,11 @@ class BEAVYProvider : public GateFactory,
   tensor::TensorCP make_tensor_sqr_op(const tensor::TensorCP input,
                                       std::size_t fractional_bits = 0) override;
   tensor::TensorCP make_tensor_relu_op(const tensor::TensorCP) override;
+  template <typename T>
+  tensor::TensorCP basic_make_tensor_relu_op(const tensor::TensorCP, const tensor::TensorCP);
+  tensor::TensorCP make_tensor_relu_op(const tensor::TensorCP, const tensor::TensorCP) override;
   tensor::TensorCP make_tensor_maxpool_op(const tensor::MaxPoolOp&,
                                           const tensor::TensorCP) override;
-  using TensorOpFactory::make_tensor_relu_op;
   template <typename T>
   tensor::TensorCP basic_make_convert_boolean_to_arithmetic_beavy_tensor(const tensor::TensorCP);
   tensor::TensorCP make_convert_boolean_to_arithmetic_beavy_tensor(const tensor::TensorCP);

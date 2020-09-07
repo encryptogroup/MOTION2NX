@@ -1042,6 +1042,44 @@ tensor::TensorCP BEAVYProvider::make_tensor_relu_op(const tensor::TensorCP in) {
   return output;
 }
 
+template <typename T>
+tensor::TensorCP BEAVYProvider::basic_make_tensor_relu_op(const tensor::TensorCP in_bool,
+                                                          const tensor::TensorCP in_arith) {
+  const auto input_bool_tensor = std::dynamic_pointer_cast<const BooleanBEAVYTensor>(in_bool);
+  assert(input_bool_tensor != nullptr);
+  const auto input_arith_tensor =
+      std::dynamic_pointer_cast<const ArithmeticBEAVYTensor<T>>(in_arith);
+  assert(input_arith_tensor != nullptr);
+  auto gate_id = gate_register_.get_next_gate_id();
+  auto tensor_op = std::make_unique<BooleanXArithmeticBEAVYTensorRelu<T>>(
+      gate_id, *this, input_bool_tensor, input_arith_tensor);
+  auto output = tensor_op->get_output_tensor();
+  gate_register_.register_gate(std::move(tensor_op));
+  return output;
+}
+
+tensor::TensorCP BEAVYProvider::make_tensor_relu_op(const tensor::TensorCP in_bool,
+                                                    const tensor::TensorCP in_arith) {
+  if (in_bool->get_protocol() != MPCProtocol::BooleanBEAVY ||
+      in_arith->get_protocol() != MPCProtocol::ArithmeticBEAVY) {
+    throw std::invalid_argument("expected Boolean and arithmetic BEAVY, respectively");
+  }
+  const auto bit_size = in_bool->get_bit_size();
+  if (bit_size != in_arith->get_bit_size()) {
+    throw std::invalid_argument("bit size mismatch");
+  }
+  switch (bit_size) {
+    case 32:
+      return basic_make_tensor_relu_op<std::uint32_t>(in_bool, in_arith);
+      break;
+    case 64:
+      return basic_make_tensor_relu_op<std::uint64_t>(in_bool, in_arith);
+      break;
+    default:
+      throw std::invalid_argument(fmt::format("unexpected bit size {}", bit_size));
+  }
+}
+
 tensor::TensorCP BEAVYProvider::make_tensor_maxpool_op(const tensor::MaxPoolOp& maxpool_op,
                                                        const tensor::TensorCP in) {
   const auto input_tensor = std::dynamic_pointer_cast<const BooleanBEAVYTensor>(in);
