@@ -541,6 +541,7 @@ void BooleanToArithmeticGMWTensorConversion<T>::evaluate_online() {
   t.Reserve(Helpers::Convert::BitsToBytes(bit_size_ * data_size_));
 
   // collect all shares into a single buffer
+  input_->wait_online();
   const auto& input_share = input_->get_share();
   for (std::size_t bit_j = 0; bit_j < bit_size_; ++bit_j) {
     const auto& share = input_share[bit_j];
