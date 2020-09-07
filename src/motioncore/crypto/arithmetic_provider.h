@@ -50,6 +50,48 @@ class ArithmeticProvider;
 class Logger;
 
 template <typename T>
+class BitIntegerMultiplicationIntSide {
+ public:
+  BitIntegerMultiplicationIntSide(std::size_t batch_size, std::size_t vector_size,
+                                  ENCRYPTO::ObliviousTransfer::OTProvider&);
+  ~BitIntegerMultiplicationIntSide();
+  void set_inputs(std::vector<T>&& inputs);
+  void set_inputs(const std::vector<T>& inputs);
+  void set_inputs(const T* inputs);
+  void compute_outputs();
+  std::vector<T> get_outputs();
+  void clear() noexcept;
+
+ private:
+  using is_enabled_ = ENCRYPTO::is_unsigned_int_t<T>;
+  std::size_t batch_size_;
+  std::size_t vector_size_;
+  std::vector<T> outputs_;
+  std::unique_ptr<ENCRYPTO::ObliviousTransfer::ACOTSender<T>> ot_sender_;
+};
+
+template <typename T>
+class BitIntegerMultiplicationBitSide {
+ public:
+  BitIntegerMultiplicationBitSide(std::size_t batch_size, std::size_t vector_size,
+                                  ENCRYPTO::ObliviousTransfer::OTProvider&);
+  ~BitIntegerMultiplicationBitSide();
+  void set_inputs(ENCRYPTO::BitVector<>&& inputs);
+  void set_inputs(const ENCRYPTO::BitVector<>& inputs);
+  void compute_outputs();
+  std::vector<T> get_outputs();
+  void clear() noexcept;
+
+ private:
+  using is_enabled_ = ENCRYPTO::is_unsigned_int_t<T>;
+  std::size_t batch_size_;
+  std::size_t vector_size_;
+  std::vector<T> outputs_;
+  std::unique_ptr<ENCRYPTO::ObliviousTransfer::ACOTReceiver<T>> ot_receiver_;
+  std::shared_ptr<Logger> logger_;
+};
+
+template <typename T>
 class IntegerMultiplicationSender {
  public:
   IntegerMultiplicationSender(std::size_t batch_size, std::size_t vector_size,
@@ -177,6 +219,13 @@ class ConvolutionKernelSide {
 class ArithmeticProvider {
  public:
   ArithmeticProvider(ENCRYPTO::ObliviousTransfer::OTProvider&, std::shared_ptr<Logger>);
+
+  template <typename T>
+  std::unique_ptr<BitIntegerMultiplicationIntSide<T>> register_bit_integer_multiplication_int_side(
+      std::size_t batch_size, std::size_t vector_size = 1);
+  template <typename T>
+  std::unique_ptr<BitIntegerMultiplicationBitSide<T>> register_bit_integer_multiplication_bit_side(
+      std::size_t batch_size, std::size_t vector_size = 1);
 
   template <typename T>
   std::unique_ptr<IntegerMultiplicationSender<T>> register_integer_multiplication_send(

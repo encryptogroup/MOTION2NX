@@ -33,6 +33,115 @@
 
 namespace MOTION {
 
+// ---------- BitIntegerMultiplicationIntSide ----------
+
+template <typename T>
+BitIntegerMultiplicationIntSide<T>::BitIntegerMultiplicationIntSide(
+    std::size_t batch_size, std::size_t vector_size,
+    ENCRYPTO::ObliviousTransfer::OTProvider& ot_provider)
+    : batch_size_(batch_size),
+      vector_size_(vector_size),
+      ot_sender_(ot_provider.RegisterSendACOT<T>(batch_size, vector_size)) {}
+
+template <typename T>
+BitIntegerMultiplicationIntSide<T>::~BitIntegerMultiplicationIntSide() = default;
+
+template <typename T>
+void BitIntegerMultiplicationIntSide<T>::set_inputs(std::vector<T>&& inputs) {
+  if (inputs.size() != batch_size_ * vector_size_) {
+    throw std::invalid_argument("input has unexpected size");
+  }
+  ot_sender_->SetCorrelations(std::move(inputs));
+  ot_sender_->SendMessages();
+}
+
+template <typename T>
+void BitIntegerMultiplicationIntSide<T>::set_inputs(const std::vector<T>& inputs) {
+  if (inputs.size() != batch_size_ * vector_size_) {
+    throw std::invalid_argument("input has unexpected size");
+  }
+  ot_sender_->SetCorrelations(inputs);
+  ot_sender_->SendMessages();
+}
+
+template <typename T>
+void BitIntegerMultiplicationIntSide<T>::set_inputs(const T* inputs) {
+  std::vector<T> ot_inputs(batch_size_ * vector_size_);
+  std::copy_n(inputs, batch_size_ * vector_size_, std::begin(ot_inputs));
+  ot_sender_->SetCorrelations(std::move(ot_inputs));
+  ot_sender_->SendMessages();
+}
+
+template <typename T>
+void BitIntegerMultiplicationIntSide<T>::compute_outputs() {
+  ot_sender_->ComputeOutputs();
+  outputs_ = ot_sender_->GetOutputs();
+  assert(outputs_.size() == batch_size_ * vector_size_);
+  std::transform(std::begin(outputs_), std::end(outputs_), std::begin(outputs_), std::negate{});
+}
+
+template <typename T>
+std::vector<T> BitIntegerMultiplicationIntSide<T>::get_outputs() {
+  // TODO: check output is ready
+  return std::move(outputs_);
+}
+
+template <typename T>
+void BitIntegerMultiplicationIntSide<T>::clear() noexcept {
+  ot_sender_->clear();
+  outputs_ = {};
+}
+
+// ---------- BitIntegerMultiplicationBitSide ----------
+
+template <typename T>
+BitIntegerMultiplicationBitSide<T>::BitIntegerMultiplicationBitSide(
+    std::size_t batch_size, std::size_t vector_size,
+    ENCRYPTO::ObliviousTransfer::OTProvider& ot_provider)
+    : batch_size_(batch_size),
+      vector_size_(vector_size),
+      ot_receiver_(ot_provider.RegisterReceiveACOT<T>(batch_size, vector_size)) {}
+
+template <typename T>
+BitIntegerMultiplicationBitSide<T>::~BitIntegerMultiplicationBitSide() = default;
+
+template <typename T>
+void BitIntegerMultiplicationBitSide<T>::set_inputs(ENCRYPTO::BitVector<>&& inputs) {
+  if (inputs.GetSize() != batch_size_) {
+    throw std::invalid_argument("input has unexpected size");
+  }
+  ot_receiver_->SetChoices(std::move(inputs));
+  ot_receiver_->SendCorrections();
+}
+
+template <typename T>
+void BitIntegerMultiplicationBitSide<T>::set_inputs(const ENCRYPTO::BitVector<>& inputs) {
+  if (inputs.GetSize() != batch_size_) {
+    throw std::invalid_argument("input has unexpected size");
+  }
+  ot_receiver_->SetChoices(inputs);
+  ot_receiver_->SendCorrections();
+}
+
+template <typename T>
+void BitIntegerMultiplicationBitSide<T>::compute_outputs() {
+  ot_receiver_->ComputeOutputs();
+  outputs_ = ot_receiver_->GetOutputs();
+  assert(outputs_.size() == batch_size_ * vector_size_);
+}
+
+template <typename T>
+std::vector<T> BitIntegerMultiplicationBitSide<T>::get_outputs() {
+  // TODO: check output is ready
+  return std::move(outputs_);
+}
+
+template <typename T>
+void BitIntegerMultiplicationBitSide<T>::clear() noexcept {
+  ot_receiver_->clear();
+  outputs_ = {};
+}
+
 // ---------- IntegerMultiplicationSender ----------
 
 template <typename T>
@@ -500,6 +609,22 @@ ArithmeticProvider::ArithmeticProvider(ENCRYPTO::ObliviousTransfer::OTProvider& 
     : ot_provider_(ot_provider), logger_(logger) {}
 
 template <typename T>
+std::unique_ptr<BitIntegerMultiplicationIntSide<T>>
+ArithmeticProvider::register_bit_integer_multiplication_int_side(std::size_t batch_size,
+                                                                 std::size_t vector_size) {
+  return std::make_unique<BitIntegerMultiplicationIntSide<T>>(batch_size, vector_size,
+                                                              ot_provider_);
+}
+
+template <typename T>
+std::unique_ptr<BitIntegerMultiplicationBitSide<T>>
+ArithmeticProvider::register_bit_integer_multiplication_bit_side(std::size_t batch_size,
+                                                                 std::size_t vector_size) {
+  return std::make_unique<BitIntegerMultiplicationBitSide<T>>(batch_size, vector_size,
+                                                              ot_provider_);
+}
+
+template <typename T>
 std::unique_ptr<IntegerMultiplicationSender<T>>
 ArithmeticProvider::register_integer_multiplication_send(std::size_t batch_size,
                                                          std::size_t vector_size) {
@@ -560,6 +685,18 @@ ArithmeticProviderManager::~ArithmeticProviderManager() = default;
 
 // ---------- template instantiations ----------
 
+template class BitIntegerMultiplicationIntSide<std::uint8_t>;
+template class BitIntegerMultiplicationIntSide<std::uint16_t>;
+template class BitIntegerMultiplicationIntSide<std::uint32_t>;
+template class BitIntegerMultiplicationIntSide<std::uint64_t>;
+template class BitIntegerMultiplicationIntSide<__uint128_t>;
+
+template class BitIntegerMultiplicationBitSide<std::uint8_t>;
+template class BitIntegerMultiplicationBitSide<std::uint16_t>;
+template class BitIntegerMultiplicationBitSide<std::uint32_t>;
+template class BitIntegerMultiplicationBitSide<std::uint64_t>;
+template class BitIntegerMultiplicationBitSide<__uint128_t>;
+
 template class IntegerMultiplicationSender<std::uint8_t>;
 template class IntegerMultiplicationSender<std::uint16_t>;
 template class IntegerMultiplicationSender<std::uint32_t>;
@@ -595,6 +732,38 @@ template class ConvolutionKernelSide<std::uint16_t>;
 template class ConvolutionKernelSide<std::uint32_t>;
 template class ConvolutionKernelSide<std::uint64_t>;
 template class ConvolutionKernelSide<__uint128_t>;
+
+template std::unique_ptr<BitIntegerMultiplicationIntSide<std::uint8_t>>
+    ArithmeticProvider::register_bit_integer_multiplication_int_side<std::uint8_t>(std::size_t,
+                                                                                   std::size_t);
+template std::unique_ptr<BitIntegerMultiplicationIntSide<std::uint16_t>>
+    ArithmeticProvider::register_bit_integer_multiplication_int_side<std::uint16_t>(std::size_t,
+                                                                                    std::size_t);
+template std::unique_ptr<BitIntegerMultiplicationIntSide<std::uint32_t>>
+    ArithmeticProvider::register_bit_integer_multiplication_int_side<std::uint32_t>(std::size_t,
+                                                                                    std::size_t);
+template std::unique_ptr<BitIntegerMultiplicationIntSide<std::uint64_t>>
+    ArithmeticProvider::register_bit_integer_multiplication_int_side<std::uint64_t>(std::size_t,
+                                                                                    std::size_t);
+template std::unique_ptr<BitIntegerMultiplicationIntSide<__uint128_t>>
+    ArithmeticProvider::register_bit_integer_multiplication_int_side<__uint128_t>(std::size_t,
+                                                                                  std::size_t);
+
+template std::unique_ptr<BitIntegerMultiplicationBitSide<std::uint8_t>>
+    ArithmeticProvider::register_bit_integer_multiplication_bit_side<std::uint8_t>(std::size_t,
+                                                                                   std::size_t);
+template std::unique_ptr<BitIntegerMultiplicationBitSide<std::uint16_t>>
+    ArithmeticProvider::register_bit_integer_multiplication_bit_side<std::uint16_t>(std::size_t,
+                                                                                    std::size_t);
+template std::unique_ptr<BitIntegerMultiplicationBitSide<std::uint32_t>>
+    ArithmeticProvider::register_bit_integer_multiplication_bit_side<std::uint32_t>(std::size_t,
+                                                                                    std::size_t);
+template std::unique_ptr<BitIntegerMultiplicationBitSide<std::uint64_t>>
+    ArithmeticProvider::register_bit_integer_multiplication_bit_side<std::uint64_t>(std::size_t,
+                                                                                    std::size_t);
+template std::unique_ptr<BitIntegerMultiplicationBitSide<__uint128_t>>
+    ArithmeticProvider::register_bit_integer_multiplication_bit_side<__uint128_t>(std::size_t,
+                                                                             std::size_t);
 
 template std::unique_ptr<IntegerMultiplicationSender<std::uint8_t>>
     ArithmeticProvider::register_integer_multiplication_send<std::uint8_t>(std::size_t,

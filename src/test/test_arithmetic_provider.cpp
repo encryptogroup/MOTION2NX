@@ -104,6 +104,81 @@ using integer_types =
     ::testing::Types<std::uint8_t, std::uint16_t, std::uint32_t, std::uint64_t, __uint128_t>;
 TYPED_TEST_SUITE(ArithmeticProviderTest, integer_types);
 
+TYPED_TEST(ArithmeticProviderTest, BitIntegerMultiplication) {
+  const std::size_t batch_size = 10;
+
+  const auto input_int_side = MOTION::Helpers::RandomVector<TypeParam>(batch_size);
+  const auto input_bit_side = ENCRYPTO::BitVector<>::Random(batch_size);
+  auto mult_int_side =
+      this->get_sender_provider().template register_bit_integer_multiplication_int_side<TypeParam>(
+          batch_size);
+  auto mult_bit_side =
+      this->get_receiver_provider()
+          .template register_bit_integer_multiplication_bit_side<TypeParam>(batch_size);
+
+  this->run_setup();
+
+  mult_int_side->set_inputs(input_int_side);
+  mult_bit_side->set_inputs(input_bit_side);
+  mult_int_side->compute_outputs();
+  mult_bit_side->compute_outputs();
+  const auto output_int_side = mult_int_side->get_outputs();
+  const auto output_bit_side = mult_bit_side->get_outputs();
+
+  ASSERT_EQ(output_int_side.size(), batch_size);
+  ASSERT_EQ(output_bit_side.size(), batch_size);
+
+  for (std::size_t i = 0; i < batch_size; ++i) {
+    if (input_bit_side.Get(i)) {
+      ASSERT_EQ(TypeParam(output_int_side[i] + output_bit_side[i]), input_int_side[i]);
+    } else {
+      ASSERT_EQ(TypeParam(output_int_side[i] + output_bit_side[i]), TypeParam(0));
+    }
+  }
+}
+
+TYPED_TEST(ArithmeticProviderTest, BitIntegerVectorMultiplication) {
+  const std::size_t batch_size = 10;
+  const std::size_t vector_size = 8;
+
+  const auto input_int_side = MOTION::Helpers::RandomVector<TypeParam>(batch_size * vector_size);
+  const auto input_bit_side = ENCRYPTO::BitVector<>::Random(batch_size);
+  auto mult_int_side =
+      this->get_sender_provider().template register_bit_integer_multiplication_int_side<TypeParam>(
+          batch_size, vector_size);
+  auto mult_bit_side = this->get_receiver_provider()
+                           .template register_bit_integer_multiplication_bit_side<TypeParam>(
+                               batch_size, vector_size);
+
+  this->run_setup();
+
+  mult_int_side->set_inputs(input_int_side);
+  mult_bit_side->set_inputs(input_bit_side);
+  mult_int_side->compute_outputs();
+  mult_bit_side->compute_outputs();
+  const auto output_int_side = mult_int_side->get_outputs();
+  const auto output_bit_side = mult_bit_side->get_outputs();
+
+  ASSERT_EQ(output_int_side.size(), batch_size * vector_size);
+  ASSERT_EQ(output_bit_side.size(), batch_size * vector_size);
+
+  for (std::size_t i = 0; i < batch_size; ++i) {
+    if (input_bit_side.Get(i)) {
+      for (std::size_t j = 0; j < vector_size; ++j) {
+        ASSERT_EQ(
+            TypeParam(output_int_side[i * vector_size + j] + output_bit_side[i * vector_size + j]),
+            input_int_side[i * vector_size + j]);
+      }
+    } else {
+      for (std::size_t j = 0; j < vector_size; ++j) {
+        ASSERT_EQ(
+            TypeParam(output_int_side[i * vector_size + j] + output_bit_side[i * vector_size + j]),
+            TypeParam(0));
+      }
+    }
+  }
+}
+
 TYPED_TEST(ArithmeticProviderTest, IntegerMultiplication) {
   const std::size_t batch_size = 10;
 
