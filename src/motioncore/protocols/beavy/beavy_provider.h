@@ -23,6 +23,7 @@
 #pragma once
 
 #include <memory>
+#include <vector>
 
 #include "base/gate_factory.h"
 #include "protocols/common/comm_mixin.h"
@@ -42,8 +43,11 @@ class CircuitLoader;
 class ArithmeticProviderManager;
 class GateRegister;
 class Logger;
+class NewGate;
+using NewGateP = std::unique_ptr<NewGate>;
 class NewWire;
 using NewWireP = std::shared_ptr<NewWire>;
+using WireVector = std::vector<NewWireP>;
 
 namespace Communication {
 class CommunicationLayer;
@@ -142,12 +146,16 @@ class BEAVYProvider : public GateFactory,
   void make_arithmetic_output_gate_other(std::size_t output_owner, const WireVector&) override;
 
   // function gates
-  std::vector<std::shared_ptr<NewWire>> make_unary_gate(
-      ENCRYPTO::PrimitiveOperationType op, const std::vector<std::shared_ptr<NewWire>>&) override;
+  WireVector make_unary_gate(ENCRYPTO::PrimitiveOperationType op, const WireVector&) override;
 
-  std::vector<std::shared_ptr<NewWire>> make_binary_gate(
-      ENCRYPTO::PrimitiveOperationType op, const std::vector<std::shared_ptr<NewWire>>&,
-      const std::vector<std::shared_ptr<NewWire>>&) override;
+  WireVector make_binary_gate(ENCRYPTO::PrimitiveOperationType op, const WireVector&,
+                              const WireVector&) override;
+
+  std::pair<NewGateP, WireVector> construct_unary_gate(ENCRYPTO::PrimitiveOperationType op,
+                                                       const WireVector&);
+
+  std::pair<NewGateP, WireVector> construct_binary_gate(ENCRYPTO::PrimitiveOperationType op,
+                                                        const WireVector&, const WireVector&);
 
   // conversions
   WireVector convert(MPCProtocol dst_protocol, const WireVector&) override;
@@ -201,6 +209,14 @@ class BEAVYProvider : public GateFactory,
   WireVector make_inv_gate(const WireVector& in_a);
   WireVector make_xor_gate(const WireVector& in_a, const WireVector& in_b);
   WireVector make_and_gate(const WireVector& in_a, const WireVector& in_b);
+  template <typename BinaryGate, bool plain = false>
+  std::pair<NewGateP, WireVector> construct_boolean_binary_gate(const WireVector& in_a,
+                                                                const WireVector& in_b);
+  std::pair<NewGateP, WireVector> construct_inv_gate(const WireVector& in_a);
+  std::pair<NewGateP, WireVector> construct_xor_gate(const WireVector& in_a,
+                                                     const WireVector& in_b);
+  std::pair<NewGateP, WireVector> construct_and_gate(const WireVector& in_a,
+                                                     const WireVector& in_b);
 
   template <template <typename> class BinaryGate, typename T>
   WireVector make_arithmetic_unary_gate(const NewWireP& in_a);
