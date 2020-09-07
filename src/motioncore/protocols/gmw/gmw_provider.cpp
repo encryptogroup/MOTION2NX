@@ -940,6 +940,18 @@ tensor::TensorCP GMWProvider::make_tensor_relu_op(const tensor::TensorCP in_bool
   }
 }
 
+tensor::TensorCP GMWProvider::make_tensor_maxpool_op(const tensor::MaxPoolOp& maxpool_op,
+                                                     const tensor::TensorCP in) {
+  const auto input_tensor = std::dynamic_pointer_cast<const BooleanGMWTensor>(in);
+  assert(input_tensor != nullptr);
+  auto gate_id = gate_register_.get_next_gate_id();
+  auto tensor_op =
+      std::make_unique<BooleanGMWTensorMaxPool>(gate_id, *this, maxpool_op, input_tensor);
+  auto output = tensor_op->get_output_tensor();
+  gate_register_.register_gate(std::move(tensor_op));
+  return output;
+}
+
 template <typename T>
 tensor::TensorCP GMWProvider::basic_make_convert_boolean_to_arithmetic_gmw_tensor(
     const tensor::TensorCP in) {

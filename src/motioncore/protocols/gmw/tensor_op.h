@@ -27,14 +27,23 @@
 #include "tensor/tensor_op.h"
 #include "utility/reusable_future.h"
 
-namespace ENCRYPTO::ObliviousTransfer {
+namespace ENCRYPTO {
+
+struct AlgorithmDescription;
+
+namespace ObliviousTransfer {
 template <typename T>
 class ACOTSender;
 template <typename T>
 class ACOTReceiver;
-}
+}  // namespace ObliviousTransfer
+
+}  // namespace ENCRYPTO
 
 namespace MOTION::proto::gmw {
+
+class BooleanGMWWire;
+using BooleanGMWWireVector = std::vector<std::shared_ptr<BooleanGMWWire>>;
 
 class GMWProvider;
 
@@ -246,6 +255,29 @@ class BooleanXArithmeticGMWTensorRelu : public NewGate {
   ArithmeticGMWTensorP<T> output_;
   std::unique_ptr<ENCRYPTO::ObliviousTransfer::ACOTSender<T>> ot_sender_;
   std::unique_ptr<ENCRYPTO::ObliviousTransfer::ACOTReceiver<T>> ot_receiver_;
+};
+
+class BooleanGMWTensorMaxPool : public NewGate {
+ public:
+  BooleanGMWTensorMaxPool(std::size_t gate_id, GMWProvider&, tensor::MaxPoolOp maxpool_op,
+                          const BooleanGMWTensorCP input);
+  bool need_setup() const noexcept override { return false; }
+  bool need_online() const noexcept override { return true; }
+  void evaluate_setup() override {}
+  void evaluate_online() override;
+  const BooleanGMWTensorP& get_output_tensor() const { return output_; }
+
+ private:
+  GMWProvider& gmw_provider_;
+  const tensor::MaxPoolOp maxpool_op_;
+  const std::size_t bit_size_;
+  const std::size_t data_size_;
+  const BooleanGMWTensorCP input_;
+  const BooleanGMWTensorP output_;
+  const ENCRYPTO::AlgorithmDescription& maxpool_algo_;
+  BooleanGMWWireVector input_wires_;
+  BooleanGMWWireVector output_wires_;
+  std::vector<std::unique_ptr<NewGate>> gates_;
 };
 
 }  // namespace MOTION::proto::gmw
