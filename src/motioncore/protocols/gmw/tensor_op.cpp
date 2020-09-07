@@ -36,6 +36,7 @@
 #include "crypto/oblivious_transfer/ot_provider.h"
 #include "crypto/sharing_randomness_generator.h"
 #include "gmw_provider.h"
+#include "utility/bit_vector.h"
 #include "utility/constants.h"
 #include "utility/fixed_point.h"
 #include "utility/linear_algebra.h"
@@ -790,7 +791,7 @@ BooleanGMWTensorMaxPool::BooleanGMWTensorMaxPool(std::size_t gate_id, GMWProvide
       output_(std::make_shared<BooleanGMWTensor>(maxpool_op_.get_output_tensor_dims(), bit_size_)),
       // XXX: use depth-optimized circuit here
       maxpool_algo_(gmw_provider_.get_circuit_loader().load_maxpool_circuit(
-          bit_size_, maxpool_op_.compute_kernel_size())) {
+          bit_size_, maxpool_op_.compute_kernel_size(), true)) {
   if (!maxpool_op_.verify()) {
     throw std::invalid_argument("invalid MaxPoolOp");
   }
@@ -815,18 +816,13 @@ BooleanGMWTensorMaxPool::BooleanGMWTensorMaxPool(std::size_t gate_id, GMWProvide
   }
 }
 
-void BooleanGMWTensorMaxPool::evaluate_online() {
-  if constexpr (MOTION_VERBOSE_DEBUG) {
-    auto logger = gmw_provider_.get_logger();
-    if (logger) {
-      logger->LogTrace(
-          fmt::format("Gate {}: BooleanGMWTensorMaxPool::evaluate_online start", gate_id_));
-    }
-  }
-  const auto& input_shape = maxpool_op_.input_shape_;
-  const auto& output_shape = maxpool_op_.output_shape_;
-  const auto& kernel_shape = maxpool_op_.kernel_shape_;
-  const auto& strides = maxpool_op_.strides_;
+static void prepare_wires(std::size_t bit_size, const tensor::MaxPoolOp& maxpool_op,
+                          BooleanGMWWireVector& circuit_wires,
+                          const std::vector<ENCRYPTO::BitVector<>>& input_shares) {
+  const auto& input_shape = maxpool_op.input_shape_;
+  const auto& output_shape = maxpool_op.output_shape_;
+  const auto& kernel_shape = maxpool_op.kernel_shape_;
+  const auto& strides = maxpool_op.strides_;
 
   // compute the index in the (tensor) input shares
   const auto in_idx = [input_shape](auto channel, auto row, auto column) {
@@ -837,11 +833,11 @@ void BooleanGMWTensorMaxPool::evaluate_online() {
   };
 
   // compute the index of the input wire of the circuit
-  const auto mpin_wires_idx = [this, &kernel_shape](auto bit_j, auto k_row, auto k_column) {
-    assert(bit_j < bit_size_);
+  const auto mpin_wires_idx = [bit_size, &kernel_shape](auto bit_j, auto k_row, auto k_column) {
+    assert(bit_j < bit_size);
     assert(k_row < kernel_shape[0]);
     assert(k_column < kernel_shape[1]);
-    return (k_row * kernel_shape[1] + k_column) * bit_size_ + bit_j;
+    return (k_row * kernel_shape[1] + k_column) * bit_size + bit_j;
   };
 
   // compute the index in the output shares and circuit input shares
@@ -852,22 +848,18 @@ void BooleanGMWTensorMaxPool::evaluate_online() {
     return channel * (output_shape[1] * output_shape[2]) + row * output_shape[2] + column;
   };
 
-  for (std::size_t bit_j = 0; bit_j < bit_size_; ++bit_j) {
-    const auto& in_share = input_->get_share()[bit_j];
+  for (std::size_t bit_j = 0; bit_j < bit_size; ++bit_j) {
+    const auto& in_share = input_shares[bit_j];
     for (std::size_t channel_i = 0; channel_i < output_shape[0]; ++channel_i) {
       std::size_t i_row = 0;
       for (std::size_t o_row = 0; o_row < output_shape[1]; ++o_row) {
         std::size_t i_col = 0;
         for (std::size_t o_col = 0; o_col < output_shape[2]; ++o_col) {
-          // load window content from (channel, i_row_j, i_col_j)
           for (std::size_t k_row = 0; k_row < kernel_shape[0]; ++k_row) {
             for (std::size_t k_col = 0; k_col < kernel_shape[0]; ++k_col) {
               auto bit = in_share.Get(in_idx(channel_i, i_row + k_row, i_col + k_col));
-              auto& bv = input_wires_[mpin_wires_idx(bit_j, k_row, k_col)]->get_share();
+              auto& bv = circuit_wires[mpin_wires_idx(bit_j, k_row, k_col)]->get_share();
               bv.Set(bit, out_idx(channel_i, o_row, o_col));
-              // std::cerr << fmt::format("copying bit from ({},{},{}) = {} to ({}, {}, {}) = {}[{}]\n",
-              //     channel_i, i_row + k_row, i_col + k_col, in_idx(channel_i, i_row + k_row, i_col + k_col),
-              //     channel_i, o_row, o_col, out_idx(channel_i, o_row, o_col), k_row * kernel_shape[1] + k_col);
             }
           }
 
@@ -877,20 +869,28 @@ void BooleanGMWTensorMaxPool::evaluate_online() {
       }
     }
   }
-  for (auto& wire : input_wires_) {
+  for (auto& wire : circuit_wires) {
     wire->set_online_ready();
   }
+}
 
-  std::cerr << "eval gates\n";
+void BooleanGMWTensorMaxPool::evaluate_online() {
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = gmw_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(
+          fmt::format("Gate {}: BooleanGMWTensorMaxPool::evaluate_online start", gate_id_));
+    }
+  }
 
-  // TODO: prepare inputs for maxpool circuit
+  input_->wait_online();
+
+  prepare_wires(bit_size_, maxpool_op_, input_wires_, input_->get_share());
+
   for (auto& gate : gates_) {
     // should work since its a Boolean circuit consisting of AND, XOR, INV gates
     gate->evaluate_online();
   }
-
-  std::cerr << "done\n";
-
 
   auto& output_shares = output_->get_share();
   for (std::size_t bit_j = 0; bit_j < bit_size_; ++bit_j) {
