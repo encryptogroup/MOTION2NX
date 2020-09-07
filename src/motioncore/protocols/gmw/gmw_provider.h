@@ -39,6 +39,7 @@ class OTProviderManager;
 
 namespace MOTION {
 
+class CircuitLoader;
 class GateRegister;
 class Logger;
 class LinAlgTripleProvider;
@@ -74,9 +75,9 @@ class GMWProvider : public GateFactory,
   enum class Role { garbler, evaluator };
   struct my_input_t {};
 
-  GMWProvider(Communication::CommunicationLayer&, GateRegister&, Crypto::MotionBaseProvider&,
-              ENCRYPTO::ObliviousTransfer::OTProviderManager&, MTProvider&, SPProvider&,
-              SBProvider&, std::shared_ptr<Logger>);
+  GMWProvider(Communication::CommunicationLayer&, GateRegister&, CircuitLoader&,
+              Crypto::MotionBaseProvider&, ENCRYPTO::ObliviousTransfer::OTProviderManager&,
+              MTProvider&, SPProvider&, SBProvider&, std::shared_ptr<Logger>);
   ~GMWProvider();
 
   std::string get_provider_name() const noexcept override { return "GMWProvider"; }
@@ -94,6 +95,7 @@ class GMWProvider : public GateFactory,
     assert(linalg_triple_provider_);
     return *linalg_triple_provider_;
   }
+  CircuitLoader& get_circuit_loader() noexcept { return circuit_loader_; }
   std::shared_ptr<Logger> get_logger() const noexcept { return logger_; }
   bool is_my_job(std::size_t gate_id) const noexcept;
   std::size_t get_my_id() const noexcept { return my_id_; }
@@ -250,6 +252,7 @@ class GMWProvider : public GateFactory,
  private:
   Communication::CommunicationLayer& communication_layer_;
   GateRegister& gate_register_;
+  CircuitLoader& circuit_loader_;
   Crypto::MotionBaseProvider& motion_base_provider_;
   ENCRYPTO::ObliviousTransfer::OTProviderManager& ot_manager_;
   MTProvider& mt_provider_;

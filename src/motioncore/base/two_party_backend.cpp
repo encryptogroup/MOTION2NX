@@ -78,8 +78,8 @@ TwoPartyBackend::TwoPartyBackend(Communication::CommunicationLayer& comm_layer,
           comm_layer_, *gate_register_, *motion_base_provider_, *ot_manager_, *arithmetic_manager_,
           logger_)),
       gmw_provider_(std::make_unique<proto::gmw::GMWProvider>(
-          comm_layer_, *gate_register_, *motion_base_provider_, *ot_manager_, *mt_provider_,
-          *sp_provider_, *sb_provider_, logger_)),
+          comm_layer_, *gate_register_, *circuit_loader_, *motion_base_provider_, *ot_manager_,
+          *mt_provider_, *sp_provider_, *sb_provider_, logger_)),
       yao_provider_(std::make_unique<proto::yao::YaoProvider>(
           comm_layer_, *gate_register_, *circuit_loader_, *motion_base_provider_,
           ot_manager_->get_provider(1 - my_id_), logger_)) {

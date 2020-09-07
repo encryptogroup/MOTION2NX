@@ -47,7 +47,7 @@
 namespace MOTION::proto::gmw {
 
 GMWProvider::GMWProvider(Communication::CommunicationLayer& communication_layer,
-                         GateRegister& gate_register,
+                         GateRegister& gate_register, CircuitLoader& circuit_loader,
                          Crypto::MotionBaseProvider& motion_base_provider,
                          ENCRYPTO::ObliviousTransfer::OTProviderManager& ot_manager,
                          MTProvider& mt_provider, SPProvider& sp_provider, SBProvider& sb_provider,
@@ -55,6 +55,7 @@ GMWProvider::GMWProvider(Communication::CommunicationLayer& communication_layer,
     : CommMixin(communication_layer, Communication::MessageType::GMWGate, logger),
       communication_layer_(communication_layer),
       gate_register_(gate_register),
+      circuit_loader_(circuit_loader),
       motion_base_provider_(motion_base_provider),
       ot_manager_(ot_manager),
       mt_provider_(mt_provider),

@@ -26,6 +26,7 @@
 
 #include <gtest/gtest.h>
 
+#include "algorithm/circuit_loader.h"
 #include "base/gate_register.h"
 #include "communication/communication_layer.h"
 #include "crypto/arithmetic_provider.h"
@@ -74,7 +75,7 @@ class GMWTensorTest : public ::testing::Test {
           *comm_layers_[i], ot_provider_managers_[i]->get_provider(1 - i), stats_[i], nullptr);
       gate_registers_[i] = std::make_unique<MOTION::GateRegister>();
       gmw_providers_[i] = std::make_unique<GMWProvider>(
-          *comm_layers_[i], *gate_registers_[i], *motion_base_providers_[i],
+          *comm_layers_[i], *gate_registers_[i], circuit_loader_, *motion_base_providers_[i],
           *ot_provider_managers_[i], *mt_providers_[i], *sp_providers_[i], *sb_providers_[i],
           loggers_[i]);
       gmw_providers_[i]->set_linalg_triple_provider(linalg_triple_providers_[i]);
@@ -151,6 +152,7 @@ class GMWTensorTest : public ::testing::Test {
     fut_e.get();
   }
 
+  MOTION::CircuitLoader circuit_loader_;
   std::vector<std::unique_ptr<MOTION::Communication::CommunicationLayer>> comm_layers_;
   std::array<std::unique_ptr<MOTION::BaseOTProvider>, 2> base_ot_providers_;
   std::array<std::unique_ptr<MOTION::Crypto::MotionBaseProvider>, 2> motion_base_providers_;
