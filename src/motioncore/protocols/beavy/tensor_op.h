@@ -27,14 +27,20 @@
 #include "tensor/tensor_op.h"
 #include "utility/reusable_future.h"
 
-namespace ENCRYPTO::ObliviousTransfer {
+namespace ENCRYPTO {
+
+struct AlgorithmDescription;
+
+namespace ObliviousTransfer {
 template <typename T>
 class ACOTSender;
 template <typename T>
 class ACOTReceiver;
 class XCOTBitSender;
 class XCOTBitReceiver;
-}  // namespace ENCRYPTO::ObliviousTransfer
+}  // namespace ObliviousTransfer
+
+}  // namespace ENCRYPTO
 
 namespace MOTION {
 template <typename T>
@@ -52,6 +58,9 @@ class MatrixMultiplicationRHS;
 }  // namespace MOTION
 
 namespace MOTION::proto::beavy {
+
+class BooleanBEAVYWire;
+using BooleanBEAVYWireVector = std::vector<std::shared_ptr<BooleanBEAVYWire>>;
 
 class BEAVYProvider;
 
@@ -284,6 +293,29 @@ class BooleanXArithmeticBEAVYTensorRelu : public NewGate {
   ArithmeticBEAVYTensorP<T> output_;
   std::unique_ptr<ENCRYPTO::ObliviousTransfer::ACOTSender<T>> ot_sender_;
   std::unique_ptr<ENCRYPTO::ObliviousTransfer::ACOTReceiver<T>> ot_receiver_;
+};
+
+class BooleanBEAVYTensorMaxPool : public NewGate {
+ public:
+  BooleanBEAVYTensorMaxPool(std::size_t gate_id, BEAVYProvider&, tensor::MaxPoolOp maxpool_op,
+                            const BooleanBEAVYTensorCP input);
+  bool need_setup() const noexcept override { return true; }
+  bool need_online() const noexcept override { return true; }
+  void evaluate_setup() override;
+  void evaluate_online() override;
+  const BooleanBEAVYTensorP& get_output_tensor() const { return output_; }
+
+ private:
+  BEAVYProvider& beavy_provider_;
+  const tensor::MaxPoolOp maxpool_op_;
+  const std::size_t bit_size_;
+  const std::size_t data_size_;
+  const BooleanBEAVYTensorCP input_;
+  const BooleanBEAVYTensorP output_;
+  const ENCRYPTO::AlgorithmDescription& maxpool_algo_;
+  BooleanBEAVYWireVector input_wires_;
+  BooleanBEAVYWireVector output_wires_;
+  std::vector<std::unique_ptr<NewGate>> gates_;
 };
 
 }  // namespace MOTION::proto::beavy

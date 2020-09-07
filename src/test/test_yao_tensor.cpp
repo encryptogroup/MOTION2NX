@@ -1110,3 +1110,87 @@ TYPED_TEST(YaoArithmeticBEAVYTensorTest, DISABLED_ReLUInBooleanXArithmeticBEAVY)
     }
   }
 }
+
+TYPED_TEST(YaoArithmeticBEAVYTensorTest, MaxPoolInBooleanBEAVY) {
+  const MOTION::tensor::TensorDimensions dims = {
+      .batch_size_ = 1, .num_channels_ = 1, .height_ = 4, .width_ = 4};
+  const MOTION::tensor::TensorDimensions out_dims = {
+      .batch_size_ = 1, .num_channels_ = 1, .height_ = 3, .width_ = 2};
+  const MOTION::tensor::MaxPoolOp maxpool_op = {.input_shape_ = {1, 4, 4},
+                                                .output_shape_ = {1, 3, 2},
+                                                .kernel_shape_ = {2, 2},
+                                                .strides_ = {1, 2}};
+  ASSERT_TRUE(maxpool_op.verify());
+
+  // clang-format off
+  // const std::vector<TypeParam> input = {
+  //   629, 499, 147, 593,
+  //   335, 313, 191, 159,
+  //   829, 569, 975, 846,
+  //   758, 466, 868, 403};
+  // const std::vector<TypeParam> expected_output = {
+  //   629, 593,
+  //   829, 975,
+  //   829, 975,
+  // };
+  std::vector<TypeParam> input;
+  std::vector<TypeParam> expected_output;
+  if constexpr (std::is_same_v<TypeParam, std::uint64_t>) {
+    input = {
+       9752516871661491360u,  4662446014583943733u, 11447746383552160793u,  6355249606212339500u,
+      18175355885135292618u,  7196435132770689189u,  2104876926157817893u, 14012399909055774597u,
+      18122604083447938486u,  2509168573361965776u, 17592664428622712039u,  2487988269217325321u,
+       7153114465142520673u, 16795418668493668102u, 11793396511977302258u,  1400963290576875662u};
+    expected_output = {
+      7196435132770689189u, 6355249606212339500u,
+      7196435132770689189u, 2487988269217325321u,
+      7153114465142520673u, 2487988269217325321u,
+    };
+  } else if constexpr (std::is_same_v<TypeParam, std::uint32_t>) {
+    input = {
+      0xfc9af2d7u, 0x80a495efu, 0x521b859cu, 0xf6c040d6u,
+      0x220aee7du, 0x100cb900u, 0x33541084u, 0xa8971444u,
+      0xb1f10b19u, 0x7ef65ca4u, 0x121716d5u, 0x997ffefau,
+      0x84a54d02u, 0xb9d7c593u, 0x369fedbfu, 0xd79ed530u
+    };
+    expected_output = {
+      0x220aee7du, 0x521b859cu,
+      0x7ef65ca4u, 0x33541084u,
+      0x7ef65ca4u, 0x369fedbfu,
+    };
+  }
+  // clang-format on
+
+  auto [input_promise, tensor_in_0] = this->make_arithmetic_T_tensor_input_my(0, dims);
+  auto tensor_in_1 = this->make_arithmetic_T_tensor_input_other(1, dims);
+
+  auto tensor_yao_0 =
+      this->yao_providers_[0]->make_convert_from_arithmetic_beavy_tensor(tensor_in_0);
+  auto tensor_yao_1 =
+      this->yao_providers_[1]->make_convert_from_arithmetic_beavy_tensor(tensor_in_1);
+  auto tensor_bbeavy_0 =
+      this->yao_providers_[0]->make_convert_to_boolean_beavy_tensor(tensor_yao_0);
+  auto tensor_bbeavy_1 =
+      this->yao_providers_[1]->make_convert_to_boolean_beavy_tensor(tensor_yao_1);
+  auto output_tensor_0 =
+      this->beavy_providers_[0]->make_tensor_maxpool_op(maxpool_op, tensor_bbeavy_0);
+  auto output_tensor_1 =
+      this->beavy_providers_[1]->make_tensor_maxpool_op(maxpool_op, tensor_bbeavy_1);
+  auto beavy_output_tensor_0 =
+      this->beavy_providers_[0]->make_convert_boolean_to_arithmetic_beavy_tensor(output_tensor_0);
+  auto beavy_output_tensor_1 =
+      this->beavy_providers_[1]->make_convert_boolean_to_arithmetic_beavy_tensor(output_tensor_1);
+  this->beavy_providers_[0]->make_arithmetic_tensor_output_other(beavy_output_tensor_0);
+  auto output_future = this->make_arithmetic_T_tensor_output_my(1, beavy_output_tensor_1);
+
+  ASSERT_EQ(output_tensor_0->get_dimensions(), out_dims);
+  ASSERT_EQ(output_tensor_1->get_dimensions(), out_dims);
+
+  this->run_setup();
+  this->run_gates_setup();
+  input_promise.set_value(input);
+  this->run_gates_online();
+
+  const auto output = output_future.get();
+  EXPECT_EQ(output, expected_output);
+}

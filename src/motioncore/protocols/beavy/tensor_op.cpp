@@ -24,6 +24,8 @@
 
 #include <stdexcept>
 
+#include "algorithm/circuit_loader.h"
+#include "algorithm/make_circuit.h"
 #include "beavy_provider.h"
 #include "crypto/arithmetic_provider.h"
 #include "crypto/motion_base_provider.h"
@@ -36,6 +38,7 @@
 #include "utility/fixed_point.h"
 #include "utility/linear_algebra.h"
 #include "utility/logger.h"
+#include "wire.h"
 
 namespace MOTION::proto::beavy {
 
@@ -1151,5 +1154,183 @@ void BooleanXArithmeticBEAVYTensorRelu<T>::evaluate_online() {
 
 template class BooleanXArithmeticBEAVYTensorRelu<std::uint32_t>;
 template class BooleanXArithmeticBEAVYTensorRelu<std::uint64_t>;
+
+BooleanBEAVYTensorMaxPool::BooleanBEAVYTensorMaxPool(std::size_t gate_id,
+                                                     BEAVYProvider& beavy_provider,
+                                                     tensor::MaxPoolOp maxpool_op,
+                                                     const BooleanBEAVYTensorCP input)
+    : NewGate(gate_id),
+      beavy_provider_(beavy_provider),
+      maxpool_op_(maxpool_op),
+      bit_size_(input->get_bit_size()),
+      data_size_(input->get_dimensions().get_data_size()),
+      input_(input),
+      output_(
+          std::make_shared<BooleanBEAVYTensor>(maxpool_op_.get_output_tensor_dims(), bit_size_)),
+      // XXX: use depth-optimized circuit here
+      maxpool_algo_(beavy_provider_.get_circuit_loader().load_maxpool_circuit(
+          bit_size_, maxpool_op_.compute_kernel_size(), true)) {
+  if (!maxpool_op_.verify()) {
+    throw std::invalid_argument("invalid MaxPoolOp");
+  }
+  const auto kernel_size = maxpool_op_.compute_kernel_size();
+  const auto output_size = maxpool_op_.compute_output_size();
+  input_wires_.resize(bit_size_ * kernel_size);
+  std::generate(std::begin(input_wires_), std::end(input_wires_), [output_size] {
+    auto w = std::make_shared<BooleanBEAVYWire>(output_size);
+    w->get_secret_share().Resize(output_size);
+    w->get_public_share().Resize(output_size);
+    return w;
+  });
+  {
+    WireVector in(bit_size_ * kernel_size);
+    std::transform(std::begin(input_wires_), std::end(input_wires_), std::begin(in),
+                   [](auto w) { return std::dynamic_pointer_cast<BooleanBEAVYWire>(w); });
+    auto [gates, out] = construct_circuit(beavy_provider_, maxpool_algo_, in);
+    gates_ = std::move(gates);
+    assert(out.size() == bit_size_);
+    output_wires_.resize(bit_size_);
+    std::transform(std::begin(out), std::end(out), std::begin(output_wires_),
+                   [](auto w) { return std::dynamic_pointer_cast<BooleanBEAVYWire>(w); });
+  }
+}
+
+template <bool setup>
+static void prepare_wires(std::size_t bit_size, const tensor::MaxPoolOp& maxpool_op,
+                          BooleanBEAVYWireVector& circuit_wires,
+                          const std::vector<ENCRYPTO::BitVector<>>& input_shares) {
+  const auto& input_shape = maxpool_op.input_shape_;
+  const auto& output_shape = maxpool_op.output_shape_;
+  const auto& kernel_shape = maxpool_op.kernel_shape_;
+  const auto& strides = maxpool_op.strides_;
+
+  // compute the index in the (tensor) input shares
+  const auto in_idx = [input_shape](auto channel, auto row, auto column) {
+    assert(channel < input_shape[0]);
+    assert(row < input_shape[1]);
+    assert(column < input_shape[2]);
+    return channel * (input_shape[1] * input_shape[2]) + row * input_shape[2] + column;
+  };
+
+  // compute the index of the input wire of the circuit
+  const auto mpin_wires_idx = [bit_size, &kernel_shape](auto bit_j, auto k_row, auto k_column) {
+    assert(bit_j < bit_size);
+    assert(k_row < kernel_shape[0]);
+    assert(k_column < kernel_shape[1]);
+    return (k_row * kernel_shape[1] + k_column) * bit_size + bit_j;
+  };
+
+  // compute the index in the output shares and circuit input shares
+  const auto out_idx = [&output_shape](auto channel, auto row, auto column) {
+    assert(channel < output_shape[0]);
+    assert(row < output_shape[1]);
+    assert(column < output_shape[2]);
+    return channel * (output_shape[1] * output_shape[2]) + row * output_shape[2] + column;
+  };
+
+  for (std::size_t bit_j = 0; bit_j < bit_size; ++bit_j) {
+    const auto& in_share = input_shares[bit_j];
+    for (std::size_t channel_i = 0; channel_i < output_shape[0]; ++channel_i) {
+      std::size_t i_row = 0;
+      for (std::size_t o_row = 0; o_row < output_shape[1]; ++o_row) {
+        std::size_t i_col = 0;
+        for (std::size_t o_col = 0; o_col < output_shape[2]; ++o_col) {
+          for (std::size_t k_row = 0; k_row < kernel_shape[0]; ++k_row) {
+            for (std::size_t k_col = 0; k_col < kernel_shape[0]; ++k_col) {
+              auto bit = in_share.Get(in_idx(channel_i, i_row + k_row, i_col + k_col));
+              if constexpr (setup) {
+                auto& bv = circuit_wires[mpin_wires_idx(bit_j, k_row, k_col)]->get_secret_share();
+                bv.Set(bit, out_idx(channel_i, o_row, o_col));
+              } else {
+                auto& bv = circuit_wires[mpin_wires_idx(bit_j, k_row, k_col)]->get_public_share();
+                bv.Set(bit, out_idx(channel_i, o_row, o_col));
+              }
+            }
+          }
+
+          i_col += strides[1];
+        }
+        i_row += strides[0];
+      }
+    }
+  }
+  for (auto& wire : circuit_wires) {
+    if constexpr (setup) {
+      wire->set_setup_ready();
+    } else {
+      wire->set_online_ready();
+    }
+  }
+}
+
+void BooleanBEAVYTensorMaxPool::evaluate_setup() {
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = beavy_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(
+          fmt::format("Gate {}: BooleanBEAVYTensorMaxPool::evaluate_setup start", gate_id_));
+    }
+  }
+
+  input_->wait_setup();
+
+  prepare_wires<true>(bit_size_, maxpool_op_, input_wires_, input_->get_secret_share());
+
+  for (auto& gate : gates_) {
+    // should work since its a Boolean circuit consisting of AND, XOR, INV gates
+    gate->evaluate_setup();
+  }
+
+  auto& output_shares = output_->get_secret_share();
+  for (std::size_t bit_j = 0; bit_j < bit_size_; ++bit_j) {
+    auto& wire = output_wires_[bit_j];
+    wire->wait_setup();
+    output_shares[bit_j] = std::move(wire->get_secret_share());
+  }
+  output_->set_setup_ready();
+
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = beavy_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(
+          fmt::format("Gate {}: BooleanBEAVYTensorMaxPool::evaluate_setup end", gate_id_));
+    }
+  }
+}
+
+void BooleanBEAVYTensorMaxPool::evaluate_online() {
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = beavy_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(
+          fmt::format("Gate {}: BooleanBEAVYTensorMaxPool::evaluate_online start", gate_id_));
+    }
+  }
+
+  input_->wait_online();
+
+  prepare_wires<false>(bit_size_, maxpool_op_, input_wires_, input_->get_public_share());
+
+  for (auto& gate : gates_) {
+    // should work since its a Boolean circuit consisting of AND, XOR, INV gates
+    gate->evaluate_online();
+  }
+
+  auto& output_shares = output_->get_public_share();
+  for (std::size_t bit_j = 0; bit_j < bit_size_; ++bit_j) {
+    auto& wire = output_wires_[bit_j];
+    wire->wait_online();
+    output_shares[bit_j] = std::move(wire->get_public_share());
+  }
+  output_->set_online_ready();
+
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = beavy_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(
+          fmt::format("Gate {}: BooleanBEAVYTensorMaxPool::evaluate_online end", gate_id_));
+    }
+  }
+}
 
 }  // namespace MOTION::proto::beavy
