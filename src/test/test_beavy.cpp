@@ -26,6 +26,7 @@
 
 #include <gtest/gtest.h>
 
+#include "algorithm/circuit_loader.h"
 #include "base/gate_register.h"
 #include "communication/communication_layer.h"
 #include "crypto/arithmetic_provider.h"
@@ -63,7 +64,7 @@ class BEAVYTest : public ::testing::Test {
           *comm_layers_[i], *ot_provider_managers_[i], loggers_[i]);
       gate_registers_[i] = std::make_unique<MOTION::GateRegister>();
       beavy_providers_[i] = std::make_unique<BEAVYProvider>(
-          *comm_layers_[i], *gate_registers_[i], *motion_base_providers_[i],
+          *comm_layers_[i], *gate_registers_[i], circuit_loader_, *motion_base_providers_[i],
           *ot_provider_managers_[i], *arithmetic_provider_managers_[i], loggers_[i]);
     }
   }
@@ -131,6 +132,7 @@ class BEAVYTest : public ::testing::Test {
     f1.get();
   }
 
+  MOTION::CircuitLoader circuit_loader_;
   std::vector<std::unique_ptr<MOTION::Communication::CommunicationLayer>> comm_layers_;
   std::array<std::unique_ptr<MOTION::BaseOTProvider>, 2> base_ot_providers_;
   std::array<std::unique_ptr<MOTION::Crypto::MotionBaseProvider>, 2> motion_base_providers_;

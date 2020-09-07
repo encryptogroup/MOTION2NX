@@ -38,6 +38,7 @@ class OTProviderManager;
 
 namespace MOTION {
 
+class CircuitLoader;
 class ArithmeticProviderManager;
 class GateRegister;
 class Logger;
@@ -77,9 +78,9 @@ class BEAVYProvider : public GateFactory,
   enum class Role { garbler, evaluator };
   struct my_input_t {};
 
-  BEAVYProvider(Communication::CommunicationLayer&, GateRegister&, Crypto::MotionBaseProvider&,
-                ENCRYPTO::ObliviousTransfer::OTProviderManager&, ArithmeticProviderManager&,
-                std::shared_ptr<Logger>);
+  BEAVYProvider(Communication::CommunicationLayer&, GateRegister&, CircuitLoader&,
+                Crypto::MotionBaseProvider&, ENCRYPTO::ObliviousTransfer::OTProviderManager&,
+                ArithmeticProviderManager&, std::shared_ptr<Logger>);
   ~BEAVYProvider();
 
   std::string get_provider_name() const noexcept override { return "BEAVYProvider"; }
@@ -88,6 +89,7 @@ class BEAVYProvider : public GateFactory,
   Crypto::MotionBaseProvider& get_motion_base_provider() noexcept { return motion_base_provider_; }
   ENCRYPTO::ObliviousTransfer::OTProviderManager& get_ot_manager() noexcept { return ot_manager_; }
   ArithmeticProviderManager& get_arith_manager() noexcept { return arith_manager_; }
+  CircuitLoader& get_circuit_loader() noexcept { return circuit_loader_; }
   std::shared_ptr<Logger> get_logger() const noexcept { return logger_; }
   bool is_my_job(std::size_t gate_id) const noexcept;
   std::size_t get_my_id() const noexcept { return my_id_; }
@@ -249,6 +251,7 @@ class BEAVYProvider : public GateFactory,
  private:
   Communication::CommunicationLayer& communication_layer_;
   GateRegister& gate_register_;
+  CircuitLoader& circuit_loader_;
   Crypto::MotionBaseProvider& motion_base_provider_;
   ENCRYPTO::ObliviousTransfer::OTProviderManager& ot_manager_;
   ArithmeticProviderManager& arith_manager_;

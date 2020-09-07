@@ -45,7 +45,7 @@
 namespace MOTION::proto::beavy {
 
 BEAVYProvider::BEAVYProvider(Communication::CommunicationLayer& communication_layer,
-                             GateRegister& gate_register,
+                             GateRegister& gate_register, CircuitLoader& circuit_loader,
                              Crypto::MotionBaseProvider& motion_base_provider,
                              ENCRYPTO::ObliviousTransfer::OTProviderManager& ot_manager,
                              ArithmeticProviderManager& arith_manager,
@@ -53,6 +53,7 @@ BEAVYProvider::BEAVYProvider(Communication::CommunicationLayer& communication_la
     : CommMixin(communication_layer, Communication::MessageType::BEAVYGate, logger),
       communication_layer_(communication_layer),
       gate_register_(gate_register),
+      circuit_loader_(circuit_loader),
       motion_base_provider_(motion_base_provider),
       ot_manager_(ot_manager),
       arith_manager_(arith_manager),
