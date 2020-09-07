@@ -309,7 +309,9 @@ class BooleanBEAVYTensorMaxPool : public NewGate {
   bool need_setup() const noexcept override { return true; }
   bool need_online() const noexcept override { return true; }
   void evaluate_setup() override;
+  void evaluate_setup_with_context(ExecutionContext&) override;
   void evaluate_online() override;
+  void evaluate_online_with_context(ExecutionContext&) override;
   const BooleanBEAVYTensorP& get_output_tensor() const { return output_; }
 
  private:

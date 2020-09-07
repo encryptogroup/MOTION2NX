@@ -265,6 +265,7 @@ class BooleanGMWTensorMaxPool : public NewGate {
   bool need_online() const noexcept override { return true; }
   void evaluate_setup() override {}
   void evaluate_online() override;
+  void evaluate_online_with_context(ExecutionContext&) override;
   const BooleanGMWTensorP& get_output_tensor() const { return output_; }
 
  private:

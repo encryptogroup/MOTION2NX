@@ -22,10 +22,18 @@
 
 #pragma once
 
+#include <cstddef>
+#include <memory>
+
+namespace ENCRYPTO {
+class FiberThreadPool;
+}
+
 namespace MOTION {
 
 struct ExecutionContext {
   std::size_t num_threads_;
+  std::unique_ptr<ENCRYPTO::FiberThreadPool> fpool_;
 };
 
 }  // namespace MOTION

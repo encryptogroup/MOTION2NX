@@ -36,9 +36,11 @@
 #include "crypto/oblivious_transfer/ot_flavors.h"
 #include "crypto/oblivious_transfer/ot_provider.h"
 #include "crypto/sharing_randomness_generator.h"
+#include "executor/execution_context.h"
 #include "gmw_provider.h"
 #include "utility/bit_vector.h"
 #include "utility/constants.h"
+#include "utility/fiber_thread_pool/fiber_thread_pool.hpp"
 #include "utility/fixed_point.h"
 #include "utility/linear_algebra.h"
 #include "utility/logger.h"
@@ -914,6 +916,40 @@ void BooleanGMWTensorMaxPool::evaluate_online() {
     if (logger) {
       logger->LogTrace(
           fmt::format("Gate {}: BooleanGMWTensorMaxPool::evaluate_online end", gate_id_));
+    }
+  }
+}
+
+void BooleanGMWTensorMaxPool::evaluate_online_with_context(ExecutionContext& exec_ctx) {
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = gmw_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(fmt::format(
+          "Gate {}: BooleanGMWTensorMaxPool::evaluate_online_with_context start", gate_id_));
+    }
+  }
+
+  input_->wait_online();
+
+  prepare_wires(bit_size_, maxpool_op_, input_wires_, input_->get_share());
+
+  for (auto& gate : gates_) {
+    exec_ctx.fpool_->post([&] { gate->evaluate_online(); });
+  }
+
+  auto& output_shares = output_->get_share();
+  for (std::size_t bit_j = 0; bit_j < bit_size_; ++bit_j) {
+    auto& wire = output_wires_[bit_j];
+    wire->wait_online();
+    output_shares[bit_j] = std::move(wire->get_share());
+  }
+  output_->set_online_ready();
+
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = gmw_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(fmt::format(
+          "Gate {}: BooleanGMWTensorMaxPool::evaluate_online_with_context end", gate_id_));
     }
   }
 }

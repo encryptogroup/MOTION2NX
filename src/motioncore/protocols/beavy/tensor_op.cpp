@@ -35,7 +35,9 @@
 #include "crypto/oblivious_transfer/ot_flavors.h"
 #include "crypto/oblivious_transfer/ot_provider.h"
 #include "crypto/sharing_randomness_generator.h"
+#include "executor/execution_context.h"
 #include "utility/constants.h"
+#include "utility/fiber_thread_pool/fiber_thread_pool.hpp"
 #include "utility/fixed_point.h"
 #include "utility/helpers.h"
 #include "utility/linear_algebra.h"
@@ -1399,6 +1401,40 @@ void BooleanBEAVYTensorMaxPool::evaluate_setup() {
   }
 }
 
+void BooleanBEAVYTensorMaxPool::evaluate_setup_with_context(ExecutionContext& exec_ctx) {
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = beavy_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(fmt::format(
+          "Gate {}: BooleanBEAVYTensorMaxPool::evaluate_setup_with_context start", gate_id_));
+    }
+  }
+
+  input_->wait_setup();
+
+  prepare_wires<true>(bit_size_, maxpool_op_, input_wires_, input_->get_secret_share());
+
+  for (auto& gate : gates_) {
+    exec_ctx.fpool_->post([&] { gate->evaluate_online(); });
+  }
+
+  auto& output_shares = output_->get_secret_share();
+  for (std::size_t bit_j = 0; bit_j < bit_size_; ++bit_j) {
+    auto& wire = output_wires_[bit_j];
+    wire->wait_setup();
+    output_shares[bit_j] = std::move(wire->get_secret_share());
+  }
+  output_->set_setup_ready();
+
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = beavy_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(fmt::format(
+          "Gate {}: BooleanBEAVYTensorMaxPool::evaluate_setup_with_context end", gate_id_));
+    }
+  }
+}
+
 void BooleanBEAVYTensorMaxPool::evaluate_online() {
   if constexpr (MOTION_VERBOSE_DEBUG) {
     auto logger = beavy_provider_.get_logger();
@@ -1430,6 +1466,40 @@ void BooleanBEAVYTensorMaxPool::evaluate_online() {
     if (logger) {
       logger->LogTrace(
           fmt::format("Gate {}: BooleanBEAVYTensorMaxPool::evaluate_online end", gate_id_));
+    }
+  }
+}
+
+void BooleanBEAVYTensorMaxPool::evaluate_online_with_context(ExecutionContext& exec_ctx) {
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = beavy_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(fmt::format(
+          "Gate {}: BooleanBEAVYTensorMaxPool::evaluate_online_with_context start", gate_id_));
+    }
+  }
+
+  input_->wait_online();
+
+  prepare_wires<false>(bit_size_, maxpool_op_, input_wires_, input_->get_public_share());
+
+  for (auto& gate : gates_) {
+    exec_ctx.fpool_->post([&] { gate->evaluate_online(); });
+  }
+
+  auto& output_shares = output_->get_public_share();
+  for (std::size_t bit_j = 0; bit_j < bit_size_; ++bit_j) {
+    auto& wire = output_wires_[bit_j];
+    wire->wait_online();
+    output_shares[bit_j] = std::move(wire->get_public_share());
+  }
+  output_->set_online_ready();
+
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = beavy_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(fmt::format(
+          "Gate {}: BooleanBEAVYTensorMaxPool::evaluate_online_with_context end", gate_id_));
     }
   }
 }
