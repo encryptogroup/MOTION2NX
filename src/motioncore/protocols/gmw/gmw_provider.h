@@ -183,6 +183,9 @@ class GMWProvider : public GateFactory,
 
   void make_arithmetic_tensor_output_other(const tensor::TensorCP&) override;
 
+  // conversions
+  tensor::TensorCP make_tensor_conversion(MPCProtocol, const tensor::TensorCP input) override;
+
   // tensor operations
   tensor::TensorCP make_tensor_flatten_op(const tensor::TensorCP input, std::size_t axis) override;
   tensor::TensorCP make_tensor_conv2d_op(const tensor::Conv2DOp& conv_op,

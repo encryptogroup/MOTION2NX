@@ -175,6 +175,9 @@ class BEAVYProvider : public GateFactory,
   ENCRYPTO::ReusableFiberFuture<IntegerValues<std::uint64_t>> make_arithmetic_64_tensor_output_my(
       const tensor::TensorCP&) override;
 
+  // conversions
+  tensor::TensorCP make_tensor_conversion(MPCProtocol, const tensor::TensorCP input) override;
+
   void make_arithmetic_tensor_output_other(const tensor::TensorCP&) override;
 
   tensor::TensorCP make_tensor_flatten_op(const tensor::TensorCP input, std::size_t axis) override;

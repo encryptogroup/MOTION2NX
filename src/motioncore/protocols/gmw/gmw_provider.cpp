@@ -734,6 +734,16 @@ void GMWProvider::make_arithmetic_tensor_output_other(const tensor::TensorCP& in
   gate_register_.register_gate(std::move(gate));
 }
 
+tensor::TensorCP GMWProvider::make_tensor_conversion(MPCProtocol dst_proto,
+                                                     const tensor::TensorCP input) {
+  auto src_proto = input->get_protocol();
+  if (src_proto == MPCProtocol::BooleanGMW && dst_proto == MPCProtocol::ArithmeticGMW) {
+    return make_convert_boolean_to_arithmetic_gmw_tensor(input);
+  }
+  throw std::invalid_argument(fmt::format("GMWProvider: cannot convert tensor from {} to {}",
+                                          ToString(src_proto), ToString(dst_proto)));
+}
+
 tensor::TensorCP GMWProvider::make_tensor_flatten_op(const tensor::TensorCP input,
                                                      std::size_t axis) {
   if (axis > 4) {

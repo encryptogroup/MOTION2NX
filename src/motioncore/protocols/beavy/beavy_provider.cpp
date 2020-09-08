@@ -903,6 +903,16 @@ tensor::TensorCP BEAVYProvider::make_tensor_flatten_op(const tensor::TensorCP in
   return output;
 }
 
+tensor::TensorCP BEAVYProvider::make_tensor_conversion(MPCProtocol dst_proto,
+                                                       const tensor::TensorCP input) {
+  auto src_proto = input->get_protocol();
+  if (src_proto == MPCProtocol::BooleanBEAVY && dst_proto == MPCProtocol::ArithmeticBEAVY) {
+    return make_convert_boolean_to_arithmetic_beavy_tensor(input);
+  }
+  throw std::invalid_argument(fmt::format("BEAVYProvider: cannot convert tensor from {} to {}",
+                                          ToString(src_proto), ToString(dst_proto)));
+}
+
 tensor::TensorCP BEAVYProvider::make_tensor_conv2d_op(const tensor::Conv2DOp& conv_op,
                                                       const tensor::TensorCP input,
                                                       const tensor::TensorCP kernel,
