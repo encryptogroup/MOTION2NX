@@ -71,14 +71,16 @@ void TensorOpExecutor::evaluate_setup_online(Statistics::RunTimeStats& stats) {
   // ------------------------------ setup phase ------------------------------
   stats.record_start<Statistics::RunTimeStats::StatID::gates_setup>();
 
-  // evaluate the setup phase of all the gates
-  for (auto& gate : register_.get_gates()) {
-    if (gate->need_setup()) {
-      gate->evaluate_setup_with_context(exec_ctx);
-      register_.increment_gate_setup_counter();
+  if (register_.get_num_gates_with_setup()) {
+    // evaluate the setup phase of all the gates
+    for (auto& gate : register_.get_gates()) {
+      if (gate->need_setup()) {
+        gate->evaluate_setup_with_context(exec_ctx);
+        register_.increment_gate_setup_counter();
+      }
     }
+    register_.wait_setup();
   }
-  register_.wait_setup();
 
   stats.record_end<Statistics::RunTimeStats::StatID::gates_setup>();
 
@@ -89,14 +91,16 @@ void TensorOpExecutor::evaluate_setup_online(Statistics::RunTimeStats& stats) {
   // ------------------------------ online phase ------------------------------
   stats.record_start<Statistics::RunTimeStats::StatID::gates_online>();
 
-  // evaluate the online phase of all the gates
-  for (auto& gate : register_.get_gates()) {
-    if (gate->need_online()) {
-      gate->evaluate_online_with_context(exec_ctx);
-      register_.increment_gate_online_counter();
+  if (register_.get_num_gates_with_online()) {
+    // evaluate the online phase of all the gates
+    for (auto& gate : register_.get_gates()) {
+      if (gate->need_online()) {
+        gate->evaluate_online_with_context(exec_ctx);
+        register_.increment_gate_online_counter();
+      }
     }
+    register_.wait_online();
   }
-  register_.wait_online();
 
   stats.record_end<Statistics::RunTimeStats::StatID::gates_online>();
 
