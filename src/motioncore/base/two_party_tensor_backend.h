@@ -84,7 +84,7 @@ class TwoPartyTensorBackend : public tensor::NetworkBuilder {
   void run();
 
   tensor::TensorOpFactory& get_tensor_op_factory(MPCProtocol) override;
-  tensor::TensorCP convert(MPCProtocol, const tensor::TensorCP) override;
+  std::optional<MPCProtocol> convert_via(MPCProtocol src_proto, MPCProtocol dst_proto) override;
 
   const Statistics::RunTimeStats& get_run_time_stats() const noexcept;
 

@@ -137,21 +137,14 @@ tensor::TensorOpFactory& TwoPartyTensorBackend::get_tensor_op_factory(MPCProtoco
   }
 }
 
-tensor::TensorCP TwoPartyTensorBackend::convert(MPCProtocol proto_to, const tensor::TensorCP in) {
-  auto proto_from = in->get_protocol();
-  auto& tof_to = get_tensor_op_factory(proto_to);
-  auto& tof_from = get_tensor_op_factory(proto_from);
-  try {
-    return tof_to.make_tensor_conversion(proto_to, in);
-  } catch (std::exception&) {
+std::optional<MPCProtocol> TwoPartyTensorBackend::convert_via(MPCProtocol src_proto,
+                                                              MPCProtocol dst_proto) {
+  if (src_proto == MPCProtocol::ArithmeticGMW && dst_proto == MPCProtocol::BooleanGMW) {
+    return MPCProtocol::Yao;
+  } else if (src_proto == MPCProtocol::ArithmeticBEAVY && dst_proto == MPCProtocol::BooleanBEAVY) {
+    return MPCProtocol::Yao;
   }
-  try {
-    return tof_from.make_tensor_conversion(proto_to, in);
-  } catch (std::exception&) {
-    throw std::logic_error(
-        fmt::format("don't know how to convert tensors from protocol {} to protocol {}",
-                    ToString(proto_from), ToString(proto_to)));
-  }
+  return std::nullopt;
 }
 
 const Statistics::RunTimeStats& TwoPartyTensorBackend::get_run_time_stats() const noexcept {

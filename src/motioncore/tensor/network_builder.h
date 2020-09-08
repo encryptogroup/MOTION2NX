@@ -23,6 +23,7 @@
 #pragma once
 
 #include <memory>
+#include <optional>
 
 namespace MOTION {
 
@@ -36,7 +37,8 @@ using TensorCP = std::shared_ptr<const Tensor>;
 
 class NetworkBuilder {
  public:
-  virtual TensorCP convert(MPCProtocol, const TensorCP) = 0;
+  virtual TensorCP convert(MPCProtocol, const TensorCP);
+  virtual std::optional<MPCProtocol> convert_via(MPCProtocol src_proto, MPCProtocol dst_proto);
   virtual TensorOpFactory& get_tensor_op_factory(MPCProtocol) = 0;
 };
 

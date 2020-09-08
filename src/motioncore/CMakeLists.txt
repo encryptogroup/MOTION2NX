@@ -79,6 +79,7 @@ add_library(motion
         share/share_wrapper.cpp
         statistics/analysis.cpp
         statistics/run_time_stats.cpp
+        tensor/network_builder.cpp
         tensor/tensor_op.cpp
         tensor/tensor_op_factory.cpp
         utility/bit_matrix.cpp
