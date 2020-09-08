@@ -48,6 +48,7 @@ namespace po = boost::program_options;
 struct Options {
   std::size_t threads;
   std::size_t num_repetitions;
+  bool sync_between_setup_and_online;
   MOTION::MPCProtocol protocol;
   std::size_t fractional_bits;
   std::size_t my_id;
@@ -71,6 +72,8 @@ std::optional<Options> parse_program_options(int argc, char* argv[]) {
     ("fractional-bits", po::value<std::size_t>()->default_value(16),
      "number of fractional bits for fixed-point arithmetic")
     ("repetitions", po::value<std::size_t>()->default_value(1), "number of repetitions")
+    ("sync-between-setup-and-online", po::bool_switch()->default_value(false),
+     "run a synchronization protocol before the online phase starts")
     ("relu", po::bool_switch(&options.relu)->default_value(false), "use ReLU instead of squaring as activation function");
   // clang-format on
 
@@ -97,6 +100,7 @@ std::optional<Options> parse_program_options(int argc, char* argv[]) {
   options.my_id = vm["my-id"].as<std::size_t>();
   options.threads = vm["threads"].as<std::size_t>();
   options.num_repetitions = vm["repetitions"].as<std::size_t>();
+  options.sync_between_setup_and_online = vm["sync-between-setup-and-online"].as<bool>();
   options.fractional_bits = vm["fractional-bits"].as<std::size_t>();
   if (options.my_id > 1) {
     std::cerr << "my-id must be one of 0 and 1\n";
@@ -264,7 +268,8 @@ int main(int argc, char* argv[]) {
     auto logger = std::make_shared<MOTION::Logger>(options->my_id,
                                                    boost::log::trivial::severity_level::trace);
     comm_layer->set_logger(logger);
-    MOTION::TwoPartyTensorBackend backend(*comm_layer, options->threads, logger);
+    MOTION::TwoPartyTensorBackend backend(*comm_layer, options->threads,
+                                          options->sync_between_setup_and_online, logger);
     run_cryptonets(*options, backend);
     comm_layer->shutdown();
   } catch (std::runtime_error& e) {

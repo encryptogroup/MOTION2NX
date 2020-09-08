@@ -77,7 +77,8 @@ class TensorOpFactory;
 class TwoPartyTensorBackend : public tensor::NetworkBuilder {
  public:
   TwoPartyTensorBackend(Communication::CommunicationLayer&, std::size_t num_threads,
-                        std::shared_ptr<Logger>, bool fake_triples = false);
+                        bool sync_between_setup_and_online, std::shared_ptr<Logger>,
+                        bool fake_triples = false);
   virtual ~TwoPartyTensorBackend();
 
   virtual void run_preprocessing();

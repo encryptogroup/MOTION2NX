@@ -37,15 +37,24 @@
 namespace MOTION {
 
 TensorOpExecutor::TensorOpExecutor(GateRegister& reg, std::function<void(void)> preprocessing_fctn,
-                                   std::size_t num_threads, std::shared_ptr<Logger> logger)
+                                   bool sync_between_setup_and_online,
+                                   std::function<void(void)> sync_fctn, std::size_t num_threads,
+                                   std::shared_ptr<Logger> logger)
     : register_(reg),
       preprocessing_fctn_(std::move(preprocessing_fctn)),
+      sync_fctn_(std::move(sync_fctn)),
       num_threads_(num_threads),
+      sync_between_setup_and_online_(sync_between_setup_and_online),
       logger_(std::move(logger)) {
   if (num_threads_ == 0) {
     num_threads_ = std::thread::hardware_concurrency();
   }
 }
+
+TensorOpExecutor::TensorOpExecutor(GateRegister& reg, std::function<void(void)> preprocessing_fctn,
+                                   std::size_t num_threads, std::shared_ptr<Logger> logger)
+    : TensorOpExecutor(
+          reg, std::move(preprocessing_fctn), false, [] {}, num_threads, std::move(logger)) {}
 
 void TensorOpExecutor::evaluate_setup_online(Statistics::RunTimeStats& stats) {
   if (num_threads_ > 0) {
@@ -83,6 +92,10 @@ void TensorOpExecutor::evaluate_setup_online(Statistics::RunTimeStats& stats) {
   }
 
   stats.record_end<Statistics::RunTimeStats::StatID::gates_setup>();
+
+  if (sync_between_setup_and_online_) {
+    sync_fctn_();
+  }
 
   if (logger_) {
     logger_->LogInfo("Start with the online phase of the circuit gates");

@@ -53,6 +53,7 @@ struct Options {
   std::size_t threads;
   bool json;
   std::size_t num_repetitions;
+  bool sync_between_setup_and_online;
   MOTION::MPCProtocol protocol;
   std::size_t bit_size;
   std::size_t fractional_bits;
@@ -77,6 +78,8 @@ std::optional<Options> parse_program_options(int argc, char* argv[]) {
     ("json", po::bool_switch()->default_value(false), "output data in JSON format")
     ("protocol", po::value<std::string>()->required(), "2PC protocol (GMW or BEAVY)")
     ("repetitions", po::value<std::size_t>()->default_value(1), "number of repetitions")
+    ("sync-between-setup-and-online", po::bool_switch()->default_value(false),
+     "run a synchronization protocol before the online phase starts")
     ("bit-size", po::value<std::size_t>()->default_value(64),
      "number of bits per number (32 or 64)")
     ("fractional-bits", po::value<std::size_t>()->default_value(16),
@@ -111,6 +114,7 @@ std::optional<Options> parse_program_options(int argc, char* argv[]) {
   options.threads = vm["threads"].as<std::size_t>();
   options.json = vm["json"].as<bool>();
   options.num_repetitions = vm["repetitions"].as<std::size_t>();
+  options.sync_between_setup_and_online = vm["sync-between-setup-and-online"].as<bool>();
   options.bit_size = vm["bit-size"].as<std::size_t>();
   options.fractional_bits = vm["fractional-bits"].as<std::size_t>();
   options.no_run = vm["no-run"].as<bool>();
@@ -224,6 +228,7 @@ void print_stats(const Options& options,
     auto obj = MOTION::Statistics::to_json(filename, run_time_stats, comm_stats);
     obj.emplace("party_id", options.my_id);
     obj.emplace("threads", options.threads);
+    obj.emplace("sync_between_setup_and_online", options.sync_between_setup_and_online);
     obj.emplace("protocol", MOTION::ToString(options.protocol));
     obj.emplace("model_path", options.model_path);
     obj.emplace("fake_triples", options.fake_triples);
@@ -247,7 +252,8 @@ int main(int argc, char* argv[]) {
     MOTION::Statistics::AccumulatedRunTimeStats run_time_stats;
     MOTION::Statistics::AccumulatedCommunicationStats comm_stats;
     for (std::size_t i = 0; i < options->num_repetitions; ++i) {
-      MOTION::TwoPartyTensorBackend backend(*comm_layer, options->threads, logger,
+      MOTION::TwoPartyTensorBackend backend(*comm_layer, options->threads,
+                                            options->sync_between_setup_and_online, logger,
                                             options->fake_triples);
       run_model(*options, backend);
       comm_layer->sync();

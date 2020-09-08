@@ -55,6 +55,7 @@ struct Options {
   bool json;
   std::size_t num_threads;
   std::size_t num_repetitions;
+  bool sync_between_setup_and_online;
   std::size_t bit_size;
   std::size_t fractional_bits;
   std::size_t my_id;
@@ -81,6 +82,8 @@ std::optional<Options> parse_program_options(int argc, char* argv[]) {
     ("relu-variant", po::value<std::size_t>(), "variant of ReLU layer")
     ("relu-size", po::value<std::size_t>(), "size of ReLU layer")
     ("repetitions", po::value<std::size_t>()->default_value(1), "number of repetitions")
+    ("sync-between-setup-and-online", po::bool_switch()->default_value(false),
+     "run a synchronization protocol before the online phase starts")
     ("bit-size", po::value<std::size_t>()->default_value(64),
      "number of bits per number (32 or 64)")
     ("fractional-bits", po::value<std::size_t>()->default_value(16),
@@ -111,6 +114,7 @@ std::optional<Options> parse_program_options(int argc, char* argv[]) {
   options.num_threads = vm["threads"].as<std::size_t>();
   options.json = vm["json"].as<bool>();
   options.num_repetitions = vm["repetitions"].as<std::size_t>();
+  options.sync_between_setup_and_online = vm["sync-between-setup-and-online"].as<bool>();
   options.bit_size = vm["bit-size"].as<std::size_t>();
   options.fractional_bits = vm["fractional-bits"].as<std::size_t>();
 
@@ -259,6 +263,7 @@ void print_stats(const Options& options,
     auto obj = MOTION::Statistics::to_json(options.experiment_name, run_time_stats, comm_stats);
     obj.emplace("party_id", options.my_id);
     obj.emplace("threads", options.num_threads);
+    obj.emplace("sync_between_setup_and_online", options.sync_between_setup_and_online);
     obj.emplace("bit-size", options.bit_size);
     obj.emplace("benchmark", options.benchmark);
     if (options.benchmark == "relu") {
@@ -286,7 +291,8 @@ int main(int argc, char* argv[]) {
     MOTION::Statistics::AccumulatedRunTimeStats run_time_stats;
     MOTION::Statistics::AccumulatedCommunicationStats comm_stats;
     for (std::size_t i = 0; i < options->num_repetitions; ++i) {
-      MOTION::TwoPartyTensorBackend backend(*comm_layer, options->num_threads, logger);
+      MOTION::TwoPartyTensorBackend backend(*comm_layer, options->num_threads,
+                                            options->sync_between_setup_and_online, logger);
       run_benchmark(*options, backend);
       comm_layer->sync();
       comm_stats.add(comm_layer->get_transport_statistics());
