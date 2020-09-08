@@ -61,6 +61,14 @@ ArithmeticBEAVYTensorInputSender<T>::ArithmeticBEAVYTensorInputSender(
   }
   output_->get_public_share().resize(dimensions.get_data_size());
   output_->get_secret_share().resize(dimensions.get_data_size());
+
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = beavy_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(
+          fmt::format("Gate {}: ArithmeticBEAVYTensorInputSender<T> created", gate_id_));
+    }
+  }
 }
 
 template <typename T>
@@ -141,6 +149,14 @@ ArithmeticBEAVYTensorInputReceiver<T>::ArithmeticBEAVYTensorInputReceiver(
   public_share_future_ =
       beavy_provider_.register_for_ints_message<T>(1 - my_id, gate_id_, dimensions.get_data_size());
   output_->get_secret_share().resize(dimensions.get_data_size());
+
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = beavy_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(
+          fmt::format("Gate {}: ArithmeticBEAVYTensorInputReceiver<T> created", gate_id_));
+    }
+  }
 }
 
 template <typename T>
@@ -207,6 +223,13 @@ ArithmeticBEAVYTensorOutput<T>::ArithmeticBEAVYTensorOutput(std::size_t gate_id,
   if (output_owner_ == my_id) {
     secret_share_future_ = beavy_provider_.register_for_ints_message<T>(
         1 - my_id, gate_id_, input_->get_dimensions().get_data_size());
+  }
+
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = beavy_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(fmt::format("Gate {}: ArithmeticBEAVYTensorOutput<T> created", gate_id_));
+    }
   }
 }
 
@@ -287,17 +310,24 @@ template class ArithmeticBEAVYTensorOutput<std::uint64_t>;
 
 template <typename T>
 ArithmeticBEAVYTensorFlatten<T>::ArithmeticBEAVYTensorFlatten(
-    std::size_t gate_id, BEAVYProvider& gmw_provider, std::size_t axis,
+    std::size_t gate_id, BEAVYProvider& beavy_provider, std::size_t axis,
     const ArithmeticBEAVYTensorCP<T> input)
-    : NewGate(gate_id), gmw_provider_(gmw_provider), input_(input) {
+    : NewGate(gate_id), beavy_provider_(beavy_provider), input_(input) {
   const auto& input_dims = input_->get_dimensions();
   output_ = std::make_shared<ArithmeticBEAVYTensor<T>>(flatten(input_dims, axis));
+
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = beavy_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(fmt::format("Gate {}: ArithmeticBEAVYTensorFlatten<T> created", gate_id_));
+    }
+  }
 }
 
 template <typename T>
 void ArithmeticBEAVYTensorFlatten<T>::evaluate_setup() {
   if constexpr (MOTION_VERBOSE_DEBUG) {
-    auto logger = gmw_provider_.get_logger();
+    auto logger = beavy_provider_.get_logger();
     if (logger) {
       logger->LogTrace(
           fmt::format("Gate {}: ArithmeticBEAVYTensorFlatten<T>::evaluate_setup start", gate_id_));
@@ -309,7 +339,7 @@ void ArithmeticBEAVYTensorFlatten<T>::evaluate_setup() {
   output_->set_setup_ready();
 
   if constexpr (MOTION_VERBOSE_DEBUG) {
-    auto logger = gmw_provider_.get_logger();
+    auto logger = beavy_provider_.get_logger();
     if (logger) {
       logger->LogTrace(
           fmt::format("Gate {}: ArithmeticBEAVYTensorFlatten<T>::evaluate_setup end", gate_id_));
@@ -320,7 +350,7 @@ void ArithmeticBEAVYTensorFlatten<T>::evaluate_setup() {
 template <typename T>
 void ArithmeticBEAVYTensorFlatten<T>::evaluate_online() {
   if constexpr (MOTION_VERBOSE_DEBUG) {
-    auto logger = gmw_provider_.get_logger();
+    auto logger = beavy_provider_.get_logger();
     if (logger) {
       logger->LogTrace(
           fmt::format("Gate {}: ArithmeticBEAVYTensorFlatten<T>::evaluate_online start", gate_id_));
@@ -332,7 +362,7 @@ void ArithmeticBEAVYTensorFlatten<T>::evaluate_online() {
   output_->set_online_ready();
 
   if constexpr (MOTION_VERBOSE_DEBUG) {
-    auto logger = gmw_provider_.get_logger();
+    auto logger = beavy_provider_.get_logger();
     if (logger) {
       logger->LogTrace(
           fmt::format("Gate {}: ArithmeticBEAVYTensorFlatten<T>::evaluate_online end", gate_id_));
@@ -363,6 +393,13 @@ ArithmeticBEAVYTensorConv2D<T>::ArithmeticBEAVYTensorConv2D(
   conv_input_side_ = ap.template register_convolution_input_side<T>(conv_op);
   conv_kernel_side_ = ap.template register_convolution_kernel_side<T>(conv_op);
   Delta_y_share_.resize(output_size);
+
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = beavy_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(fmt::format("Gate {}: ArithmeticBEAVYTensorConv2D<T> created", gate_id_));
+    }
+  }
 }
 
 template <typename T>
@@ -518,6 +555,13 @@ ArithmeticBEAVYTensorGemm<T>::ArithmeticBEAVYTensorGemm(std::size_t gate_id,
   mm_lhs_side_ = ap.template register_matrix_multiplication_lhs<T>(dim_l, dim_m, dim_n);
   mm_rhs_side_ = ap.template register_matrix_multiplication_rhs<T>(dim_l, dim_m, dim_n);
   Delta_y_share_.resize(output_size);
+
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = beavy_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(fmt::format("Gate {}: ArithmeticBEAVYTensorGemm<T> created", gate_id_));
+    }
+  }
 }
 
 template <typename T>
@@ -671,6 +715,13 @@ ArithmeticBEAVYTensorMul<T>::ArithmeticBEAVYTensorMul(std::size_t gate_id,
   mult_sender_ = ap.template register_integer_multiplication_send<T>(data_size);
   mult_receiver_ = ap.template register_integer_multiplication_receive<T>(data_size);
   Delta_y_share_.resize(data_size);
+
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = beavy_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(fmt::format("Gate {}: ArithmeticBEAVYTensorMul<T> created", gate_id_));
+    }
+  }
 }
 
 template <typename T>
@@ -822,6 +873,14 @@ BooleanToArithmeticBEAVYTensorConversion<T>::BooleanToArithmeticBEAVYTensorConve
     ot_receiver_ = ot_provider.RegisterReceiveACOT<T>(bit_size_ * data_size_);
   }
   share_future_ = beavy_provider_.register_for_ints_message<T>(1 - my_id, gate_id_, data_size_);
+
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = beavy_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(
+          fmt::format("Gate {}: BooleanToArithmeticBEAVYTensorConversion<T> created", gate_id_));
+    }
+  }
 }
 
 template <typename T>
@@ -975,6 +1034,13 @@ BooleanBEAVYTensorRelu::BooleanBEAVYTensorRelu(std::size_t gate_id, BEAVYProvide
   auto& otp = beavy_provider_.get_ot_manager().get_provider(1 - my_id);
   ot_sender_ = otp.RegisterSendXCOTBit(data_size_, bit_size_ - 1);
   ot_receiver_ = otp.RegisterReceiveXCOTBit(data_size_, bit_size_ - 1);
+
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = beavy_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(fmt::format("Gate {}: BooleanGMWTensorRelu created", gate_id_));
+    }
+  }
 }
 
 BooleanBEAVYTensorRelu::~BooleanBEAVYTensorRelu() = default;
@@ -1128,6 +1194,13 @@ BooleanXArithmeticBEAVYTensorRelu<T>::BooleanXArithmeticBEAVYTensorRelu(
   delta_b_share_.resize(data_size_);
   delta_b_x_delta_n_share_.resize(data_size_);
   share_future_ = beavy_provider_.register_for_ints_message<T>(1 - my_id, gate_id_, data_size_);
+
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = beavy_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(fmt::format("Gate {}: BooleanXArithmeticBEAVYTensorRelu created", gate_id_));
+    }
+  }
 }
 
 template <typename T>
@@ -1294,6 +1367,13 @@ BooleanBEAVYTensorMaxPool::BooleanBEAVYTensorMaxPool(std::size_t gate_id,
     output_wires_.resize(bit_size_);
     std::transform(std::begin(out), std::end(out), std::begin(output_wires_),
                    [](auto w) { return std::dynamic_pointer_cast<BooleanBEAVYWire>(w); });
+  }
+
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = beavy_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(fmt::format("Gate {}: BooleanBEAVYTensorMaxPool created", gate_id_));
+    }
   }
 }
 

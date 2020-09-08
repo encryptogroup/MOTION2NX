@@ -58,6 +58,14 @@ ArithmeticGMWToYaoTensorConversionGarbler<T>::ArithmeticGMWToYaoTensorConversion
   auto& ot_provider = yao_provider_.get_ot_provider();
   ot_sender_ = ot_provider.RegisterSendGOT128(bit_size_ * data_size_);
   output_->get_keys().resize(bit_size_ * data_size_);
+
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = yao_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(
+          fmt::format("Gate {}: ArithmeticGMWToYaoTensorConversionGarbler<T> created", gate_id_));
+    }
+  }
 }
 
 template <typename T>
@@ -172,6 +180,14 @@ ArithmeticGMWToYaoTensorConversionEvaluator<T>::ArithmeticGMWToYaoTensorConversi
   garbled_tables_future_ = yao_provider_.CommMixin::register_for_blocks_message(
       0, gate_id, 2 * (bit_size_ - 1) * data_size_, 1);
   output_->get_keys().resize(bit_size_ * data_size_);
+
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = yao_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(
+          fmt::format("Gate {}: ArithmeticGMWToYaoTensorConversionEvaluator<T> created", gate_id_));
+    }
+  }
 }
 
 template <typename T>
@@ -262,6 +278,13 @@ YaoToArithmeticGMWTensorConversionGarbler<T>::YaoToArithmeticGMWTensorConversion
       output_(std::make_shared<gmw::ArithmeticGMWTensor<T>>(input->get_dimensions())),
       addition_algo_(yao_provider_.get_circuit_loader().load_circuit(
           fmt::format("int_add{}_size.bristol", ENCRYPTO::bit_size_v<T>), CircuitFormat::Bristol)) {
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = yao_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(
+          fmt::format("Gate {}: YaoToArithmeticGMWTensorConversionGarbler<T> created", gate_id_));
+    }
+  }
 }
 
 template <typename T>
@@ -349,6 +372,14 @@ YaoToArithmeticGMWTensorConversionEvaluator<T>::YaoToArithmeticGMWTensorConversi
       0, gate_id, 2 * (bit_size_ - 1) * data_size_, 1);
   output_info_future_ =
       yao_provider_.CommMixin::register_for_bits_message(0, gate_id_, bit_size_ * data_size_, 2);
+
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = yao_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(
+          fmt::format("Gate {}: YaoToArithmeticGMWTensorConversionEvaluator<T> created", gate_id_));
+    }
+  }
 }
 
 template <typename T>
@@ -456,6 +487,14 @@ YaoToBooleanGMWTensorConversionGarbler::YaoToBooleanGMWTensorConversionGarbler(
   for (std::size_t bit_j = 0; bit_j < bit_size_; ++bit_j) {
     shares.at(bit_j) = ENCRYPTO::BitVector<>(data_size_);
   }
+
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = yao_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(
+          fmt::format("Gate {}: YaoToBooleanGMWTensorConversionGarbler created", gate_id_));
+    }
+  }
 }
 
 void YaoToBooleanGMWTensorConversionGarbler::evaluate_setup() {
@@ -498,6 +537,14 @@ YaoToBooleanGMWTensorConversionEvaluator::YaoToBooleanGMWTensorConversionEvaluat
   auto& shares = output_->get_share();
   for (std::size_t bit_j = 0; bit_j < bit_size_; ++bit_j) {
     shares.at(bit_j) = ENCRYPTO::BitVector<>(data_size_);
+  }
+
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = yao_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(
+          fmt::format("Gate {}: YaoToBooleanGMWTensorConversionEvaluator created", gate_id_));
+    }
   }
 }
 
@@ -543,6 +590,14 @@ ArithmeticBEAVYToYaoTensorConversionGarbler<T>::ArithmeticBEAVYToYaoTensorConver
   auto& ot_provider = yao_provider_.get_ot_provider();
   ot_sender_ = ot_provider.RegisterSendFixedXCOT128(bit_size_ * data_size_);
   output_->get_keys().resize(bit_size_ * data_size_);
+
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = yao_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(
+          fmt::format("Gate {}: ArithmeticBEAVYToYaoTensorConversionGarbler<T> created", gate_id_));
+    }
+  }
 }
 
 template <typename T>
@@ -649,6 +704,14 @@ ArithmeticBEAVYToYaoTensorConversionEvaluator<T>::ArithmeticBEAVYToYaoTensorConv
   garbled_tables_future_ = yao_provider_.CommMixin::register_for_blocks_message(
       0, gate_id, 2 * (bit_size_ - 1) * data_size_, 1);
   output_->get_keys().resize(bit_size_ * data_size_);
+
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = yao_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(fmt::format(
+          "Gate {}: ArithmeticBEAVYToYaoTensorConversionEvaluator<T> created", gate_id_));
+    }
+  }
 }
 
 template <typename T>
@@ -764,6 +827,13 @@ YaoToArithmeticBEAVYTensorConversionGarbler<T>::YaoToArithmeticBEAVYTensorConver
           yao_provider.register_for_ints_message<T>(1, gate_id_, data_size_)),
       addition_algo_(yao_provider_.get_circuit_loader().load_circuit(
           fmt::format("int_add{}_size.bristol", ENCRYPTO::bit_size_v<T>), CircuitFormat::Bristol)) {
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = yao_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(
+          fmt::format("Gate {}: YaoToArithmeticBEAVYTensorConversionGarbler<T> created", gate_id_));
+    }
+  }
 }
 
 template <typename T>
@@ -891,6 +961,14 @@ YaoToArithmeticBEAVYTensorConversionEvaluator<T>::YaoToArithmeticBEAVYTensorConv
       0, gate_id, 2 * (bit_size_ - 1) * data_size_, 1);
   output_info_future_ =
       yao_provider_.CommMixin::register_for_bits_message(0, gate_id_, bit_size_ * data_size_, 2);
+
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = yao_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(fmt::format(
+          "Gate {}: YaoToArithmeticBEAVYTensorConversionEvaluator<T> created", gate_id_));
+    }
+  }
 }
 
 template <typename T>
@@ -1028,6 +1106,14 @@ YaoToBooleanBEAVYTensorConversionGarbler::YaoToBooleanBEAVYTensorConversionGarbl
   const auto& tensor_dims = input_->get_dimensions();
   output_ = std::make_shared<beavy::BooleanBEAVYTensor>(tensor_dims, bit_size_);
   public_share_future_ = yao_provider_.register_for_bits_message(gate_id, bit_size_ * data_size_);
+
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = yao_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(
+          fmt::format("Gate {}: YaoToBooleanBEAVYTensorConversionGarbler created", gate_id_));
+    }
+  }
 }
 
 void YaoToBooleanBEAVYTensorConversionGarbler::evaluate_setup() {
@@ -1098,6 +1184,14 @@ YaoToBooleanBEAVYTensorConversionEvaluator::YaoToBooleanBEAVYTensorConversionEva
       input_(std::move(input)) {
   const auto& tensor_dims = input_->get_dimensions();
   output_ = std::make_shared<beavy::BooleanBEAVYTensor>(tensor_dims, bit_size_);
+
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = yao_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(
+          fmt::format("Gate {}: YaoToBooleanBEAVYTensorConversionEvaluator created", gate_id_));
+    }
+  }
 }
 
 void YaoToBooleanBEAVYTensorConversionEvaluator::evaluate_setup() {
@@ -1173,6 +1267,13 @@ YaoTensorReluGarbler::YaoTensorReluGarbler(std::size_t gate_id, YaoProvider& yao
       relu_algo_(yao_provider_.get_circuit_loader().load_relu_circuit(bit_size_)) {
   garbled_tables_.resize(data_size_ * (bit_size_ - 1));
   output_->get_keys().resize(bit_size_);
+
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = yao_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(fmt::format("Gate {}: YaoTensorReluGarbler created", gate_id_));
+    }
+  }
 }
 
 void YaoTensorReluGarbler::evaluate_setup() {
@@ -1210,6 +1311,13 @@ YaoTensorReluEvaluator::YaoTensorReluEvaluator(std::size_t gate_id, YaoProvider&
   garbled_tables_future_ =
       yao_provider_.register_for_blocks_message(gate_id, 2 * (bit_size_ - 1) * data_size_);
   output_->get_keys().resize(bit_size_ * data_size_);
+
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = yao_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(fmt::format("Gate {}: YaoTensorReluEvaluator created", gate_id_));
+    }
+  }
 }
 
 void YaoTensorReluEvaluator::evaluate_online() {
@@ -1252,6 +1360,13 @@ YaoTensorMaxPoolGarbler::YaoTensorMaxPoolGarbler(std::size_t gate_id, YaoProvide
           bit_size_, maxpool_op_.compute_kernel_size())) {
   assert(maxpool_op_.verify());
   output_->get_keys().resize(data_size_ * bit_size_);
+
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = yao_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(fmt::format("Gate {}: YaoTensorMaxPoolGarbler created", gate_id_));
+    }
+  }
 }
 
 void YaoTensorMaxPoolGarbler::evaluate_setup() {
@@ -1299,6 +1414,13 @@ YaoTensorMaxPoolEvaluator::YaoTensorMaxPoolEvaluator(std::size_t gate_id, YaoPro
       (2 * bit_size_) * (maxpool_op_.compute_kernel_size() - 1) * maxpool_op_.compute_output_size();
   garbled_tables_future_ = yao_provider_.register_for_blocks_message(gate_id, 2 * num_and_gates);
   output_->get_keys().resize(bit_size_);
+
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = yao_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(fmt::format("Gate {}: YaoTensorMaxPoolEvaluator created", gate_id_));
+    }
+  }
 }
 
 void YaoTensorMaxPoolEvaluator::evaluate_online() {

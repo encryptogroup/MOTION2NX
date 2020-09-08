@@ -61,6 +61,13 @@ ArithmeticGMWTensorInputSender<T>::ArithmeticGMWTensorInputSender(
     throw std::logic_error("only two parties are currently supported");
   }
   output_->get_share().resize(dimensions.get_data_size());
+
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = gmw_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(fmt::format("Gate {}: ArithmeticGMWTensorInputSender<T> created", gate_id_));
+    }
+  }
 }
 
 template <typename T>
@@ -130,6 +137,14 @@ ArithmeticGMWTensorInputReceiver<T>::ArithmeticGMWTensorInputReceiver(
       input_id_(gmw_provider.get_next_input_id(1)),
       output_(std::make_shared<ArithmeticGMWTensor<T>>(dimensions)) {
   output_->get_share().resize(dimensions.get_data_size());
+
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = gmw_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(
+          fmt::format("Gate {}: ArithmeticGMWTensorInputReceiver<T> created", gate_id_));
+    }
+  }
 }
 
 template <typename T>
@@ -171,6 +186,13 @@ ArithmeticGMWTensorOutput<T>::ArithmeticGMWTensorOutput(std::size_t gate_id,
   if (output_owner_ == my_id) {
     share_future_ = gmw_provider_.register_for_ints_message<T>(
         1 - my_id, gate_id_, input_->get_dimensions().get_data_size());
+  }
+
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = gmw_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(fmt::format("Gate {}: ArithmeticGMWTensorOutput<T> created", gate_id_));
+    }
   }
 }
 
@@ -227,6 +249,13 @@ ArithmeticGMWTensorFlatten<T>::ArithmeticGMWTensorFlatten(std::size_t gate_id,
     : NewGate(gate_id), gmw_provider_(gmw_provider), input_(input) {
   const auto& input_dims = input_->get_dimensions();
   output_ = std::make_shared<ArithmeticGMWTensor<T>>(flatten(input_dims, axis));
+
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = gmw_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(fmt::format("Gate {}: ArithmeticGMWTensorFlatten<T> created", gate_id_));
+    }
+  }
 }
 
 template <typename T>
@@ -272,7 +301,15 @@ ArithmeticGMWTensorConv2D<T>::ArithmeticGMWTensorConv2D(
           gmw_provider.get_linalg_triple_provider().register_for_conv2d_triple<T>(conv_op)),
       share_future_(gmw_provider_.register_for_ints_message<T>(
           1 - gmw_provider.get_my_id(), gate_id_,
-          conv_op.compute_input_size() + conv_op.compute_kernel_size())) {}
+          conv_op.compute_input_size() + conv_op.compute_kernel_size())) {
+
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = gmw_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(fmt::format("Gate {}: ArithmeticGMWTensorConv2D<T> created", gate_id_));
+    }
+  }
+}
 
 template <typename T>
 void ArithmeticGMWTensorConv2D<T>::evaluate_online() {
@@ -365,6 +402,13 @@ ArithmeticGMWTensorGemm<T>::ArithmeticGMWTensorGemm(std::size_t gate_id, GMWProv
   assert(input_A_->get_dimensions() == gemm_op.get_input_A_tensor_dims());
   assert(input_B_->get_dimensions() == gemm_op.get_input_B_tensor_dims());
   assert(gemm_op.verify());
+
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = gmw_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(fmt::format("Gate {}: ArithmeticGMWTensorGemm<T> created", gate_id_));
+    }
+  }
 }
 
 template <typename T>
@@ -451,7 +495,14 @@ ArithmeticGMWTensorSqr<T>::ArithmeticGMWTensorSqr(std::size_t gate_id, GMWProvid
       output_(std::make_shared<ArithmeticGMWTensor<T>>(input_->get_dimensions())),
       triple_index_(gmw_provider.get_sp_provider().RequestSPs<T>(data_size_)),
       share_future_(gmw_provider_.register_for_ints_message<T>(1 - gmw_provider.get_my_id(),
-                                                               gate_id_, data_size_)) {}
+                                                               gate_id_, data_size_)) {
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = gmw_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(fmt::format("Gate {}: ArithmeticGMWTensorSqr<T> created", gate_id_));
+    }
+  }
+}
 
 template <typename T>
 void ArithmeticGMWTensorSqr<T>::evaluate_online() {
@@ -531,6 +582,14 @@ BooleanToArithmeticGMWTensorConversion<T>::BooleanToArithmeticGMWTensorConversio
   t_share_future_ =
       gmw_provider_.register_for_bits_message(1 - my_id, gate_id_, bit_size_ * data_size_);
   output_->get_share().resize(data_size_);
+
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = gmw_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(
+          fmt::format("Gate {}: BooleanToArithmeticGMWTensorConversion<T> created", gate_id_));
+    }
+  }
 }
 
 template <typename T>
@@ -618,6 +677,13 @@ BooleanGMWTensorRelu::BooleanGMWTensorRelu(std::size_t gate_id, GMWProvider& gmw
   const auto my_id = gmw_provider_.get_my_id();
   share_future_ =
       gmw_provider_.register_for_bits_message(1 - my_id, gate_id_, data_size_ * bit_size_);
+
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = gmw_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(fmt::format("Gate {}: BooleanGMWTensorRelu created", gate_id_));
+    }
+  }
 }
 
 void BooleanGMWTensorRelu::evaluate_online() {
@@ -723,6 +789,14 @@ BooleanXArithmeticGMWTensorRelu<T>::BooleanXArithmeticGMWTensorRelu(
   auto& otp = gmw_provider_.get_ot_manager().get_provider(1 - my_id);
   ot_sender_ = otp.RegisterSendACOT<T>(data_size_);
   ot_receiver_ = otp.RegisterReceiveACOT<T>(data_size_);
+
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = gmw_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(
+          fmt::format("Gate {}: BooleanXArithmeticGMWTensorRelu<T> created", gate_id_));
+    }
+  }
 }
 
 template <typename T>
@@ -823,6 +897,13 @@ BooleanGMWTensorMaxPool::BooleanGMWTensorMaxPool(std::size_t gate_id, GMWProvide
     output_wires_.resize(bit_size_);
     std::transform(std::begin(out), std::end(out), std::begin(output_wires_),
                    [](auto w) { return std::dynamic_pointer_cast<BooleanGMWWire>(w); });
+  }
+
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = gmw_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(fmt::format("Gate {}: BooleanGMWTensorMaxPool created", gate_id_));
+    }
   }
 }
 
