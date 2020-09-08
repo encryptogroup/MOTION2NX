@@ -95,18 +95,16 @@ std::optional<Options> parse_program_options(int argc, char* argv[]) {
     std::cerr << desc << "\n";
     return std::nullopt;
   }
+  if (vm.count("config-file")) {
+    std::ifstream ifs(vm["config-file"].as<std::string>().c_str());
+    po::store(po::parse_config_file(ifs, desc), vm);
+  }
   try {
     po::notify(vm);
   } catch (std::exception& e) {
     std::cerr << "error:" << e.what() << "\n\n";
     std::cerr << desc << "\n";
     return std::nullopt;
-  }
-
-  if (vm.count("config-file")) {
-    std::ifstream ifs(vm["config-file"].as<std::string>().c_str());
-    po::store(po::parse_config_file(ifs, desc), vm);
-    po::notify(vm);
   }
 
   options.my_id = vm["my-id"].as<std::size_t>();
