@@ -43,6 +43,7 @@ class OnnxAdapter : public OnnxVisitor {
   OnnxAdapter(tensor::NetworkBuilder& network_builder, MPCProtocol arithmetic_protocol,
               MPCProtocol boolean_protocol, std::size_t bit_size, std::size_t fractional_bits,
               bool is_model_provider);
+  ~OnnxAdapter();
   void load_model(const std::string& path);
   void visit_initializer(const ::onnx::TensorProto&) override;
   void visit_input(const ::onnx::ValueInfoProto&) override;
@@ -93,6 +94,9 @@ class OnnxAdapter : public OnnxVisitor {
                      std::pair<tensor::TensorDimensions,
                                ENCRYPTO::ReusableFiberFuture<std::vector<std::uint64_t>>>>
       output_futures_64_;
+
+  struct OnnxAdapterImpl;
+  std::unique_ptr<OnnxAdapterImpl> impl_;
 };
 
 template <typename T>

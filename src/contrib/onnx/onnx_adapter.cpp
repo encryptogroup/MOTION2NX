@@ -22,6 +22,7 @@
 
 #include "onnx_adapter.h"
 
+#include <exception>
 #include <fstream>
 #include <stdexcept>
 #include <utility>
@@ -34,6 +35,10 @@
 
 namespace MOTION::onnx {
 
+struct OnnxAdapter::OnnxAdapter::OnnxAdapterImpl {
+  ::onnx::ModelProto model;
+};
+
 OnnxAdapter::OnnxAdapter(tensor::NetworkBuilder& network_builder, MPCProtocol arithmetic_protocol,
                          MPCProtocol boolean_protocol, std::size_t bit_size,
                          std::size_t fractional_bits, bool is_model_provider)
@@ -42,19 +47,21 @@ OnnxAdapter::OnnxAdapter(tensor::NetworkBuilder& network_builder, MPCProtocol ar
       boolean_protocol_(boolean_protocol),
       bit_size_(bit_size),
       fractional_bits_(fractional_bits),
-      is_model_provider_(is_model_provider) {
+      is_model_provider_(is_model_provider),
+      impl_(std::make_unique<OnnxAdapterImpl>()) {
   if (bit_size_ != 64 && bit_size_ != 32) {
     throw std::invalid_argument(fmt::format("unsupported bit size: {}", bit_size_));
   }
 }
 
+OnnxAdapter::~OnnxAdapter() = default;
+
 void OnnxAdapter::load_model(const std::string& path) {
-  ::onnx::ModelProto model;
   {
     std::ifstream in(path, std::ios_base::binary);
-    model.ParseFromIstream(&in);
+    impl_->model.ParseFromIstream(&in);
   }
-  visit_model(model);
+  visit_model(impl_->model);
 }
 
 void OnnxAdapter::visit_initializer(const ::onnx::TensorProto& tensor) {
@@ -406,8 +413,40 @@ void OnnxAdapter::visit_relu(const ::onnx::NodeProto& node) {
   const auto& input_name = node.input(0);
   const auto& output_name = node.output(0);
 
+  const bool use_mixed_protocol_relu = [this, &input_name, &output_name] {
+    // check if input is available in arithmetic sharing
+    if (arithmetic_tensor_map_.count(input_name) == 0) {
+      return false;
+    }
+    // check if output is needed only in arithmetic sharing
+    const auto& graph = impl_->model.graph();
+    for (const auto& node : graph.node()) {
+      for (const auto& input : node.input()) {
+        if (input == output_name) {
+          const auto& op_type = node.op_type();
+          // assume flatten only appear in front of Gemm
+          if (op_type != "Gemm" && op_type != "Mul" && op_type != "Conv" && op_type != "Flatten") {
+            return false;
+          }
+        }
+      }
+    }
+    return true;
+  }();
+
   auto& tensor_op_factory = network_builder_.get_tensor_op_factory(boolean_protocol_);
   const auto input_tensor = get_as_boolean_tensor(input_name);
+  if (use_mixed_protocol_relu) {
+    try {
+      const auto input_arith_tensor = get_as_arithmetic_tensor(input_name);
+      const auto output_tensor =
+          tensor_op_factory.make_tensor_relu_op(input_tensor, input_arith_tensor);
+      arithmetic_tensor_map_[output_name] = output_tensor;
+      return;
+    } catch (std::exception&) {
+      // operation not supported
+    }
+  }
   const auto output_tensor = tensor_op_factory.make_tensor_relu_op(input_tensor);
   boolean_tensor_map_[output_name] = output_tensor;
 }
