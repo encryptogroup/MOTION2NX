@@ -28,6 +28,7 @@
 #include <iostream>
 #include <memory>
 #include <numeric>
+#include <type_traits>
 #include <vector>
 
 #include <fmt/chrono.h>
@@ -320,17 +321,34 @@ void generate_matrix_triple(OTBackend& ot_backend, std::size_t m, std::size_t k,
   // print_matrix(output.data(), m, n);
 }
 
-void generate_triples(OTBackend& ot_backend, std::size_t m, std::size_t k, std::size_t n,
-                      bool par) {
-  using T = std::uint64_t;
-  ;
-  using clock_type = std::chrono::steady_clock;
-  matrix_multiplication_stats<T>(m, k, n);
-  auto start = clock_type::now();
-  generate_matrix_triple<T>(ot_backend, m, k, n, par);
-  auto end = clock_type::now();
+void generate_triples(OTBackend& ot_backend, std::size_t bit_size, std::size_t m, std::size_t k,
+                      std::size_t n, bool par) {
+  const auto run = [&](auto dummy) {
+    using T = decltype(dummy);
+    using clock_type = std::chrono::steady_clock;
+    auto start = clock_type::now();
+    generate_matrix_triple<T>(ot_backend, m, k, n, par);
+    auto end = clock_type::now();
+    return std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+  };
+  decltype(run(std::uint8_t{})) total_time;
+
+  switch (bit_size) {
+    case 8:
+      total_time = run(std::uint8_t{});
+      break;
+    case 16:
+      total_time = run(std::uint16_t{});
+      break;
+    case 32:
+      total_time = run(std::uint32_t{});
+      break;
+    case 64:
+      total_time = run(std::uint64_t{});
+      break;
+  }
+
   const auto& stats = ot_backend.get_run_time_stats();
-  const auto total_time = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
   const auto zero_duration = decltype(total_time){};
   const auto ot_ext_setup_time = std::transform_reduce(
       std::begin(stats), std::end(stats), zero_duration, std::plus{}, [](const auto& rts) {

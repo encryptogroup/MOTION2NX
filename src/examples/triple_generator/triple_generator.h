@@ -26,6 +26,7 @@ namespace MOTION {
 
 class OTBackend;
 
-void generate_triples(OTBackend&, std::size_t m, std::size_t k, std::size_t n, bool par);
+void generate_triples(OTBackend&, std::size_t bit_size, std::size_t m, std::size_t k, std::size_t n,
+                      bool par);
 
-}
+}  // namespace MOTION

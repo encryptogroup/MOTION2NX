@@ -50,6 +50,7 @@ namespace po = boost::program_options;
 struct Options {
   std::size_t my_id;
   MOTION::Communication::tcp_parties_config tcp_config;
+  std::size_t bit_size;
   std::size_t m;
   std::size_t k;
   std::size_t n;
@@ -66,6 +67,7 @@ std::optional<Options> parse_program_options(int argc, char* argv[]) {
     ("my-id", po::value<std::size_t>()->required(), "my party id")
     ("party", po::value<std::vector<std::string>>()->multitoken(),
      "(party id, IP, port), e.g., --party 1,127.0.0.1,7777")
+    ("bit-size", po::value<std::size_t>()->default_value(64), "bit size (8, 16, 32, 64)")
     ("m,m", po::value<std::size_t>()->required(), "m")
     ("k,k", po::value<std::size_t>()->required(), "k")
     ("n,n", po::value<std::size_t>()->required(), "n")
@@ -129,6 +131,7 @@ std::optional<Options> parse_program_options(int argc, char* argv[]) {
   options.tcp_config[id0] = conn_info0;
   options.tcp_config[id1] = conn_info1;
 
+  options.bit_size = vm["bit-size"].as<std::size_t>();
   options.m = vm["m"].as<std::size_t>();
   options.k = vm["k"].as<std::size_t>();
   options.n = vm["n"].as<std::size_t>();
@@ -156,7 +159,8 @@ int main(int argc, char* argv[]) {
                                                    boost::log::trivial::severity_level::trace);
     comm_layer->set_logger(logger);
     MOTION::OTBackend backend(*comm_layer, logger);
-    generate_triples(backend, options->m, options->k, options->n, options->parallelization);
+    generate_triples(backend, options->bit_size, options->m, options->k, options->n,
+                     options->parallelization);
     comm_layer->shutdown();
   } catch (std::runtime_error& e) {
     std::cerr << "ERROR OCCURRED: " << e.what() << "\n";
