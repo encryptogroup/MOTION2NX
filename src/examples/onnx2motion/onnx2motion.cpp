@@ -54,7 +54,8 @@ struct Options {
   bool json;
   std::size_t num_repetitions;
   bool sync_between_setup_and_online;
-  MOTION::MPCProtocol protocol;
+  MOTION::MPCProtocol arithmetic_protocol;
+  MOTION::MPCProtocol boolean_protocol;
   std::size_t bit_size;
   std::size_t fractional_bits;
   std::size_t my_id;
@@ -76,7 +77,8 @@ std::optional<Options> parse_program_options(int argc, char* argv[]) {
      "(party id, IP, port), e.g., --party 1,127.0.0.1,7777")
     ("threads", po::value<std::size_t>()->default_value(0), "number of threads to use for gate evaluation")
     ("json", po::bool_switch()->default_value(false), "output data in JSON format")
-    ("protocol", po::value<std::string>()->required(), "2PC protocol (GMW or BEAVY)")
+    ("arithmetic-protocol", po::value<std::string>()->required(), "2PC protocol (GMW or BEAVY)")
+    ("boolean-protocol", po::value<std::string>()->required(), "2PC protocol (Yao, GMW or BEAVY)")
     ("repetitions", po::value<std::size_t>()->default_value(1), "number of repetitions")
     ("sync-between-setup-and-online", po::bool_switch()->default_value(false),
      "run a synchronization protocol before the online phase starts")
@@ -123,14 +125,26 @@ std::optional<Options> parse_program_options(int argc, char* argv[]) {
     std::cerr << "my-id must be one of 0 and 1\n";
     return std::nullopt;
   }
-  auto protocol = vm["protocol"].as<std::string>();
-  boost::algorithm::to_lower(protocol);
-  if (protocol == "gmw") {
-    options.protocol = MOTION::MPCProtocol::ArithmeticGMW;
-  } else if (protocol == "beavy") {
-    options.protocol = MOTION::MPCProtocol::ArithmeticBEAVY;
+  auto arithmetic_protocol = vm["arithmetic-protocol"].as<std::string>();
+  boost::algorithm::to_lower(arithmetic_protocol);
+  if (arithmetic_protocol == "gmw") {
+    options.arithmetic_protocol = MOTION::MPCProtocol::ArithmeticGMW;
+  } else if (arithmetic_protocol == "beavy") {
+    options.arithmetic_protocol = MOTION::MPCProtocol::ArithmeticBEAVY;
   } else {
-    std::cerr << "invalid protocol: " << protocol << "\n";
+    std::cerr << "invalid protocol: " << arithmetic_protocol << "\n";
+    return std::nullopt;
+  }
+  auto boolean_protocol = vm["boolean-protocol"].as<std::string>();
+  boost::algorithm::to_lower(boolean_protocol);
+  if (boolean_protocol == "yao") {
+    options.boolean_protocol = MOTION::MPCProtocol::Yao;
+  } else if (boolean_protocol == "gmw") {
+    options.boolean_protocol = MOTION::MPCProtocol::BooleanGMW;
+  } else if (boolean_protocol == "beavy") {
+    options.boolean_protocol = MOTION::MPCProtocol::BooleanBEAVY;
+  } else {
+    std::cerr << "invalid protocol: " << boolean_protocol << "\n";
     return std::nullopt;
   }
 
@@ -202,9 +216,9 @@ void collect_outputs(MOTION::onnx::OnnxAdapter& onnx_adapter) {
 }
 
 void run_model(const Options& options, MOTION::TwoPartyTensorBackend& backend) {
-  MOTION::onnx::OnnxAdapter onnx_adapter(backend, options.protocol, MOTION::MPCProtocol::Yao,
-                                         options.bit_size, options.fractional_bits,
-                                         options.my_id == 0);
+  MOTION::onnx::OnnxAdapter onnx_adapter(backend, options.arithmetic_protocol,
+                                         options.boolean_protocol, options.bit_size,
+                                         options.fractional_bits, options.my_id == 0);
   onnx_adapter.load_model(options.model_path);
 
   if (options.no_run) {
@@ -229,7 +243,8 @@ void print_stats(const Options& options,
     obj.emplace("party_id", options.my_id);
     obj.emplace("threads", options.threads);
     obj.emplace("sync_between_setup_and_online", options.sync_between_setup_and_online);
-    obj.emplace("protocol", MOTION::ToString(options.protocol));
+    obj.emplace("arithmetic_protocol", MOTION::ToString(options.arithmetic_protocol));
+    obj.emplace("boolean_protocol", MOTION::ToString(options.boolean_protocol));
     obj.emplace("model_path", options.model_path);
     obj.emplace("fake_triples", options.fake_triples);
     std::cout << boost::json::to_string(obj) << "\n";
