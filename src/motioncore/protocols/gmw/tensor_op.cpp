@@ -590,6 +590,13 @@ ArithmeticGMWTensorAveragePool<T>::ArithmeticGMWTensorAveragePool(
   }
   factor_ = fixed_point::encode<T>(1.0 / kernel_size, fractional_bits_);
   output_->get_share().resize(avgpool_op_.compute_output_size());
+
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = gmw_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(fmt::format("Gate {}: ArithmeticGMWTensorAveragePool<T> created", gate_id_));
+    }
+  }
 }
 
 template <typename T>
@@ -597,8 +604,8 @@ void ArithmeticGMWTensorAveragePool<T>::evaluate_online() {
   if constexpr (MOTION_VERBOSE_DEBUG) {
     auto logger = gmw_provider_.get_logger();
     if (logger) {
-      logger->LogTrace(
-          fmt::format("Gate {}: ArithmeticGMWTensorSqr<T>::evaluate_online start", gate_id_));
+      logger->LogTrace(fmt::format(
+          "Gate {}: ArithmeticGMWTensorAveragePool<T>::evaluate_online start", gate_id_));
     }
   }
 
@@ -615,7 +622,7 @@ void ArithmeticGMWTensorAveragePool<T>::evaluate_online() {
     auto logger = gmw_provider_.get_logger();
     if (logger) {
       logger->LogTrace(
-          fmt::format("Gate {}: ArithmeticGMWTensorSqr<T>::evaluate_online end", gate_id_));
+          fmt::format("Gate {}: ArithmeticGMWTensorAveragePool<T>::evaluate_online end", gate_id_));
     }
   }
 }
