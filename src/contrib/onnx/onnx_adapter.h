@@ -48,6 +48,7 @@ class OnnxAdapter : public OnnxVisitor {
   void visit_initializer(const ::onnx::TensorProto&) override;
   void visit_input(const ::onnx::ValueInfoProto&) override;
   void visit_output(const ::onnx::ValueInfoProto&) override;
+  void visit_avgpool(const ::onnx::NodeProto&) override;
   void visit_conv(const ::onnx::NodeProto&) override;
   void visit_dropout(const ::onnx::NodeProto&) override;
   void visit_flatten(const ::onnx::NodeProto&) override;

@@ -47,7 +47,9 @@ void OnnxVisitor::visit_graph(const ::onnx::GraphProto& graph) {
 
 void OnnxVisitor::visit_node(const ::onnx::NodeProto& node) {
   const auto& op_type = node.op_type();
-  if (op_type == "Conv") {
+  if (op_type == "AveragePool") {
+    visit_avgpool(node);
+  } else if (op_type == "Conv") {
     visit_conv(node);
   } else if (op_type == "Dropout") {
     visit_dropout(node);

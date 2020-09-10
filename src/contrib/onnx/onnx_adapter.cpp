@@ -31,6 +31,7 @@
 #include <onnx/onnx_pb.h>
 
 #include "tensor/network_builder.h"
+#include "tensor/tensor_op.h"
 #include "tensor/tensor_op_factory.h"
 
 namespace MOTION::onnx {
@@ -517,6 +518,74 @@ void OnnxAdapter::visit_maxpool(const ::onnx::NodeProto& node) {
   }
   const auto output_tensor = tensor_op_factory.make_tensor_maxpool_op(maxpool_op, input_tensor);
   boolean_tensor_map_[output_name] = output_tensor;
+}
+
+void OnnxAdapter::visit_avgpool(const ::onnx::NodeProto& node) {
+  assert(node.op_type() == "AveragePool");
+  assert(node.input_size() == 1);
+  assert(node.output_size() == 1);
+  const auto& input_name = node.input(0);
+  const auto& output_name = node.output(0);
+
+  std::unordered_map<std::string, std::reference_wrapper<const ::onnx::AttributeProto>>
+      attribute_map;
+  for (const auto& attr : node.attribute()) {
+    attribute_map.emplace(attr.name(), std::cref(attr));
+  }
+  assert(attribute_map.count("auto_pad") == 0);
+  assert(attribute_map.count("ceil_mode") == 0);
+  assert(attribute_map.count("dilations") == 0);
+  assert(attribute_map.count("kernel_shape") == 1);
+
+  auto& tensor_op_factory = network_builder_.get_tensor_op_factory(arithmetic_protocol_);
+  const auto input_tensor = get_as_arithmetic_tensor(input_name);
+  tensor::AveragePoolOp avgpool_op;
+  {
+    auto it = attribute_map.find("kernel_shape");
+    assert(it != std::end(attribute_map));
+    const auto& kernel_shape_attr = it->second.get();
+    assert(kernel_shape_attr.name() == "kernel_shape");
+    assert(kernel_shape_attr.has_type() &&
+           kernel_shape_attr.type() == ::onnx::AttributeProto::INTS);
+    assert(kernel_shape_attr.ints_size() == 2);
+    avgpool_op.kernel_shape_[0] = kernel_shape_attr.ints(0);
+    avgpool_op.kernel_shape_[1] = kernel_shape_attr.ints(1);
+  }
+  if (attribute_map.count("pads") == 1) {
+    auto it = attribute_map.find("pads");
+    assert(it != std::end(attribute_map));
+    const auto& pads_attr = it->second.get();
+    assert(pads_attr.name() == "pads");
+    assert(pads_attr.has_type() && pads_attr.type() == ::onnx::AttributeProto::INTS);
+    assert(pads_attr.ints_size() == 4);
+    assert(pads_attr.ints(0) == 0);
+    assert(pads_attr.ints(1) == 0);
+    assert(pads_attr.ints(2) == 0);
+    assert(pads_attr.ints(3) == 0);
+  }
+  if (attribute_map.count("strides") == 1) {
+    auto it = attribute_map.find("strides");
+    assert(it != std::end(attribute_map));
+    const auto& strides_attr = it->second.get();
+    assert(strides_attr.name() == "strides");
+    assert(strides_attr.has_type() && strides_attr.type() == ::onnx::AttributeProto::INTS);
+    assert(strides_attr.ints_size() == 2);
+    avgpool_op.strides_[0] = strides_attr.ints(0);
+    avgpool_op.strides_[1] = strides_attr.ints(1);
+  } else {
+    avgpool_op.strides_[0] = 1;
+    avgpool_op.strides_[1] = 1;
+  }
+  {
+    const auto& input_dims = input_tensor->get_dimensions();
+    avgpool_op.input_shape_[0] = input_dims.num_channels_;
+    avgpool_op.input_shape_[1] = input_dims.height_;
+    avgpool_op.input_shape_[2] = input_dims.width_;
+    avgpool_op.output_shape_ = avgpool_op.compute_output_shape();
+    assert(avgpool_op.verify());
+  }
+  const auto output_tensor = tensor_op_factory.make_tensor_avgpool_op(avgpool_op, input_tensor);
+  arithmetic_tensor_map_[output_name] = output_tensor;
 }
 
 void OnnxAdapter::visit_flatten(const ::onnx::NodeProto& node) {
