@@ -89,7 +89,7 @@ class TensorOpFactory {
                                                   const tensor::TensorCP input);
   virtual tensor::TensorCP make_tensor_avgpool_op(const tensor::AveragePoolOp& avgpool_op,
                                                   const tensor::TensorCP input,
-                                                  std::size_t truncate_bits = 0);
+                                                  std::size_t truncate_bits);
 };
 
 }  // namespace MOTION::tensor

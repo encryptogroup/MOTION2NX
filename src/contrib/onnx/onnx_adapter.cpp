@@ -591,7 +591,8 @@ void OnnxAdapter::visit_avgpool(const ::onnx::NodeProto& node) {
     avgpool_op.output_shape_ = avgpool_op.compute_output_shape();
     assert(avgpool_op.verify());
   }
-  const auto output_tensor = tensor_op_factory.make_tensor_avgpool_op(avgpool_op, input_tensor);
+  const auto output_tensor =
+      tensor_op_factory.make_tensor_avgpool_op(avgpool_op, input_tensor, fractional_bits_);
   arithmetic_tensor_map_[output_name] = output_tensor;
 }
 
