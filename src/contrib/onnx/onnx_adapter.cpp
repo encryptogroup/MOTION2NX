@@ -547,9 +547,16 @@ void OnnxAdapter::visit_avgpool(const ::onnx::NodeProto& node) {
     assert(kernel_shape_attr.name() == "kernel_shape");
     assert(kernel_shape_attr.has_type() &&
            kernel_shape_attr.type() == ::onnx::AttributeProto::INTS);
-    assert(kernel_shape_attr.ints_size() == 2);
-    avgpool_op.kernel_shape_[0] = kernel_shape_attr.ints(0);
-    avgpool_op.kernel_shape_[1] = kernel_shape_attr.ints(1);
+    if (kernel_shape_attr.ints_size() == 2) {
+      avgpool_op.kernel_shape_[0] = kernel_shape_attr.ints(0);
+      avgpool_op.kernel_shape_[1] = kernel_shape_attr.ints(1);
+    } else if (kernel_shape_attr.ints_size() == 3) {
+      assert(kernel_shape_attr.ints(0) == 1);
+      avgpool_op.kernel_shape_[0] = kernel_shape_attr.ints(1);
+      avgpool_op.kernel_shape_[1] = kernel_shape_attr.ints(2);
+    } else {
+      throw std::runtime_error("unexpected kernel dimension");
+    }
   }
   if (attribute_map.count("pads") == 1) {
     auto it = attribute_map.find("pads");
