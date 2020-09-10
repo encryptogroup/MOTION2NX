@@ -22,7 +22,9 @@
 
 #include "onnx_visitor.h"
 
+#include <fmt/format.h>
 #include <onnx/onnx_pb.h>
+#include <stdexcept>
 
 namespace MOTION::onnx {
 
@@ -60,7 +62,7 @@ void OnnxVisitor::visit_node(const ::onnx::NodeProto& node) {
   } else if (op_type == "Relu") {
     visit_relu(node);
   } else {
-    // TODO: warn unsupported node
+    throw std::runtime_error(fmt::format("OnnxAdapter: unsupported node: {}", op_type));
   }
 }
 
