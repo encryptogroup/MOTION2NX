@@ -579,7 +579,7 @@ ArithmeticGMWTensorAveragePool<T>::ArithmeticGMWTensorAveragePool(
       data_size_(input->get_dimensions().get_data_size()),
       fractional_bits_(fractional_bits),
       input_(input),
-      output_(std::make_shared<ArithmeticGMWTensor<T>>(input_->get_dimensions())) {
+      output_(std::make_shared<ArithmeticGMWTensor<T>>(avgpool_op_.get_output_tensor_dims())) {
   if (!avgpool_op_.verify()) {
     throw std::invalid_argument("invalid AveragePoolOp");
   }
