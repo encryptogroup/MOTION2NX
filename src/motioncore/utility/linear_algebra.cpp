@@ -186,4 +186,37 @@ template std::vector<__uint128_t> convolution(const tensor::Conv2DOp&,
                                               const std::vector<__uint128_t>&,
                                               const std::vector<__uint128_t>&);
 
+template <typename T>
+void sum_pool(const tensor::AveragePoolOp& avgpool_op, const T* input, T* output) {
+  assert(avgpool_op.verify());
+  using TensorType3C = Eigen::Tensor<const T, 3, Eigen::RowMajor>;
+  using TensorType3 = Eigen::Tensor<T, 3, Eigen::RowMajor>;
+  const auto in_channels = static_cast<Eigen::Index>(avgpool_op.input_shape_[0]);
+  const auto in_rows = static_cast<Eigen::Index>(avgpool_op.input_shape_[1]);
+  const auto in_columns = static_cast<Eigen::Index>(avgpool_op.input_shape_[2]);
+  const auto out_channels = static_cast<Eigen::Index>(avgpool_op.output_shape_[0]);
+  const auto out_rows = static_cast<Eigen::Index>(avgpool_op.output_shape_[1]);
+  const auto out_columns = static_cast<Eigen::Index>(avgpool_op.output_shape_[2]);
+  const auto kernel_rows = static_cast<Eigen::Index>(avgpool_op.kernel_shape_[0]);
+  const auto kernel_columns = static_cast<Eigen::Index>(avgpool_op.kernel_shape_[1]);
+  const auto stride_rows = static_cast<Eigen::Index>(avgpool_op.strides_[0]);
+  const auto stride_columns = static_cast<Eigen::Index>(avgpool_op.strides_[1]);
+
+  Eigen::TensorMap<TensorType3C> tensor_src(input, in_channels, in_rows, in_columns);
+  Eigen::TensorMap<TensorType3> tensor_dst(output, out_channels, out_rows, out_columns);
+
+  tensor_dst = tensor_src.shuffle(Eigen::array<Eigen::Index, 3>{2, 1, 0})
+                   .extract_image_patches(kernel_rows, kernel_columns, stride_rows, stride_columns,
+                                          1, 1, 1, 1, 0, 0, 0, 0, T(0))
+                   .sum(Eigen::array<Eigen::Index, 2>{1, 2})
+                   .reshape(Eigen::array<Eigen::Index, 3>{out_columns, out_rows, out_channels})
+                   .shuffle(Eigen::array<Eigen::Index, 3>{2, 1, 0});
+}
+
+template void sum_pool(const tensor::AveragePoolOp&, const std::uint8_t*, std::uint8_t*);
+template void sum_pool(const tensor::AveragePoolOp&, const std::uint16_t*, std::uint16_t*);
+template void sum_pool(const tensor::AveragePoolOp&, const std::uint32_t*, std::uint32_t*);
+template void sum_pool(const tensor::AveragePoolOp&, const std::uint64_t*, std::uint64_t*);
+template void sum_pool(const tensor::AveragePoolOp&, const __uint128_t*, __uint128_t*);
+
 }  // namespace MOTION

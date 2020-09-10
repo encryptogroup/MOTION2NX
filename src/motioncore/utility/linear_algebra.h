@@ -28,9 +28,11 @@
 namespace MOTION {
 
 namespace tensor {
+struct MaxPoolOp;
+using AveragePoolOp = MaxPoolOp;
 struct Conv2DOp;
 struct GemmOp;
-}
+}  // namespace tensor
 
 template <typename T>
 std::vector<T> matrix_multiply(std::size_t dim_l, std::size_t dim_m, std::size_t dim_n,
@@ -49,5 +51,8 @@ std::vector<T> convolution(const tensor::Conv2DOp&, const std::vector<T>& input,
 
 template <typename T>
 void convolution(const tensor::Conv2DOp&, const T* input, const T* kernel, T* output);
+
+template <typename T>
+void sum_pool(const tensor::AveragePoolOp&, const T* input, T* output);
 
 }  // namespace MOTION

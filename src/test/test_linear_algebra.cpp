@@ -188,3 +188,71 @@ TEST_F(Conv2DTest, Conv2D) {
   auto output_buffer = MOTION::convolution(conv_op_, input_buffer_, kernel_buffer_);
   ASSERT_EQ(output_buffer, expected_output_buffer_);
 }
+
+TEST(LinearAlgebra, SumPool) {
+  MOTION::tensor::AveragePoolOp avgpool_op{
+      .input_shape_ = {1, 4, 4},
+      .output_shape_ = {1, 2, 2},
+      .kernel_shape_ = {2, 2},
+      .strides_ = {2, 2},
+  };
+
+  ASSERT_TRUE(avgpool_op.verify());
+  // clang-format off
+  const std::vector<std::uint16_t> input = {
+    45, 26, 35, 59,
+    50, 58, 38,  7,
+     6, 31, 55, 39,
+    15, 13, 43, 25
+  };
+  const std::vector<std::uint16_t> expected_output = {
+    179, 139,
+     65, 162
+  };
+  // clang-format on
+  std::vector<std::uint16_t> output(4);
+  ASSERT_EQ(input.size(), avgpool_op.compute_input_size());
+  ASSERT_EQ(output.size(), avgpool_op.compute_output_size());
+  MOTION::sum_pool(avgpool_op, input.data(), output.data());
+  ASSERT_EQ(output, expected_output);
+}
+
+TEST(LinearAlgebra, SumPool2) {
+  MOTION::tensor::AveragePoolOp avgpool_op{
+      .input_shape_ = {3, 4, 4},
+      .output_shape_ = {3, 2, 2},
+      .kernel_shape_ = {2, 2},
+      .strides_ = {2, 2},
+  };
+
+  ASSERT_TRUE(avgpool_op.verify());
+  // clang-format off
+  const std::vector<std::uint16_t> input = {
+    45, 26, 35, 59,
+    50, 58, 38,  7,
+     6, 31, 55, 39,
+    15, 13, 43, 25,
+    46, 27, 36, 60,
+    51, 59, 39,  8,
+     7, 32, 56, 40,
+    16, 14, 44, 26,
+    47, 28, 37, 61,
+    52, 60, 40,  9,
+     8, 33, 57, 41,
+    17, 15, 45, 27,
+  };
+  const std::vector<std::uint16_t> expected_output = {
+    179, 139,
+     65, 162,
+    183, 143,
+     69, 166,
+    187, 147,
+     73, 170,
+  };
+  // clang-format on
+  std::vector<std::uint16_t> output(12);
+  ASSERT_EQ(input.size(), avgpool_op.compute_input_size());
+  ASSERT_EQ(output.size(), avgpool_op.compute_output_size());
+  MOTION::sum_pool(avgpool_op, input.data(), output.data());
+  ASSERT_EQ(output, expected_output);
+}
