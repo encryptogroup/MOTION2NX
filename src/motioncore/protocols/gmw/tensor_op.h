@@ -195,6 +195,27 @@ class ArithmeticGMWTensorSqr : public NewGate {
 };
 
 template <typename T>
+class ArithmeticGMWTensorAveragePool : public NewGate {
+ public:
+  ArithmeticGMWTensorAveragePool(std::size_t gate_id, GMWProvider&, tensor::AveragePoolOp,
+                                 const ArithmeticGMWTensorCP<T> input, std::size_t fractional_bits);
+  bool need_setup() const noexcept override { return false; }
+  bool need_online() const noexcept override { return true; }
+  void evaluate_setup() override {}
+  void evaluate_online() override;
+  const ArithmeticGMWTensorP<T>& get_output_tensor() const { return output_; }
+
+ private:
+  GMWProvider& gmw_provider_;
+  tensor::AveragePoolOp avgpool_op_;
+  std::size_t data_size_;
+  std::size_t fractional_bits_;
+  const ArithmeticGMWTensorCP<T> input_;
+  std::shared_ptr<ArithmeticGMWTensor<T>> output_;
+  T factor_;
+};
+
+template <typename T>
 class BooleanToArithmeticGMWTensorConversion : public NewGate {
  public:
   BooleanToArithmeticGMWTensorConversion(std::size_t gate_id, GMWProvider&,

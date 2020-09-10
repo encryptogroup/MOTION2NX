@@ -23,6 +23,7 @@
 #include "tensor_op_factory.h"
 
 #include <stdexcept>
+#include "tensor/tensor_op.h"
 
 #include <fmt/format.h>
 
@@ -117,6 +118,12 @@ tensor::TensorCP TensorOpFactory::make_tensor_maxpool_op(const tensor::MaxPoolOp
                                                          const tensor::TensorCP) {
   throw std::logic_error(
       fmt::format("{} does not support the MaxPool operation", get_provider_name()));
+}
+
+tensor::TensorCP TensorOpFactory::make_tensor_avgpool_op(const tensor::AveragePoolOp&,
+                                                         const tensor::TensorCP, std::size_t) {
+  throw std::logic_error(
+      fmt::format("{} does not support the AveragePool operation", get_provider_name()));
 }
 
 }  // namespace MOTION::tensor

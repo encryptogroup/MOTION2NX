@@ -21,6 +21,7 @@
 // SOFTWARE.
 
 #include "tensor_op.h"
+#include <parallel/algorithmfwd.h>
 
 #include <cstdint>
 #include <memory>
@@ -567,6 +568,60 @@ void ArithmeticGMWTensorSqr<T>::evaluate_online() {
 
 template class ArithmeticGMWTensorSqr<std::uint32_t>;
 template class ArithmeticGMWTensorSqr<std::uint64_t>;
+
+template <typename T>
+ArithmeticGMWTensorAveragePool<T>::ArithmeticGMWTensorAveragePool(
+    std::size_t gate_id, GMWProvider& gmw_provider, tensor::AveragePoolOp avgpool_op,
+    const ArithmeticGMWTensorCP<T> input, std::size_t fractional_bits)
+    : NewGate(gate_id),
+      gmw_provider_(gmw_provider),
+      avgpool_op_(avgpool_op),
+      data_size_(input->get_dimensions().get_data_size()),
+      fractional_bits_(fractional_bits),
+      input_(input),
+      output_(std::make_shared<ArithmeticGMWTensor<T>>(input_->get_dimensions())) {
+  if (!avgpool_op_.verify()) {
+    throw std::invalid_argument("invalid AveragePoolOp");
+  }
+  auto kernel_size = avgpool_op_.compute_kernel_size();
+  if (kernel_size > (T(1) << fractional_bits_)) {
+    throw std::invalid_argument(
+        "ArithmeticGMWTensorAveragePool: not enough fractional bits to represent factor");
+  }
+  factor_ = fixed_point::encode<T>(1.0 / kernel_size, fractional_bits_);
+  output_->get_share().resize(avgpool_op_.compute_output_size());
+}
+
+template <typename T>
+void ArithmeticGMWTensorAveragePool<T>::evaluate_online() {
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = gmw_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(
+          fmt::format("Gate {}: ArithmeticGMWTensorSqr<T>::evaluate_online start", gate_id_));
+    }
+  }
+
+  input_->wait_online();
+  sum_pool(avgpool_op_, input_->get_share().data(), output_->get_share().data());
+  __gnu_parallel::transform(std::begin(output_->get_share()), std::end(output_->get_share()),
+                            std::begin(output_->get_share()),
+                            [this](auto x) { return x * factor_; });
+  fixed_point::truncate_shared(output_->get_share().data(), fractional_bits_,
+                               output_->get_share().size(), gmw_provider_.is_my_job(gate_id_));
+  output_->set_online_ready();
+
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = gmw_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(
+          fmt::format("Gate {}: ArithmeticGMWTensorSqr<T>::evaluate_online end", gate_id_));
+    }
+  }
+}
+
+template class ArithmeticGMWTensorAveragePool<std::uint32_t>;
+template class ArithmeticGMWTensorAveragePool<std::uint64_t>;
 
 template <typename T>
 BooleanToArithmeticGMWTensorConversion<T>::BooleanToArithmeticGMWTensorConversion(

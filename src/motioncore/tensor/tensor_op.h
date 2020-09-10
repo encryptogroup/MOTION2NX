@@ -100,6 +100,8 @@ struct MaxPoolOp {
   TensorDimensions get_output_tensor_dims() const noexcept;
 };
 
+using AveragePoolOp = MaxPoolOp;
+
 }  // namespace MOTION::tensor
 
 namespace std {
