@@ -1495,7 +1495,7 @@ void BooleanBEAVYTensorMaxPool::evaluate_setup_with_context(ExecutionContext& ex
   prepare_wires<true>(bit_size_, maxpool_op_, input_wires_, input_->get_secret_share());
 
   for (auto& gate : gates_) {
-    exec_ctx.fpool_->post([&] { gate->evaluate_online(); });
+    exec_ctx.fpool_->post([&] { gate->evaluate_setup(); });
   }
 
   auto& output_shares = output_->get_secret_share();
