@@ -60,6 +60,9 @@ OnnxAdapter::~OnnxAdapter() = default;
 void OnnxAdapter::load_model(const std::string& path) {
   {
     std::ifstream in(path, std::ios_base::binary);
+    if (in.fail()) {
+      throw std::runtime_error(fmt::format("failed to open ONNX file: {}", path));
+    }
     impl_->model.ParseFromIstream(&in);
   }
   visit_model(impl_->model);
