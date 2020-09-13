@@ -34,6 +34,7 @@
 #include "crypto/oblivious_transfer/ot_provider.h"
 #include "statistics/run_time_stats.h"
 #include "tensor/tensor_op.h"
+#include "utility/bit_vector.h"
 #include "utility/helpers.h"
 #include "utility/linear_algebra.h"
 #include "utility/logger.h"
@@ -522,6 +523,24 @@ void FakeLinAlgTripleProvider::setup() {
       }
     }
   };
+  const auto run_setup_boolean = [](const auto& count_map, auto& triple_map) {
+    for (const auto& [key, count] : count_map) {
+      const auto num_triples = key.first;
+      const auto bit_size = key.second;
+      auto& triple_vec = triple_map.at(key);
+      triple_vec.reserve(count);
+      for (std::size_t i = 0; i < count; ++i) {
+        auto& triple = triple_vec.emplace_back();
+        triple.a_ = ENCRYPTO::BitVector<>::Random(num_triples);
+        triple.b_ = std::vector<ENCRYPTO::BitVector<>>(bit_size - 1);
+        triple.c_ = std::vector<ENCRYPTO::BitVector<>>(bit_size - 1);
+        std::generate(std::begin(triple.b_), std::end(triple.b_),
+                      [num_triples] { return ENCRYPTO::BitVector<>::Random(num_triples); });
+        std::generate(std::begin(triple.c_), std::end(triple.c_),
+                      [num_triples] { return ENCRYPTO::BitVector<>::Random(num_triples); });
+      }
+    }
+  };
 
   run_setup_gemm(gemm_counts_8_, gemm_triples_8_);
   run_setup_gemm(gemm_counts_16_, gemm_triples_16_);
@@ -534,6 +553,8 @@ void FakeLinAlgTripleProvider::setup() {
   run_setup_conv(conv2d_counts_32_, conv2d_triples_32_);
   run_setup_conv(conv2d_counts_64_, conv2d_triples_64_);
   run_setup_conv(conv2d_counts_128_, conv2d_triples_128_);
+
+  run_setup_boolean(relu_counts_, relu_triples_);
 
   set_setup_ready();
 }
