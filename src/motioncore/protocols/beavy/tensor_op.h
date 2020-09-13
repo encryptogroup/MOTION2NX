@@ -230,6 +230,31 @@ class ArithmeticBEAVYTensorMul : public NewGate {
 };
 
 template <typename T>
+class ArithmeticBEAVYTensorAveragePool : public NewGate {
+ public:
+  ArithmeticBEAVYTensorAveragePool(std::size_t gate_id, BEAVYProvider&, tensor::AveragePoolOp,
+                                   const ArithmeticBEAVYTensorCP<T> input,
+                                   std::size_t fractional_bits);
+  bool need_setup() const noexcept override { return true; }
+  bool need_online() const noexcept override { return true; }
+  void evaluate_setup() override;
+  void evaluate_online() override;
+  const ArithmeticBEAVYTensorP<T>& get_output_tensor() const { return output_; }
+
+ private:
+  BEAVYProvider& beavy_provider_;
+  tensor::AveragePoolOp avgpool_op_;
+  std::size_t data_size_;
+  std::size_t fractional_bits_;
+  const ArithmeticBEAVYTensorCP<T> input_;
+  std::shared_ptr<ArithmeticBEAVYTensor<T>> output_;
+  ENCRYPTO::ReusableFiberFuture<std::vector<T>> share_future_;
+  T factor_;
+  std::vector<T> tmp_in_;
+  std::vector<T> tmp_out_;
+};
+
+template <typename T>
 class BooleanToArithmeticBEAVYTensorConversion : public NewGate {
  public:
   BooleanToArithmeticBEAVYTensorConversion(std::size_t gate_id, BEAVYProvider&,

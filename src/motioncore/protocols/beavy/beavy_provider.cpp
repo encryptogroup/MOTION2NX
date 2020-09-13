@@ -1042,6 +1042,36 @@ tensor::TensorCP BEAVYProvider::make_tensor_sqr_op(const tensor::TensorCP input,
   return output;
 }
 
+tensor::TensorCP BEAVYProvider::make_tensor_avgpool_op(const tensor::AveragePoolOp& avgpool_op,
+                                                       const tensor::TensorCP input,
+                                                       std::size_t fractional_bits) {
+  auto bit_size = input->get_bit_size();
+  std::unique_ptr<NewGate> gate;
+  auto gate_id = gate_register_.get_next_gate_id();
+  tensor::TensorCP output;
+  const auto make_op = [this, input, &avgpool_op, fractional_bits, gate_id,
+                        &output](auto dummy_arg) {
+    using T = decltype(dummy_arg);
+    auto tensor_op = std::make_unique<ArithmeticBEAVYTensorAveragePool<T>>(
+        gate_id, *this, avgpool_op,
+        std::dynamic_pointer_cast<const ArithmeticBEAVYTensor<T>>(input), fractional_bits);
+    output = tensor_op->get_output_tensor();
+    return tensor_op;
+  };
+  switch (bit_size) {
+    case 32:
+      gate = make_op(std::uint32_t{});
+      break;
+    case 64:
+      gate = make_op(std::uint64_t{});
+      break;
+    default:
+      throw std::logic_error(fmt::format("unexpected bit size {}", bit_size));
+  }
+  gate_register_.register_gate(std::move(gate));
+  return output;
+}
+
 tensor::TensorCP BEAVYProvider::make_tensor_relu_op(const tensor::TensorCP in) {
   const auto input_tensor = std::dynamic_pointer_cast<const BooleanBEAVYTensor>(in);
   assert(input_tensor != nullptr);

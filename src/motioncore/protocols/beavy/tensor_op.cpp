@@ -856,6 +856,122 @@ template class ArithmeticBEAVYTensorMul<std::uint32_t>;
 template class ArithmeticBEAVYTensorMul<std::uint64_t>;
 
 template <typename T>
+ArithmeticBEAVYTensorAveragePool<T>::ArithmeticBEAVYTensorAveragePool(
+    std::size_t gate_id, BEAVYProvider& beavy_provider, tensor::AveragePoolOp avgpool_op,
+    const ArithmeticBEAVYTensorCP<T> input, std::size_t fractional_bits)
+    : NewGate(gate_id),
+      beavy_provider_(beavy_provider),
+      avgpool_op_(avgpool_op),
+      data_size_(input->get_dimensions().get_data_size()),
+      fractional_bits_(fractional_bits),
+      input_(input),
+      output_(std::make_shared<ArithmeticBEAVYTensor<T>>(avgpool_op_.get_output_tensor_dims())) {
+  if (!avgpool_op_.verify()) {
+    throw std::invalid_argument("invalid AveragePoolOp");
+  }
+  auto kernel_size = avgpool_op_.compute_kernel_size();
+  if (kernel_size > (T(1) << fractional_bits_)) {
+    throw std::invalid_argument(
+        "ArithmeticBEAVYTensorAveragePool: not enough fractional bits to represent factor");
+  }
+  factor_ = fixed_point::encode<T>(1.0 / kernel_size, fractional_bits_);
+  output_->get_public_share().resize(avgpool_op_.compute_output_size());
+  tmp_in_.resize(data_size_);
+  tmp_out_.resize(avgpool_op_.compute_output_size());
+  const auto my_id = beavy_provider_.get_my_id();
+  share_future_ = beavy_provider_.register_for_ints_message<T>(1 - my_id, gate_id_,
+                                                               avgpool_op_.compute_output_size());
+}
+
+template <typename T>
+void ArithmeticBEAVYTensorAveragePool<T>::evaluate_setup() {
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = beavy_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(
+          fmt::format("Gate {}: ArithmeticBEAVYTensorSqr<T>::evaluate_setup start", gate_id_));
+    }
+  }
+
+  output_->get_secret_share() = Helpers::RandomVector<T>(avgpool_op_.compute_output_size());
+  output_->set_setup_ready();
+
+  if (!beavy_provider_.is_my_job(gate_id_)) {
+    input_->wait_setup();
+    // convert: alpha -> A
+    __gnu_parallel::transform(std::begin(input_->get_secret_share()),
+                              std::end(input_->get_secret_share()), std::begin(tmp_in_),
+                              std::negate{});
+    // compute AveragePool on A share
+    sum_pool(avgpool_op_, tmp_in_.data(), tmp_out_.data());
+    __gnu_parallel::transform(std::begin(tmp_out_), std::end(tmp_out_), std::begin(tmp_out_),
+                              [this](auto x) { return x * factor_; });
+    fixed_point::truncate_shared(tmp_out_.data(), fractional_bits_, tmp_out_.size(),
+                                 beavy_provider_.is_my_job(gate_id_));
+    // convert: A -> alpha, mask with secret_share + send
+    __gnu_parallel::transform(std::begin(tmp_out_), std::end(tmp_out_),
+                              std::begin(output_->get_secret_share()), std::begin(tmp_out_),
+                              std::plus{});
+    beavy_provider_.broadcast_ints_message(gate_id_, tmp_out_);
+  }
+
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = beavy_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(
+          fmt::format("Gate {}: ArithmeticBEAVYTensorSqr<T>::evaluate_setup end", gate_id_));
+    }
+  }
+}
+
+template <typename T>
+void ArithmeticBEAVYTensorAveragePool<T>::evaluate_online() {
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = beavy_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(
+          fmt::format("Gate {}: ArithmeticBEAVYTensorSqr<T>::evaluate_online start", gate_id_));
+    }
+  }
+
+  if (beavy_provider_.is_my_job(gate_id_)) {
+    input_->wait_online();
+    // convert: alpha -> A
+    __gnu_parallel::transform(
+        std::begin(input_->get_public_share()), std::end(input_->get_public_share()),
+        std::begin(input_->get_secret_share()), std::begin(tmp_in_), std::minus{});
+    // compute AveragePool on A share
+    sum_pool(avgpool_op_, tmp_in_.data(), tmp_out_.data());
+    __gnu_parallel::transform(std::begin(tmp_out_), std::end(tmp_out_), std::begin(tmp_out_),
+                              [this](auto x) { return x * factor_; });
+    fixed_point::truncate_shared(tmp_out_.data(), fractional_bits_, tmp_out_.size(),
+                                 beavy_provider_.is_my_job(gate_id_));
+    // convert: A -> alpha, mask with secret_share + send
+    __gnu_parallel::transform(std::begin(tmp_out_), std::end(tmp_out_),
+                              std::begin(output_->get_secret_share()), std::begin(tmp_out_),
+                              std::plus{});
+    beavy_provider_.broadcast_ints_message(gate_id_, tmp_out_);
+  }
+
+  auto other_share = share_future_.get();
+  __gnu_parallel::transform(std::begin(tmp_out_), std::end(tmp_out_), std::begin(other_share),
+                            std::begin(tmp_out_), std::plus{});
+  output_->get_public_share() = std::move(tmp_out_);
+  output_->set_online_ready();
+
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = beavy_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(
+          fmt::format("Gate {}: ArithmeticBEAVYTensorSqr<T>::evaluate_online end", gate_id_));
+    }
+  }
+}
+
+template class ArithmeticBEAVYTensorAveragePool<std::uint32_t>;
+template class ArithmeticBEAVYTensorAveragePool<std::uint64_t>;
+
+template <typename T>
 BooleanToArithmeticBEAVYTensorConversion<T>::BooleanToArithmeticBEAVYTensorConversion(
     std::size_t gate_id, BEAVYProvider& beavy_provider, const BooleanBEAVYTensorCP input)
     : NewGate(gate_id),
