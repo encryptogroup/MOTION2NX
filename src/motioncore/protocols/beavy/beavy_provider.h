@@ -84,7 +84,7 @@ class BEAVYProvider : public GateFactory,
 
   BEAVYProvider(Communication::CommunicationLayer&, GateRegister&, CircuitLoader&,
                 Crypto::MotionBaseProvider&, ENCRYPTO::ObliviousTransfer::OTProviderManager&,
-                ArithmeticProviderManager&, std::shared_ptr<Logger>);
+                ArithmeticProviderManager&, std::shared_ptr<Logger>, bool fake_setup = false);
   ~BEAVYProvider();
 
   std::string get_provider_name() const noexcept override { return "BEAVYProvider"; }
@@ -100,6 +100,8 @@ class BEAVYProvider : public GateFactory,
   std::size_t get_num_parties() const noexcept { return num_parties_; }
 
   std::size_t get_next_input_id(std::size_t num_inputs) noexcept;
+
+  bool get_fake_setup() const noexcept { return fake_setup_; }
 
   // Implementation of GateFactors interface
 
@@ -284,6 +286,7 @@ class BEAVYProvider : public GateFactory,
   std::size_t num_parties_;
   std::size_t next_input_id_;
   std::shared_ptr<Logger> logger_;
+  bool fake_setup_;
 };
 
 }  // namespace proto::beavy

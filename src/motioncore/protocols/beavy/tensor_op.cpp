@@ -390,8 +390,10 @@ ArithmeticBEAVYTensorConv2D<T>::ArithmeticBEAVYTensorConv2D(
   const auto output_size = conv_op_.compute_output_size();
   share_future_ = beavy_provider_.register_for_ints_message<T>(1 - my_id, gate_id_, output_size);
   auto& ap = beavy_provider_.get_arith_manager().get_provider(1 - my_id);
-  conv_input_side_ = ap.template register_convolution_input_side<T>(conv_op);
-  conv_kernel_side_ = ap.template register_convolution_kernel_side<T>(conv_op);
+  if (!beavy_provider_.get_fake_setup()) {
+    conv_input_side_ = ap.template register_convolution_input_side<T>(conv_op);
+    conv_kernel_side_ = ap.template register_convolution_kernel_side<T>(conv_op);
+  }
   Delta_y_share_.resize(output_size);
 
   if constexpr (MOTION_VERBOSE_DEBUG) {
@@ -427,8 +429,10 @@ void ArithmeticBEAVYTensorConv2D<T>::evaluate_setup() {
   const auto& delta_b_share = kernel_->get_secret_share();
   const auto& delta_y_share = output_->get_secret_share();
 
-  conv_input_side_->set_input(delta_a_share);
-  conv_kernel_side_->set_input(delta_b_share);
+  if (!beavy_provider_.get_fake_setup()) {
+    conv_input_side_->set_input(delta_a_share);
+    conv_kernel_side_->set_input(delta_b_share);
+  }
 
   // [Delta_y]_i = [delta_a]_i * [delta_b]_i
   convolution(conv_op_, delta_a_share.data(), delta_b_share.data(), Delta_y_share_.data());
@@ -440,12 +444,21 @@ void ArithmeticBEAVYTensorConv2D<T>::evaluate_setup() {
     // NB: happens after truncation if that is requested
   }
 
-  conv_input_side_->compute_output();
-  conv_kernel_side_->compute_output();
-  // [[delta_a]_i * [delta_b]_(1-i)]_i
-  auto delta_ab_share1 = conv_input_side_->get_output();
-  // [[delta_b]_i * [delta_a]_(1-i)]_i
-  auto delta_ab_share2 = conv_kernel_side_->get_output();
+  if (!beavy_provider_.get_fake_setup()) {
+    conv_input_side_->compute_output();
+    conv_kernel_side_->compute_output();
+  }
+  std::vector<T> delta_ab_share1;
+  std::vector<T> delta_ab_share2;
+  if (beavy_provider_.get_fake_setup()) {
+    delta_ab_share1 = Helpers::RandomVector<T>(conv_op_.compute_output_size());
+    delta_ab_share2 = Helpers::RandomVector<T>(conv_op_.compute_output_size());
+  } else {
+    // [[delta_a]_i * [delta_b]_(1-i)]_i
+    delta_ab_share1 = conv_input_side_->get_output();
+    // [[delta_b]_i * [delta_a]_(1-i)]_i
+    delta_ab_share2 = conv_kernel_side_->get_output();
+  }
   // [Delta_y]_i += [[delta_a]_i * [delta_b]_(1-i)]_i
   __gnu_parallel::transform(std::begin(Delta_y_share_), std::end(Delta_y_share_),
                             std::begin(delta_ab_share1), std::begin(Delta_y_share_), std::plus{});
@@ -552,8 +565,10 @@ ArithmeticBEAVYTensorGemm<T>::ArithmeticBEAVYTensorGemm(std::size_t gate_id,
   const auto dim_l = gemm_op_.input_A_shape_[0];
   const auto dim_m = gemm_op_.input_A_shape_[1];
   const auto dim_n = gemm_op_.input_B_shape_[1];
-  mm_lhs_side_ = ap.template register_matrix_multiplication_lhs<T>(dim_l, dim_m, dim_n);
-  mm_rhs_side_ = ap.template register_matrix_multiplication_rhs<T>(dim_l, dim_m, dim_n);
+  if (!beavy_provider_.get_fake_setup()) {
+    mm_lhs_side_ = ap.template register_matrix_multiplication_lhs<T>(dim_l, dim_m, dim_n);
+    mm_rhs_side_ = ap.template register_matrix_multiplication_rhs<T>(dim_l, dim_m, dim_n);
+  }
   Delta_y_share_.resize(output_size);
 
   if constexpr (MOTION_VERBOSE_DEBUG) {
@@ -589,8 +604,10 @@ void ArithmeticBEAVYTensorGemm<T>::evaluate_setup() {
   const auto& delta_b_share = input_B_->get_secret_share();
   const auto& delta_y_share = output_->get_secret_share();
 
-  mm_lhs_side_->set_input(delta_a_share);
-  mm_rhs_side_->set_input(delta_b_share);
+  if (!beavy_provider_.get_fake_setup()) {
+    mm_lhs_side_->set_input(delta_a_share);
+    mm_rhs_side_->set_input(delta_b_share);
+  }
 
   // [Delta_y]_i = [delta_a]_i * [delta_b]_i
   matrix_multiply(gemm_op_, delta_a_share.data(), delta_b_share.data(), Delta_y_share_.data());
@@ -602,12 +619,21 @@ void ArithmeticBEAVYTensorGemm<T>::evaluate_setup() {
     // NB: happens after truncation if that is requested
   }
 
-  mm_lhs_side_->compute_output();
-  mm_rhs_side_->compute_output();
-  // [[delta_a]_i * [delta_b]_(1-i)]_i
-  auto delta_ab_share1 = mm_lhs_side_->get_output();
-  // [[delta_b]_i * [delta_a]_(1-i)]_i
-  auto delta_ab_share2 = mm_rhs_side_->get_output();
+  if (!beavy_provider_.get_fake_setup()) {
+    mm_lhs_side_->compute_output();
+    mm_rhs_side_->compute_output();
+  }
+  std::vector<T> delta_ab_share1;
+  std::vector<T> delta_ab_share2;
+  if (beavy_provider_.get_fake_setup()) {
+    delta_ab_share1 = Helpers::RandomVector<T>(gemm_op_.compute_output_size());
+    delta_ab_share2 = Helpers::RandomVector<T>(gemm_op_.compute_output_size());
+  } else {
+    // [[delta_a]_i * [delta_b]_(1-i)]_i
+    delta_ab_share1 = mm_lhs_side_->get_output();
+    // [[delta_b]_i * [delta_a]_(1-i)]_i
+    delta_ab_share2 = mm_rhs_side_->get_output();
+  }
   // [Delta_y]_i += [[delta_a]_i * [delta_b]_(1-i)]_i
   __gnu_parallel::transform(std::begin(Delta_y_share_), std::end(Delta_y_share_),
                             std::begin(delta_ab_share1), std::begin(Delta_y_share_), std::plus{});

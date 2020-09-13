@@ -49,7 +49,7 @@ BEAVYProvider::BEAVYProvider(Communication::CommunicationLayer& communication_la
                              Crypto::MotionBaseProvider& motion_base_provider,
                              ENCRYPTO::ObliviousTransfer::OTProviderManager& ot_manager,
                              ArithmeticProviderManager& arith_manager,
-                             std::shared_ptr<Logger> logger)
+                             std::shared_ptr<Logger> logger, bool fake_setup)
     : CommMixin(communication_layer, Communication::MessageType::BEAVYGate, logger),
       communication_layer_(communication_layer),
       gate_register_(gate_register),
@@ -60,7 +60,8 @@ BEAVYProvider::BEAVYProvider(Communication::CommunicationLayer& communication_la
       my_id_(communication_layer_.get_my_id()),
       num_parties_(communication_layer_.get_num_parties()),
       next_input_id_(0),
-      logger_(std::move(logger)) {
+      logger_(std::move(logger)),
+      fake_setup_(fake_setup) {
   if (communication_layer.get_num_parties() != 2) {
     throw std::logic_error("currently only two parties are supported");
   }
