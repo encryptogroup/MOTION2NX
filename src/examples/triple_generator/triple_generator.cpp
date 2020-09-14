@@ -263,14 +263,10 @@ void generate_matrix_triple_combined(OTBackend& ot_backend, std::size_t m, std::
 #pragma omp for
       for (std::size_t i = 0; i < n; ++i) {
         for (std::size_t col_j = 0; col_j < k; ++col_j) {
-          output_row[i] += mult_outputs_s[col_j][i];
-          output_row[i] += mult_outputs_r[col_j][i];
-          output_row[n + i] += mult_outputs_s[k + col_j][i];
-          output_row[n + i] += mult_outputs_r[k + col_j][i];
-          output_row[2 * n + i] += mult_outputs_s[k + col_j][i];
-          output_row[2 * n + i] += mult_outputs_r[k + col_j][i];
-          output_row[3 * n + i] += mult_outputs_s[k + col_j][i];
-          output_row[3 * n + i] += mult_outputs_r[k + col_j][i];
+          for (std::size_t r = 0; r < parallel_rows; ++r) {
+            output_row[r * n + i] += mult_outputs_s[r * k + col_j][i];
+            output_row[r * n + i] += mult_outputs_r[r * k + col_j][i];
+          }
         }
       }
 #pragma omp for
