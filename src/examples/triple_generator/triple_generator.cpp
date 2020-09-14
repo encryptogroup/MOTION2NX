@@ -221,7 +221,7 @@ void print_matrix(const T* matrix, std::size_t rows, std::size_t cols) {
   }
 }
 
-template <typename T>
+template <typename T, std::size_t parallel_rows = 4>
 void generate_matrix_triple_combined(OTBackend& ot_backend, std::size_t m, std::size_t k,
                                      std::size_t n, const std::vector<T>& input_a,
                                      const std::vector<T>& input_b, std::vector<T>& output) {
@@ -230,37 +230,37 @@ void generate_matrix_triple_combined(OTBackend& ot_backend, std::size_t m, std::
   assert(output.size() == m * n);
   auto& arith_provider = ot_backend.get_arithmetic_provider();
   // compute matrix product row-wise
-  std::vector<std::unique_ptr<IntegerMultiplicationReceiver<T>>> mult_receiver(4 * k);
-  std::vector<std::unique_ptr<IntegerMultiplicationSender<T>>> mult_sender(4 * k);
-  for (std::size_t col_j = 0; col_j < 4 * k; ++col_j) {
+  std::vector<std::unique_ptr<IntegerMultiplicationReceiver<T>>> mult_receiver(parallel_rows * k);
+  std::vector<std::unique_ptr<IntegerMultiplicationSender<T>>> mult_sender(parallel_rows * k);
+  for (std::size_t col_j = 0; col_j < parallel_rows * k; ++col_j) {
     mult_receiver.at(col_j) = arith_provider.register_integer_multiplication_receive<T>(1, n);
     mult_sender.at(col_j) = arith_provider.register_integer_multiplication_send<T>(1, n);
   }
-  for (std::size_t row_i = 0; row_i < m; row_i += 4) {
+  for (std::size_t row_i = 0; row_i < m; row_i += parallel_rows) {
     std::cout << fmt::format("computing row {} of {}\n", row_i + 1, m);
     // run OT setup
     ot_backend.run_setup();
     ot_backend.sync();
-    std::vector<std::vector<T>> mult_outputs_s(4 * k);
-    std::vector<std::vector<T>> mult_outputs_r(4 * k);
-    #pragma omp parallel shared(mult_outputs_s, mult_outputs_r)
+    std::vector<std::vector<T>> mult_outputs_s(parallel_rows * k);
+    std::vector<std::vector<T>> mult_outputs_r(parallel_rows * k);
+#pragma omp parallel shared(mult_outputs_s, mult_outputs_r)
     {
       const auto* input_a_row = input_a.data() + row_i * k;
       const auto* input_b_row = input_b.data() + row_i * n;
       auto* output_row = output.data() + row_i * n;
-      #pragma omp for nowait
-      for (std::size_t col_j = 0; col_j < 4 * k; ++col_j) {
+#pragma omp for nowait
+      for (std::size_t col_j = 0; col_j < parallel_rows * k; ++col_j) {
         mult_receiver[col_j]->set_inputs({input_a_row[col_j]});
         mult_sender[col_j]->set_inputs(input_b_row);
       }
-      #pragma omp for
-      for (std::size_t col_j = 0; col_j < 4 * k; ++col_j) {
+#pragma omp for
+      for (std::size_t col_j = 0; col_j < parallel_rows * k; ++col_j) {
         mult_sender[col_j]->compute_outputs();
         mult_receiver[col_j]->compute_outputs();
         mult_outputs_s[col_j] = mult_sender[col_j]->get_outputs();
         mult_outputs_r[col_j] = mult_receiver[col_j]->get_outputs();
       }
-      #pragma omp for
+#pragma omp for
       for (std::size_t i = 0; i < n; ++i) {
         for (std::size_t col_j = 0; col_j < k; ++col_j) {
           output_row[i] += mult_outputs_s[col_j][i];
@@ -273,8 +273,8 @@ void generate_matrix_triple_combined(OTBackend& ot_backend, std::size_t m, std::
           output_row[3 * n + i] += mult_outputs_r[k + col_j][i];
         }
       }
-      #pragma omp for
-      for (std::size_t col_j = 0; col_j < 4 * k; ++col_j) {
+#pragma omp for
+      for (std::size_t col_j = 0; col_j < parallel_rows * k; ++col_j) {
         mult_receiver[col_j]->clear();
         mult_sender[col_j]->clear();
       }
@@ -298,7 +298,11 @@ void generate_matrix_triple(OTBackend& ot_backend, std::size_t m, std::size_t k,
   };
 
   if (par) {
-    generate_matrix_triple_combined(ot_backend, m, k, n, input_a, input_b, output);
+    if (m % 4 == 0) {
+      generate_matrix_triple_combined<T, 4>(ot_backend, m, k, n, input_a, input_b, output);
+    } else {
+      generate_matrix_triple_combined<T, 1>(ot_backend, m, k, n, input_a, input_b, output);
+    }
   } else {
     if (my_id == 0) {
       auto tmp = matrix_multiplication_lhs(ot_backend, m, k, n, input_a);
