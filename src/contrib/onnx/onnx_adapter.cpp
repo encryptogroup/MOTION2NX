@@ -429,7 +429,8 @@ void OnnxAdapter::visit_relu(const ::onnx::NodeProto& node) {
         if (input == output_name) {
           const auto& op_type = node.op_type();
           // assume flatten only appear in front of Gemm
-          if (op_type != "Gemm" && op_type != "Mul" && op_type != "Conv" && op_type != "Flatten") {
+          if (op_type != "Gemm" && op_type != "Mul" && op_type != "Conv" && op_type != "Flatten" &&
+              op_type != "AveragePool") {
             return false;
           }
         }
