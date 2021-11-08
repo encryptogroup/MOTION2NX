@@ -24,6 +24,7 @@
 
 #include <chrono>
 #include <future>
+#include <thread>
 #include <shared_mutex>
 
 #include <boost/asio/connect.hpp>

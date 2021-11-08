@@ -24,12 +24,14 @@
 
 #pragma once
 
+#include <atomic>
+#include <memory>
+#include <mutex>
+
 #include <boost/log/sinks/sync_frontend.hpp>
 #include <boost/log/sinks/text_file_backend.hpp>
 #include <boost/log/sources/severity_channel_logger.hpp>
 #include <boost/log/trivial.hpp>
-#include <memory>
-#include <mutex>
 
 using logger_type =
     boost::log::sources::severity_channel_logger<boost::log::trivial::severity_level, std::size_t>;
