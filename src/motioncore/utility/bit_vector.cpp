@@ -436,7 +436,7 @@ template bool BitVector<aligned_alloc>::operator==(const BitVector<aligned_alloc
 
 template <typename Allocator>
 bool BitVector<Allocator>::operator==(const BitSpan& bs) const noexcept {
-  return bs == *this;
+  return bs.operator==(*this);
 }
 
 template <typename Allocator>
