@@ -25,11 +25,11 @@
 #include <fmt/format.h>
 
 #include "algorithm_description.h"
+#include "gate/new_gate.h"
 #include "wire/new_wire.h"
 
 namespace MOTION {
 
-class NewGate;
 using WireVector = std::vector<std::shared_ptr<NewWire>>;
 
 template <typename Builder>
