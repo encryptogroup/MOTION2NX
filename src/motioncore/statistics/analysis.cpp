@@ -29,8 +29,6 @@
 #include <boost/accumulators/statistics/variance.hpp>
 #include <boost/core/alloc_construct.hpp>
 #include <boost/json.hpp>
-#include <boost/json/except.hpp>
-#include <boost/json/to_string.hpp>
 
 #include "communication/transport.h"
 #include "utility/runtime_info.h"

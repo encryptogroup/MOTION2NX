@@ -31,7 +31,7 @@
 
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/case_conv.hpp>
-#include <boost/json/to_string.hpp>
+#include <boost/json/serialize.hpp>
 #include <boost/lexical_cast.hpp>
 #include <boost/log/trivial.hpp>
 #include <boost/program_options.hpp>
@@ -270,7 +270,7 @@ void print_stats(const Options& options,
       obj.emplace("relu-variant", options.relu_variant);
       obj.emplace("relu-size", options.relu_size);
     }
-    std::cout << boost::json::to_string(obj) << "\n";
+    std::cout << obj << "\n";
   } else {
     std::cout << MOTION::Statistics::print_stats(options.experiment_name, run_time_stats,
                                                  comm_stats);

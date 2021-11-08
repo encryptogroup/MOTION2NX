@@ -30,7 +30,7 @@
 
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/case_conv.hpp>
-#include <boost/json/to_string.hpp>
+#include <boost/json/serialize.hpp>
 #include <boost/lexical_cast.hpp>
 #include <boost/log/trivial.hpp>
 #include <boost/program_options.hpp>
@@ -247,7 +247,7 @@ void print_stats(const Options& options,
     obj.emplace("boolean_protocol", MOTION::ToString(options.boolean_protocol));
     obj.emplace("model_path", options.model_path);
     obj.emplace("fake_triples", options.fake_triples);
-    std::cout << boost::json::to_string(obj) << "\n";
+    std::cout << obj << "\n";
   } else {
     std::cout << MOTION::Statistics::print_stats(filename, run_time_stats, comm_stats);
   }
