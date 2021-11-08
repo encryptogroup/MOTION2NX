@@ -89,8 +89,8 @@ const ENCRYPTO::AlgorithmDescription& CircuitLoader::load_circuit(std::string na
         return algo_cache_[name];
       } catch (std::runtime_error& e) {
         throw std::runtime_error(
-            fmt::format("Could not load circuit description '{}' from file {}: '{}'", name,
-                        dir_entry.path().string()));
+            fmt::format("Could not load circuit description '{:s}' from file {:s}: '{:s}'", name,
+                        dir_entry.path().string(), e.what()));
       }
     }
   }
