@@ -34,7 +34,7 @@ namespace ENCRYPTO {
 // - int (as type) to an std::vector<int> instance, and
 // - std::string to an std::vector<int> instance.
 
-#if __cplusplus > 201703L  // C++20
+#if (__cplusplus > 201703L) && __GNUC_  // C++20 on GCC
 
 template <template <typename> class Value, typename... Ts>
 using type_map = decltype([] {
@@ -44,7 +44,7 @@ using type_map = decltype([] {
   });
 }());
 
-#else  // C++17
+#else  // C++17 or Clang
 
 namespace detail {
 
