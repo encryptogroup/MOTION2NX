@@ -1071,8 +1071,11 @@ void YaoToArithmeticBEAVYTensorConversionEvaluator<T>::evaluate_online() {
     // }
 
     // reshare masked value in Arithemtic BEAVY and subtract shared mask
-    __gnu_parallel::transform(std::begin(masked_value_int), std::end(masked_value_int),
-                              std::begin(masked_value_public_share_),
+    // note that:
+    // - masked_value_int is of size padded_data_size >= data_size_
+    // - masked_value_public_share_ is of size data_size_
+    __gnu_parallel::transform(std::begin(masked_value_public_share_), std::end(masked_value_public_share_),
+                              std::begin(masked_value_int),
                               std::begin(masked_value_public_share_), std::plus{});
     yao_provider_.send_ints_message(0, gate_id_, masked_value_public_share_);
     auto& public_share = output_->get_public_share();
