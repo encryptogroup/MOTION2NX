@@ -5,7 +5,7 @@ find_package(Boost
         program_options
         REQUIRED)
 
-target_compile_features(aes128 PRIVATE cxx_std_17)
+target_compile_features(evaluate_circuit_from_file PRIVATE cxx_std_20)
 
 target_link_libraries(evaluate_circuit_from_file
         MOTION::motion

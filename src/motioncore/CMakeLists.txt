@@ -158,7 +158,8 @@ endif ()
 #endif ()
 
 
-target_compile_features(motion PUBLIC cxx_std_17)
+set_property(TARGET motion PROPERTY CXX_STANDARD 20)
+set_property(TARGET motion PROPERTY CXX_STANDARD_REQUIRED On)
 target_compile_options(motion PRIVATE
         ${MOTION_EXTRA_FLAGS}
         -Wall -Wextra

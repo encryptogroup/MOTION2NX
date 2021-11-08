@@ -34,7 +34,8 @@ add_executable(motiontest
         test_yao_tensor.cpp
         )
 
-target_compile_features(motiontest PRIVATE cxx_std_17)
+set_property(TARGET motiontest PROPERTY CXX_STANDARD 20)
+set_property(TARGET motiontest PROPERTY CXX_STANDARD_REQUIRED On)
 
 target_link_libraries(motiontest PRIVATE
         MOTION::motion
