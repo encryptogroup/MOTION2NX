@@ -49,6 +49,10 @@ class BooleanGMWWire : public NewWire {
 
 using BooleanGMWWireVector = std::vector<std::shared_ptr<BooleanGMWWire>>;
 
+inline std::ostream& operator<<(std::ostream& os, const BooleanGMWWire& w) {
+  return os << "<BooleanGMWWire @ " << &w << ">";
+}
+
 template <typename T>
 class ArithmeticGMWWire : public NewWire {
  public:
@@ -69,5 +73,10 @@ template <typename T>
 using ArithmeticGMWWireP = std::shared_ptr<ArithmeticGMWWire<T>>;
 template <typename T>
 using ArithmeticGMWWireVector = std::vector<std::shared_ptr<ArithmeticGMWWire<T>>>;
+
+template <typename T>
+std::ostream& operator<<(std::ostream& os, const ArithmeticGMWWire<T>& w) {
+  return os << "<ArithmeticGMWWire<T> @ " << &w << ">";
+}
 
 }  // namespace MOTION::proto::gmw

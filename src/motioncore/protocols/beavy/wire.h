@@ -45,18 +45,10 @@ class BooleanBEAVYWire : public NewWire, public ENCRYPTO::enable_wait_setup {
   std::pair<const ENCRYPTO::BitVector<>&, const ENCRYPTO::BitVector<>&> get_share() const {
     return {public_share_, secret_share_};
   };
-  ENCRYPTO::BitVector<>& get_public_share() {
-    return public_share_;
-  };
-  const ENCRYPTO::BitVector<>& get_public_share() const {
-    return public_share_;
-  };
-  ENCRYPTO::BitVector<>& get_secret_share() {
-    return secret_share_;
-  };
-  const ENCRYPTO::BitVector<>& get_secret_share() const {
-    return secret_share_;
-  };
+  ENCRYPTO::BitVector<>& get_public_share() { return public_share_; };
+  const ENCRYPTO::BitVector<>& get_public_share() const { return public_share_; };
+  ENCRYPTO::BitVector<>& get_secret_share() { return secret_share_; };
+  const ENCRYPTO::BitVector<>& get_secret_share() const { return secret_share_; };
 
  private:
   // holds this party shares
@@ -66,6 +58,10 @@ class BooleanBEAVYWire : public NewWire, public ENCRYPTO::enable_wait_setup {
 
 using BooleanBEAVYWireP = std::shared_ptr<BooleanBEAVYWire>;
 using BooleanBEAVYWireVector = std::vector<BooleanBEAVYWireP>;
+
+inline std::ostream& operator<<(std::ostream& os, const BooleanBEAVYWire& w) {
+  return os << "<BooleanBEAVYWire @ " << &w << ">";
+}
 
 template <typename T>
 class ArithmeticBEAVYWire : public NewWire, public ENCRYPTO::enable_wait_setup {
@@ -80,18 +76,10 @@ class ArithmeticBEAVYWire : public NewWire, public ENCRYPTO::enable_wait_setup {
   std::pair<const std::vector<T>&, const std::vector<T>&> get_share() const {
     return {public_share_, secret_share_};
   };
-  std::vector<T>& get_public_share() {
-    return public_share_;
-  };
-  const std::vector<T>& get_public_share() const {
-    return public_share_;
-  };
-  std::vector<T>& get_secret_share() {
-    return secret_share_;
-  };
-  const std::vector<T>& get_secret_share() const {
-    return secret_share_;
-  };
+  std::vector<T>& get_public_share() { return public_share_; };
+  const std::vector<T>& get_public_share() const { return public_share_; };
+  std::vector<T>& get_secret_share() { return secret_share_; };
+  const std::vector<T>& get_secret_share() const { return secret_share_; };
 
  private:
   using is_enabled_ = ENCRYPTO::is_unsigned_int_t<T>;
@@ -105,5 +93,10 @@ template <typename T>
 using ArithmeticBEAVYWireP = std::shared_ptr<ArithmeticBEAVYWire<T>>;
 template <typename T>
 using ArithmeticBEAVYWireVector = std::vector<std::shared_ptr<ArithmeticBEAVYWire<T>>>;
+
+template <typename T>
+std::ostream& operator<<(std::ostream& os, const ArithmeticBEAVYWire<T>& w) {
+  return os << "<ArithmeticBEAVYWire<T> @ " << &w << ">";
+}
 
 }  // namespace MOTION::proto::beavy

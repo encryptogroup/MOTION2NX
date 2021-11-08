@@ -25,6 +25,7 @@
 #include <algorithm>
 #include <array>
 #include <boost/align/aligned_allocator.hpp>
+#include <ostream>
 #include <vector>
 #include "config.h"
 
@@ -135,6 +136,10 @@ struct block128_t {
   // the underlying array of bytes
   alignas(alignment) std::array<std::byte, 16> byte_array;
 };
+
+inline std::ostream& operator<<(std::ostream& os, const block128_t& b) {
+  return os << "<block128_t @ " << &b << ">";
+}
 
 // vector of 128 bit / 16 B blocks
 struct block128_vector {
@@ -276,5 +281,9 @@ struct block128_vector {
 
   static constexpr std::size_t alignment = MOTION::MOTION_ALIGNMENT;
 };
+
+inline std::ostream& operator<<(std::ostream& os, const block128_vector& b) {
+  return os << "<block128_vector @ " << &b << ">";
+}
 
 }  // namespace ENCRYPTO

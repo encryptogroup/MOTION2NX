@@ -53,6 +53,11 @@ using ArithmeticBEAVYTensorP = std::shared_ptr<ArithmeticBEAVYTensor<T>>;
 template <typename T>
 using ArithmeticBEAVYTensorCP = std::shared_ptr<const ArithmeticBEAVYTensor<T>>;
 
+template <typename T>
+std::ostream& operator<<(std::ostream& os, const ArithmeticBEAVYTensor<T>& w) {
+  return os << "<ArithmeticBEAVYTensor<T> @ " << &w << ">";
+}
+
 class BooleanBEAVYTensor : public tensor::Tensor, public ENCRYPTO::enable_wait_setup {
  public:
   BooleanBEAVYTensor(const tensor::TensorDimensions& dims, std::size_t bit_size)
@@ -77,5 +82,9 @@ class BooleanBEAVYTensor : public tensor::Tensor, public ENCRYPTO::enable_wait_s
 using BooleanBEAVYTensorP = std::shared_ptr<BooleanBEAVYTensor>;
 
 using BooleanBEAVYTensorCP = std::shared_ptr<const BooleanBEAVYTensor>;
+
+inline std::ostream& operator<<(std::ostream& os, const BooleanBEAVYTensor& w) {
+  return os << "<BooleanBEAVYTensor @ " << &w << ">";
+}
 
 }  // namespace MOTION::proto::beavy

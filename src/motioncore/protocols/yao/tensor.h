@@ -49,4 +49,8 @@ using YaoTensorP = std::shared_ptr<YaoTensor>;
 
 using YaoTensorCP = std::shared_ptr<const YaoTensor>;
 
+inline std::ostream& operator<<(std::ostream& os, const YaoTensor& w) {
+  return os << "<YaoTensor @ " << &w << ">";
+}
+
 }  // namespace MOTION::proto::yao

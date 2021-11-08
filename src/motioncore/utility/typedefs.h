@@ -25,8 +25,8 @@
 #pragma once
 
 #include <cstdint>
-#include <string>
 #include <stdexcept>
+#include <string>
 #include <tuple>
 #include <type_traits>
 
@@ -111,6 +111,10 @@ inline std::string ToString(PrimitiveOperationType t) {
   }
 }
 
+inline std::ostream& operator<<(std::ostream& os, const PrimitiveOperationType& t) {
+  return os << ToString(t);
+}
+
 enum class IntegerOperationType : unsigned int { ADD, DIV, GT, EQ, MUL, SUB, INVALID };
 
 inline std::string ToString(IntegerOperationType p) {
@@ -137,6 +141,11 @@ inline std::string ToString(IntegerOperationType p) {
       throw std::invalid_argument("Invalid IntegerOperationType");
   }
 }
+
+inline std::ostream& operator<<(std::ostream& os, const IntegerOperationType& t) {
+  return os << ToString(t);
+}
+
 }  // namespace ENCRYPTO
 
 // TODO: put MOTION namespace into ENCRYPTO namespace

@@ -50,4 +50,8 @@ class YaoWire : public NewWire, public ENCRYPTO::enable_wait_setup {
 
 using YaoWireVector = std::vector<std::shared_ptr<YaoWire>>;
 
+inline std::ostream& operator<<(std::ostream& os, const YaoWire& w) {
+  return os << "<YaoWire @ " << &w << ">";
+}
+
 }  // namespace MOTION::proto::yao

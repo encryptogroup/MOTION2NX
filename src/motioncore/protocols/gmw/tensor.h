@@ -50,6 +50,11 @@ using ArithmeticGMWTensorP = std::shared_ptr<ArithmeticGMWTensor<T>>;
 template <typename T>
 using ArithmeticGMWTensorCP = std::shared_ptr<const ArithmeticGMWTensor<T>>;
 
+template <typename T>
+std::ostream& operator<<(std::ostream& os, const ArithmeticGMWTensor<T>& w) {
+  return os << "<ArithmeticGMWTensor<T> @ " << &w << ">";
+}
+
 class BooleanGMWTensor : public tensor::Tensor {
  public:
   BooleanGMWTensor(const tensor::TensorDimensions& dims, std::size_t bit_size)
@@ -67,5 +72,9 @@ class BooleanGMWTensor : public tensor::Tensor {
 using BooleanGMWTensorP = std::shared_ptr<BooleanGMWTensor>;
 
 using BooleanGMWTensorCP = std::shared_ptr<const BooleanGMWTensor>;
+
+inline std::ostream& operator<<(std::ostream& os, const BooleanGMWTensor& w) {
+  return os << "<BooleanGMWTensor @ " << &w << ">";
+}
 
 }  // namespace MOTION::proto::gmw
