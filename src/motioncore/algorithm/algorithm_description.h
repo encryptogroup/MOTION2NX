@@ -41,8 +41,6 @@ struct PrimitiveOperation {
 };
 
 struct AlgorithmDescription {
-  AlgorithmDescription() = default;
-
   static AlgorithmDescription FromBristol(const std::string& path);
 
   static AlgorithmDescription FromBristol(std::string&& path);
