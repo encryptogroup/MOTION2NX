@@ -28,7 +28,7 @@
 namespace fp = MOTION::fixed_point;
 
 
-TEST(FixedPoint, EncodeDecode) {
+TEST(FixedPoint, EncodeDecodeTruncate) {
   const std::size_t fractional_bits = 24;
   const double max_error = 1.0 / (1 << 10);
 
@@ -45,5 +45,40 @@ TEST(FixedPoint, EncodeDecode) {
   const double h = f * g;
   const auto enc_h = fp::truncate<std::uint64_t>(enc_f * enc_g, fractional_bits);
   const auto dec_h = fp::decode<std::uint64_t, double>(enc_h, fractional_bits);
+  EXPECT_NEAR(dec_h, h, max_error);
+}
+
+TEST(FixedPoint, TruncateShared) {
+  const std::size_t fractional_bits = 24;
+  const double max_error = 1.0 / (1 << 10);
+
+  // define factors and encode them as fixed-point numbers
+  const double f = 13.374247;
+  const double g = -48.768676;
+  const auto enc_f = fp::encode<std::uint64_t, double>(f, fractional_bits);
+  const auto enc_g = fp::encode<std::uint64_t, double>(g, fractional_bits);
+
+  // compute product in plain as doubles
+  const double h = f * g;
+  // compute product in plain as fixed-point numbers, but do *not* truncate
+  const auto enc_h = enc_f * enc_g;
+
+  // emulate an additive secret sharing (GMW-style)
+  const std::uint64_t enc_h_0 = 0x4242424242424242;
+  const std::uint64_t enc_h_1 = enc_h - enc_h_0;
+  ASSERT_EQ(enc_h, enc_h_0 + enc_h_1);
+
+  // run the truncation protocol on each share separately
+  auto enc_h_truncated_0 = enc_h_0;
+  fp::truncate_shared(&enc_h_truncated_0, fractional_bits, 1, 0);
+  auto enc_h_truncated_1 = enc_h_1;
+  fp::truncate_shared(&enc_h_truncated_1, fractional_bits, 1, 1);
+
+  // reconstruct the truncated fixed-point number and decode it into a double
+  const auto enc_h_truncated = enc_h_truncated_0 + enc_h_truncated_1;
+
+  // decode the truncated fixed-point number into a double
+  const auto dec_h = fp::decode<std::uint64_t, double>(enc_h_truncated, fractional_bits);
+  // check that the result matches the product computed on doubles in plaintext
   EXPECT_NEAR(dec_h, h, max_error);
 }
