@@ -46,6 +46,8 @@ also work with older versions):
 - [GCC 11.1.0](https://gcc.gnu.org/) or [Clang/LLVM 12.0.1](https://clang.llvm.org/)
 - [CMake 3.21.4](https://cmake.org/)
 - [Boost 1.76.0](https://www.boost.org/)
+- [OpenSSL 1.1.1.l](https://openssl.org/)
+- [Eigen 3.4.0](https://eigen.tuxfamily.org/)
 - [fmt 8.0.1](https://github.com/fmtlib/fmt)
 - [flatbuffers 2.0.0](https://github.com/google/flatbuffers)
 - [GoogleTest 1.11.0 (optional, for tests, build automatically)](https://github.com/google/googletest)
