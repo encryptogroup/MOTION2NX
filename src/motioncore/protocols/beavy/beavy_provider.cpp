@@ -501,24 +501,36 @@ WireVector BEAVYProvider::make_arithmetic_unary_gate(const WireVector& in_a) {
   }
 }
 
-static std::size_t check_arithmetic_wires(const WireVector& in_a, const WireVector& in_b) {
+static std::size_t check_arithmetic_wires(const WireVector& in_a, const WireVector& in_b,
+                                          bool bit_x_int = false) {
   if (in_a.size() != 1 || in_b.size() != 1) {
     throw std::logic_error("arithmetic operations support single wires only");
   }
-  auto bit_size = in_a[0]->get_bit_size();
-  if (bit_size != in_b[0]->get_bit_size()) {
-    throw std::logic_error("different bit sizes on wires");
+  if (bit_x_int) {
+    assert(std::min(in_a[0]->get_bit_size(), in_b[0]->get_bit_size()) == 1);
+    return std::max(in_a[0]->get_bit_size(), in_b[0]->get_bit_size());
+  } else {
+    auto bit_size = in_a[0]->get_bit_size();
+    if (bit_size != in_b[0]->get_bit_size()) {
+      throw std::logic_error("different bit sizes on wires");
+    }
+    return bit_size;
   }
-  return bit_size;
 }
 
-template <template <typename> class BinaryGate, typename T, bool plain>
+template <template <typename> class BinaryGate, typename T, BEAVYProvider::mixed_gate_mode_t mgm>
 WireVector BEAVYProvider::make_arithmetic_binary_gate(const NewWireP& in_a, const NewWireP& in_b) {
   auto gate_id = gate_register_.get_next_gate_id();
   WireVector output;
-  if constexpr (plain) {
+  if constexpr (mgm == mixed_gate_mode_t::plain) {
     auto gate = std::make_unique<BinaryGate<T>>(gate_id, *this, cast_arith_wire<T>(in_a),
                                                 cast_arith_plain_wire<T>(in_b));
+    output = {cast_arith_wire(gate->get_output_wire())};
+    gate_register_.register_gate(std::move(gate));
+  } else if constexpr (mgm == mixed_gate_mode_t::boolean) {
+    auto gate = std::make_unique<BinaryGate<T>>(gate_id, *this,
+                                                std::dynamic_pointer_cast<BooleanBEAVYWire>(in_a),
+                                                cast_arith_wire<T>(in_b));
     output = {cast_arith_wire(gate->get_output_wire())};
     gate_register_.register_gate(std::move(gate));
   } else {
@@ -530,19 +542,19 @@ WireVector BEAVYProvider::make_arithmetic_binary_gate(const NewWireP& in_a, cons
   return output;
 }
 
-template <template <typename> class BinaryGate, bool plain>
+template <template <typename> class BinaryGate, BEAVYProvider::mixed_gate_mode_t mgm>
 WireVector BEAVYProvider::make_arithmetic_binary_gate(const WireVector& in_a,
                                                       const WireVector& in_b) {
-  auto bit_size = check_arithmetic_wires(in_a, in_b);
+  auto bit_size = check_arithmetic_wires(in_a, in_b, mgm == mixed_gate_mode_t::boolean);
   switch (bit_size) {
     case 8:
-      return make_arithmetic_binary_gate<BinaryGate, std::uint8_t, plain>(in_a[0], in_b[0]);
+      return make_arithmetic_binary_gate<BinaryGate, std::uint8_t, mgm>(in_a[0], in_b[0]);
     case 16:
-      return make_arithmetic_binary_gate<BinaryGate, std::uint16_t, plain>(in_a[0], in_b[0]);
+      return make_arithmetic_binary_gate<BinaryGate, std::uint16_t, mgm>(in_a[0], in_b[0]);
     case 32:
-      return make_arithmetic_binary_gate<BinaryGate, std::uint32_t, plain>(in_a[0], in_b[0]);
+      return make_arithmetic_binary_gate<BinaryGate, std::uint32_t, mgm>(in_a[0], in_b[0]);
     case 64:
-      return make_arithmetic_binary_gate<BinaryGate, std::uint64_t, plain>(in_a[0], in_b[0]);
+      return make_arithmetic_binary_gate<BinaryGate, std::uint64_t, mgm>(in_a[0], in_b[0]);
     default:
       throw std::logic_error(fmt::format("unexpected bit size {}", bit_size));
   }
@@ -559,20 +571,26 @@ WireVector BEAVYProvider::make_add_gate(const WireVector& in_a, const WireVector
   }
   assert(in_a.at(0)->get_protocol() == MPCProtocol::ArithmeticBEAVY);
   if (in_b.at(0)->get_protocol() == MPCProtocol::ArithmeticPlain) {
-    return make_arithmetic_binary_gate<ArithmeticBEAVYADDPlainGate, true>(in_a, in_b);
+    return make_arithmetic_binary_gate<ArithmeticBEAVYADDPlainGate, mixed_gate_mode_t::plain>(in_a,
+                                                                                              in_b);
   } else {
     return make_arithmetic_binary_gate<ArithmeticBEAVYADDGate>(in_a, in_b);
   }
 }
 
 WireVector BEAVYProvider::make_mul_gate(const WireVector& in_a, const WireVector& in_b) {
-  // assume, at most one of the inputs is a plain wire
-  if (in_a.at(0)->get_protocol() == MPCProtocol::ArithmeticPlain) {
+  // assume, at most one of the inputs is a plain wire or a Boolean wire
+  if (in_a.at(0)->get_protocol() == MPCProtocol::ArithmeticPlain ||
+      in_a.at(0)->get_protocol() == MPCProtocol::BooleanBEAVY) {
     return make_mul_gate(in_b, in_a);
   }
   assert(in_a.at(0)->get_protocol() == MPCProtocol::ArithmeticBEAVY);
   if (in_b.at(0)->get_protocol() == MPCProtocol::ArithmeticPlain) {
-    return make_arithmetic_binary_gate<ArithmeticBEAVYMULPlainGate, true>(in_a, in_b);
+    return make_arithmetic_binary_gate<ArithmeticBEAVYMULPlainGate, mixed_gate_mode_t::plain>(in_a,
+                                                                                              in_b);
+  } else if (in_b.at(0)->get_protocol() == MPCProtocol::BooleanBEAVY) {
+    return make_arithmetic_binary_gate<BooleanXArithmeticBEAVYMULGate, mixed_gate_mode_t::boolean>(
+        in_b, in_a);
   } else {
     return make_arithmetic_binary_gate<ArithmeticBEAVYMULGate>(in_a, in_b);
   }

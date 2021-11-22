@@ -1095,6 +1095,55 @@ TYPED_TEST(ArithmeticBEAVYTest, SQR) {
   }
 }
 
+TYPED_TEST(ArithmeticBEAVYTest, BitMUL) {
+  std::size_t num_simd = 10;
+  const auto input_bit = ENCRYPTO::BitVector<>::Random(num_simd);
+  const auto input_int = this->generate_inputs(num_simd);
+  std::vector<TypeParam> expected_output(num_simd);
+  for (std::size_t simd_j = 0; simd_j < num_simd; ++simd_j) {
+    expected_output.at(simd_j) = input_bit.Get(simd_j) ? input_int.at(simd_j) : TypeParam(0);
+  }
+
+  // input of party 0
+  auto [input_int_promise, wires_int_in_0] = this->make_arithmetic_T_input_gate_my(0, 0, num_simd);
+  auto wires_int_in_1 = this->make_arithmetic_T_input_gate_other(1, 0, num_simd);
+
+  // input of party 1
+  auto wires_bit_in_0 = this->beavy_providers_[0]->make_boolean_input_gate_other(1, 1, num_simd);
+  auto [input_bit_promise, wires_bit_in_1] =
+      this->beavy_providers_[1]->make_boolean_input_gate_my(1, 1, num_simd);
+
+  auto wires_0_out = this->beavy_providers_[0]->make_binary_gate(
+      ENCRYPTO::PrimitiveOperationType::MUL, wires_bit_in_0, wires_int_in_0);
+  auto wires_1_out = this->beavy_providers_[1]->make_binary_gate(
+      ENCRYPTO::PrimitiveOperationType::MUL, wires_bit_in_1, wires_int_in_1);
+
+  this->run_setup();
+  this->run_gates_setup();
+  input_bit_promise.set_value({input_bit});
+  input_int_promise.set_value(input_int);
+  this->run_gates_online();
+
+  // check wire values
+  const auto wire_0 = std::dynamic_pointer_cast<ArithmeticBEAVYWire<TypeParam>>(wires_0_out.at(0));
+  const auto wire_1 = std::dynamic_pointer_cast<ArithmeticBEAVYWire<TypeParam>>(wires_1_out.at(0));
+  wire_0->wait_online();
+  wire_1->wait_online();
+  const auto& pshare_0 = wire_0->get_public_share();
+  const auto& pshare_1 = wire_1->get_public_share();
+  const auto& sshare_0 = wire_0->get_secret_share();
+  const auto& sshare_1 = wire_1->get_secret_share();
+  ASSERT_EQ(pshare_0.size(), num_simd);
+  ASSERT_EQ(pshare_1.size(), num_simd);
+  ASSERT_EQ(sshare_0.size(), num_simd);
+  ASSERT_EQ(sshare_1.size(), num_simd);
+  ASSERT_EQ(pshare_0, pshare_1);
+  for (std::size_t simd_j = 0; simd_j < num_simd; ++simd_j) {
+    ASSERT_EQ(expected_output.at(simd_j),
+              TypeParam(pshare_0.at(simd_j) - sshare_0.at(simd_j) - sshare_1.at(simd_j)));
+  }
+}
+
 // naive transposition of integers into bit vectors
 template <typename T>
 static std::vector<ENCRYPTO::BitVector<>> int_to_bit_vectors(const std::vector<T>& ints) {

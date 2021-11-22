@@ -207,6 +207,7 @@ class BEAVYProvider : public GateFactory,
   tensor::TensorCP make_convert_boolean_to_arithmetic_beavy_tensor(const tensor::TensorCP);
 
  private:
+  enum class mixed_gate_mode_t { arithmetic, boolean, plain };
   template <typename T>
   std::pair<ENCRYPTO::ReusableFiberPromise<IntegerValues<T>>, WireVector>
   basic_make_arithmetic_input_gate_my(std::size_t input_owner, std::size_t num_simd);
@@ -233,9 +234,10 @@ class BEAVYProvider : public GateFactory,
   WireVector make_arithmetic_unary_gate(const NewWireP& in_a);
   template <template <typename> class BinaryGate>
   WireVector make_arithmetic_unary_gate(const WireVector& in_a);
-  template <template <typename> class BinaryGate, typename T, bool plain>
+  template <template <typename> class BinaryGate, typename T, mixed_gate_mode_t mgm>
   WireVector make_arithmetic_binary_gate(const NewWireP& in_a, const NewWireP& in_b);
-  template <template <typename> class BinaryGate, bool plain = false>
+  template <template <typename> class BinaryGate,
+            mixed_gate_mode_t mgm = mixed_gate_mode_t::arithmetic>
   WireVector make_arithmetic_binary_gate(const WireVector& in_a, const WireVector& in_b);
   WireVector make_neg_gate(const WireVector& in_a);
   WireVector make_add_gate(const WireVector& in_a, const WireVector& in_b);
