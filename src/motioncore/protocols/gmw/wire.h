@@ -47,6 +47,7 @@ class BooleanGMWWire : public NewWire {
   ENCRYPTO::BitVector<> share_;
 };
 
+using BooleanGMWWireP = std::shared_ptr<BooleanGMWWire>;
 using BooleanGMWWireVector = std::vector<std::shared_ptr<BooleanGMWWire>>;
 
 inline std::ostream& operator<<(std::ostream& os, const BooleanGMWWire& w) {

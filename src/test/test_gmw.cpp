@@ -72,8 +72,8 @@ class GMWTest : public ::testing::Test {
       gate_registers_[i] = std::make_unique<MOTION::GateRegister>();
       gmw_providers_[i] = std::make_unique<GMWProvider>(
           *comm_layers_[i], *gate_registers_[i], circuit_loader_, *motion_base_providers_[i],
-          *ot_provider_managers_[i], *mt_providers_[i], *sp_providers_[i], *sb_providers_[i],
-          loggers_[i]);
+          *ot_provider_managers_[i], *arithmetic_provider_managers_[i], *mt_providers_[i],
+          *sp_providers_[i], *sb_providers_[i], loggers_[i]);
     }
   }
 
@@ -957,6 +957,49 @@ TYPED_TEST(ArithmeticGMWTest, SQR) {
   this->run_setup();
   this->run_gates_setup();
   input_promise.set_value(inputs);
+  this->run_gates_online();
+
+  // check wire values
+  const auto wire_0 = std::dynamic_pointer_cast<ArithmeticGMWWire<TypeParam>>(wires_0_out.at(0));
+  const auto wire_1 = std::dynamic_pointer_cast<ArithmeticGMWWire<TypeParam>>(wires_1_out.at(0));
+  wire_0->wait_online();
+  wire_1->wait_online();
+  const auto& share_0 = wire_0->get_share();
+  const auto& share_1 = wire_1->get_share();
+  ASSERT_EQ(share_0.size(), num_simd);
+  ASSERT_EQ(share_1.size(), num_simd);
+  for (std::size_t simd_j = 0; simd_j < num_simd; ++simd_j) {
+    ASSERT_EQ(expected_output.at(simd_j), TypeParam(share_0.at(simd_j) + share_1.at(simd_j)));
+  }
+}
+
+TYPED_TEST(ArithmeticGMWTest, BitMUL) {
+  std::size_t num_simd = 10;
+  const auto input_bit = ENCRYPTO::BitVector<>::Random(num_simd);
+  const auto input_int = this->generate_inputs(num_simd);
+  std::vector<TypeParam> expected_output(num_simd);
+  for (std::size_t simd_j = 0; simd_j < num_simd; ++simd_j) {
+    expected_output.at(simd_j) = input_bit.Get(simd_j) ? input_int.at(simd_j) : TypeParam(0);
+  }
+
+  // input of party 0
+  auto [input_int_promise, wires_int_in_0] = this->make_arithmetic_T_input_gate_my(0, 0, num_simd);
+  auto wires_int_in_1 = this->make_arithmetic_T_input_gate_other(1, 0, num_simd);
+
+  // input of party 1
+  auto wires_bit_in_0 = this->gmw_providers_[0]->make_boolean_input_gate_other(1, 1, num_simd);
+  auto [input_bit_promise, wires_bit_in_1] =
+      this->gmw_providers_[1]->make_boolean_input_gate_my(1, 1, num_simd);
+
+  auto wires_0_out = this->gmw_providers_[0]->make_binary_gate(
+      ENCRYPTO::PrimitiveOperationType::MUL, wires_bit_in_0, wires_int_in_0);
+  auto wires_1_out = this->gmw_providers_[1]->make_binary_gate(
+      ENCRYPTO::PrimitiveOperationType::MUL, wires_bit_in_1, wires_int_in_1);
+
+  this->run_setup();
+  this->run_gates_setup();
+  input_bit_promise.set_value({input_bit});
+  input_int_promise.set_value(input_int);
   this->run_gates_online();
 
   // check wire values

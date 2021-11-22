@@ -39,6 +39,7 @@ class OTProviderManager;
 
 namespace MOTION {
 
+class ArithmeticProviderManager;
 class CircuitLoader;
 class GateRegister;
 class Logger;
@@ -77,7 +78,8 @@ class GMWProvider : public GateFactory,
 
   GMWProvider(Communication::CommunicationLayer&, GateRegister&, CircuitLoader&,
               Crypto::MotionBaseProvider&, ENCRYPTO::ObliviousTransfer::OTProviderManager&,
-              MTProvider&, SPProvider&, SBProvider&, std::shared_ptr<Logger>);
+              ArithmeticProviderManager&, MTProvider&, SPProvider&, SBProvider&,
+              std::shared_ptr<Logger>);
   ~GMWProvider();
 
   std::string get_provider_name() const noexcept override { return "GMWProvider"; }
@@ -85,6 +87,7 @@ class GMWProvider : public GateFactory,
   void setup();
   Crypto::MotionBaseProvider& get_motion_base_provider() noexcept { return motion_base_provider_; }
   ENCRYPTO::ObliviousTransfer::OTProviderManager& get_ot_manager() noexcept { return ot_manager_; }
+  ArithmeticProviderManager& get_arith_manager() noexcept { return arith_manager_; }
   MTProvider& get_mt_provider() noexcept { return mt_provider_; }
   SPProvider& get_sp_provider() noexcept { return sp_provider_; }
   SBProvider& get_sb_provider() noexcept { return sb_provider_; }
@@ -212,6 +215,7 @@ class GMWProvider : public GateFactory,
   tensor::TensorCP make_convert_boolean_to_arithmetic_gmw_tensor(const tensor::TensorCP);
 
  private:
+  enum class mixed_gate_mode_t { arithmetic, boolean, plain };
   template <typename T>
   std::pair<ENCRYPTO::ReusableFiberPromise<IntegerValues<T>>, WireVector>
   basic_make_arithmetic_input_gate_my(std::size_t input_owner, std::size_t num_simd);
@@ -233,9 +237,10 @@ class GMWProvider : public GateFactory,
   WireVector make_arithmetic_unary_gate(const NewWireP& in_a);
   template <template <typename> class BinaryGate>
   WireVector make_arithmetic_unary_gate(const WireVector& in_a);
-  template <template <typename> class BinaryGate, typename T, bool plain>
+  template <template <typename> class BinaryGate, typename T, mixed_gate_mode_t mgm>
   WireVector make_arithmetic_binary_gate(const NewWireP& in_a, const NewWireP& in_b);
-  template <template <typename> class BinaryGate, bool plain = false>
+  template <template <typename> class BinaryGate,
+            mixed_gate_mode_t mgm = mixed_gate_mode_t::arithmetic>
   WireVector make_arithmetic_binary_gate(const WireVector& in_a, const WireVector& in_b);
   WireVector make_neg_gate(const WireVector& in_a);
   WireVector make_add_gate(const WireVector& in_a, const WireVector& in_b);
@@ -262,6 +267,7 @@ class GMWProvider : public GateFactory,
   CircuitLoader& circuit_loader_;
   Crypto::MotionBaseProvider& motion_base_provider_;
   ENCRYPTO::ObliviousTransfer::OTProviderManager& ot_manager_;
+  ArithmeticProviderManager& arith_manager_;
   MTProvider& mt_provider_;
   SPProvider& sp_provider_;
   SBProvider& sb_provider_;

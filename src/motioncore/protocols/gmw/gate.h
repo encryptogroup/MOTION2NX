@@ -30,6 +30,13 @@
 #include "utility/type_traits.hpp"
 #include "wire.h"
 
+namespace MOTION {
+template <typename T>
+class BitIntegerMultiplicationBitSide;
+template <typename T>
+class BitIntegerMultiplicationIntSide;
+}  // namespace MOTION
+
 namespace MOTION::proto::gmw {
 
 namespace detail {
@@ -185,6 +192,19 @@ class BasicArithmeticGMWUnaryGate : public NewGate {
   ArithmeticGMWWireP<T> output_;
 };
 
+template <typename T>
+class BasicBooleanXArithmeticGMWBinaryGate : public NewGate {
+ public:
+  BasicBooleanXArithmeticGMWBinaryGate(std::size_t gate_id, GMWProvider&, BooleanGMWWireP&&,
+                                       ArithmeticGMWWireP<T>&&);
+  ArithmeticGMWWireP<T>& get_output_wire() noexcept { return output_; }
+
+ protected:
+  const BooleanGMWWireP input_a_;
+  const ArithmeticGMWWireP<T> input_b_;
+  ArithmeticGMWWireP<T> output_;
+};
+
 }  // namespace detail
 
 template <typename T>
@@ -316,6 +336,23 @@ class ArithmeticGMWSQRGate : public detail::BasicArithmeticGMWUnaryGate<T> {
   GMWProvider& gmw_provider_;
   std::size_t sp_offset_;
   std::vector<ENCRYPTO::ReusableFiberFuture<std::vector<T>>> share_futures_;
+};
+
+template <typename T>
+class BooleanXArithmeticGMWMULGate : public detail::BasicBooleanXArithmeticGMWBinaryGate<T> {
+ public:
+  BooleanXArithmeticGMWMULGate(std::size_t gate_id, GMWProvider&, BooleanGMWWireP&&,
+                               ArithmeticGMWWireP<T>&&);
+  ~BooleanXArithmeticGMWMULGate();
+  bool need_setup() const noexcept override { return false; }
+  bool need_online() const noexcept override { return true; }
+  void evaluate_setup() override {}
+  void evaluate_online() override;
+
+ private:
+  GMWProvider& gmw_provider_;
+  std::unique_ptr<MOTION::BitIntegerMultiplicationBitSide<T>> mult_bit_side_;
+  std::unique_ptr<MOTION::BitIntegerMultiplicationIntSide<T>> mult_int_side_;
 };
 
 }  // namespace MOTION::proto::gmw

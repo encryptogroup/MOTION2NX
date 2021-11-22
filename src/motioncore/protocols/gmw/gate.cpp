@@ -25,6 +25,7 @@
 #include <stdexcept>
 
 #include "base/gate_factory.h"
+#include "crypto/arithmetic_provider.h"
 #include "crypto/motion_base_provider.h"
 #include "crypto/multiplication_triple/mt_provider.h"
 #include "crypto/multiplication_triple/sp_provider.h"
@@ -420,6 +421,23 @@ template class BasicArithmeticGMWUnaryGate<std::uint16_t>;
 template class BasicArithmeticGMWUnaryGate<std::uint32_t>;
 template class BasicArithmeticGMWUnaryGate<std::uint64_t>;
 
+template <typename T>
+BasicBooleanXArithmeticGMWBinaryGate<T>::BasicBooleanXArithmeticGMWBinaryGate(
+    std::size_t gate_id, GMWProvider&, BooleanGMWWireP&& in_a, ArithmeticGMWWireP<T>&& in_b)
+    : NewGate(gate_id),
+      input_a_(std::move(in_a)),
+      input_b_(std::move(in_b)),
+      output_(std::make_shared<ArithmeticGMWWire<T>>(input_a_->get_num_simd())) {
+  if (input_a_->get_num_simd() != input_b_->get_num_simd()) {
+    throw std::logic_error("number of SIMD values need to be the same for all wires");
+  }
+}
+
+template class BasicBooleanXArithmeticGMWBinaryGate<std::uint8_t>;
+template class BasicBooleanXArithmeticGMWBinaryGate<std::uint16_t>;
+template class BasicBooleanXArithmeticGMWBinaryGate<std::uint32_t>;
+template class BasicBooleanXArithmeticGMWBinaryGate<std::uint64_t>;
+
 }  // namespace detail
 
 template <typename T>
@@ -804,5 +822,90 @@ template class ArithmeticGMWSQRGate<std::uint8_t>;
 template class ArithmeticGMWSQRGate<std::uint16_t>;
 template class ArithmeticGMWSQRGate<std::uint32_t>;
 template class ArithmeticGMWSQRGate<std::uint64_t>;
+
+template <typename T>
+BooleanXArithmeticGMWMULGate<T>::BooleanXArithmeticGMWMULGate(std::size_t gate_id,
+                                                              GMWProvider& gmw_provider,
+                                                              BooleanGMWWireP&& in_a,
+                                                              ArithmeticGMWWireP<T>&& in_b)
+    : detail::BasicBooleanXArithmeticGMWBinaryGate<T>(gate_id, gmw_provider, std::move(in_a),
+                                                      std::move(in_b)),
+      gmw_provider_(gmw_provider) {
+  if (gmw_provider_.get_num_parties() != 2) {
+    throw std::logic_error("currently only two parties are supported");
+  }
+  auto num_simd = this->input_a_->get_num_simd();
+  auto& arith_provider =
+      gmw_provider.get_arith_manager().get_provider(1 - gmw_provider_.get_my_id());
+  this->mult_bit_side_ = arith_provider.register_bit_integer_multiplication_bit_side<T>(num_simd);
+  this->mult_int_side_ = arith_provider.register_bit_integer_multiplication_int_side<T>(num_simd);
+}
+
+template <typename T>
+BooleanXArithmeticGMWMULGate<T>::~BooleanXArithmeticGMWMULGate() = default;
+
+template <typename T>
+void BooleanXArithmeticGMWMULGate<T>::evaluate_online() {
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = gmw_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(fmt::format(
+          "Gate {}: BooleanXArithmeticGMWMULGate<T>::evaluate_online start", this->gate_id_));
+    }
+  }
+
+  auto num_simd = this->input_a_->get_num_simd();
+  this->input_a_->wait_online();
+  this->input_b_->wait_online();
+  const auto& b = this->input_a_->get_share();
+  const auto& n = this->input_b_->get_share();
+
+  assert(b.GetSize() == num_simd);
+  assert(n.size() == num_simd);
+
+  // Note that we can write the product as:
+  //
+  // b * n = (b_1 ^ b_2) * (n_1 + n_2)
+  //       = (b_1 + b_2 - 2 * b_1 * b_2) * (n_1 + n_2)
+  //       = (b_1 * n_1) + (b_2 * n_2) +
+  //         b_1 * (n_2 - 2 * b_2 * n_2) + b_2 * (n_1 - 2 * b_1 * n_1)
+  //
+  // The first two terms can be computed locally. For the other two we use
+  // bit-integer multiplication via OT on private inputs.
+
+  std::vector<T> result(num_simd);
+  std::vector<T> int_factor(num_simd);
+  for (std::size_t simd_j = 0; simd_j < num_simd; ++simd_j) {
+    auto bn_j = b.Get(simd_j) ? n[simd_j] : T(0);
+    result[simd_j] = bn_j;
+    int_factor[simd_j] = n[simd_j] - 2 * bn_j;
+  }
+  mult_bit_side_->set_inputs(b);
+  mult_int_side_->set_inputs(std::move(int_factor));
+
+  mult_bit_side_->compute_outputs();
+  mult_int_side_->compute_outputs();
+
+  auto bit_prod = mult_bit_side_->get_outputs();
+  auto int_prod = mult_int_side_->get_outputs();
+  for (std::size_t simd_j = 0; simd_j < num_simd; ++simd_j) {
+    result[simd_j] += bit_prod[simd_j] + int_prod[simd_j];
+  }
+  this->output_->get_share() = std::move(result);
+  this->output_->set_online_ready();
+
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = gmw_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(fmt::format("Gate {}: BooleanXArithmeticGMWMULGate<T>::evaluate_online end",
+                                   this->gate_id_));
+    }
+  }
+}
+
+template class BooleanXArithmeticGMWMULGate<std::uint8_t>;
+template class BooleanXArithmeticGMWMULGate<std::uint16_t>;
+template class BooleanXArithmeticGMWMULGate<std::uint32_t>;
+template class BooleanXArithmeticGMWMULGate<std::uint64_t>;
 
 }  // namespace MOTION::proto::gmw
