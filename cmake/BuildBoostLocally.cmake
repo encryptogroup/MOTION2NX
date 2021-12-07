@@ -2,7 +2,8 @@ message("!!!!! Building boost from sources. This can take a few minutes.")
 
 include(ExternalProject)
 
-set(boost_URL "https://dl.bintray.com/boostorg/release/1.71.0/source/boost_1_71_0.tar.bz2")
+set(boost_URL "https://boostorg.jfrog.io/artifactory/main/release/1.77.0/source/boost_1_77_0.tar.bz2")
+set(boost_URL_HASH "SHA256=fc9f85fc030e233142908241af7a846e60630aa7388de9a5fafb1f3a26840854")
 set(boost_INSTALL ${CMAKE_CURRENT_BINARY_DIR}/extern/boost)
 set(boost_INCLUDE_DIR ${boost_INSTALL}/include)
 set(boost_LIB_DIR ${boost_INSTALL}/lib)
@@ -16,10 +17,10 @@ endif ()
 ExternalProject_Add(external_boost
         PREFIX boost
         URL ${boost_URL}
-        URL_HASH SHA256=d73a8da01e8bf8c7eda40b4c84915071a8c8a0df4a6734537ddde4a8580524ee
+        URL_HASH ${boost_URL_HASH}
         BUILD_IN_SOURCE 1
         CONFIGURE_COMMAND ./bootstrap.sh
-        --with-libraries=context,fiber,log,filesystem,system,thread,program_options
+        --with-libraries=context,fiber,json,log,filesystem,system,thread,program_options
         --prefix=<INSTALL_DIR>
         BUILD_COMMAND
         env -u CPATH -u C_INCLUDE_PATH ./b2 install link=static variant=${boost_BUILD_TYPE} threading=multi -j 10 define=BOOST_LOG_USE_NATIVE_SYSLOG define=BOOST_ERROR_CODE_HEADER_ONLY
@@ -38,6 +39,12 @@ set_property(TARGET boost::fiber PROPERTY IMPORTED_LOCATION ${boost_LIB_DIR}/lib
 set_property(TARGET boost::fiber PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${boost_INCLUDE_DIR})
 add_dependencies(boost::fiber external_boost)
 add_library(Boost::fiber ALIAS boost::fiber)
+
+add_library(boost::json STATIC IMPORTED GLOBAL)
+set_property(TARGET boost::json PROPERTY IMPORTED_LOCATION ${boost_LIB_DIR}/libboost_json.a)
+set_property(TARGET boost::json PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${boost_INCLUDE_DIR})
+add_dependencies(boost::json external_boost)
+add_library(Boost::json ALIAS boost::json)
 
 add_library(boost::log_setup SHARED IMPORTED GLOBAL)
 set_property(TARGET boost::log_setup PROPERTY IMPORTED_LOCATION ${boost_LIB_DIR}/libboost_log_setup.a)
