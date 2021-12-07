@@ -23,13 +23,14 @@ find_package(OpenSSL REQUIRED)
 find_package(OpenMP REQUIRED)
 find_package(Eigen3 REQUIRED)
 
-set(REQUIRED_BOOST_VERSION "1.69.0")
+set(REQUIRED_BOOST_VERSION "1.75.0")
 
 find_package(Boost ${REQUIRED_BOOST_VERSION}
         COMPONENTS
         context
         fiber
         filesystem
+        json
         log
         log_setup
         program_options
@@ -93,8 +94,6 @@ elseif (NOT fmt_FOUND AND NOT TARGET fmt::fmt)
     #set(FMT_TEST OFF CACHE BOOL "Enable building fmt tests" FORCE)
     #add_subdirectory(extern/fmt)
 endif ()
-
-find_package(boost_json)
 
 set(FBS_DIR_FULL_PREFIX "${MOTION_ROOT_DIR}/fbs")
 set(FBS_INCLUDE_PREFIX "${MOTION_ROOT_DIR}/src/motioncore/communication/fbs_headers")
