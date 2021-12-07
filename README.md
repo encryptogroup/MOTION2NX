@@ -62,7 +62,7 @@ find these libraries in the system.
 The framework can for example be compiled as follows:
 ```
 $ CC=gcc CXX=g++ cmake \
-    -B build_debwithrelinfo_gcc_foo \
+    -B build_debwithrelinfo_gcc \
     -DCMAKE_BUILD_TYPE=DebWithRelInfo \
     -DMOTION_BUILD_EXE=On \
     -DMOTION_BUILD_TESTS=On \
