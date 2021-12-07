@@ -221,19 +221,23 @@ target_include_directories(motion PUBLIC
 target_compile_definitions(motion PUBLIC FMT_HEADER_ONLY BOOST_ERROR_CODE_HEADER_ONLY)
 
 target_link_libraries(motion
-        PRIVATE
+        PUBLIC
+        Boost::fiber
         Boost::json
         Boost::log_setup
         Boost::log
+        OpenSSL::Crypto
+        OpenSSL::SSL
+        )
+
+target_link_libraries(motion
+        PRIVATE
         Boost::filesystem
         Boost::system
-        Boost::fiber
         Boost::thread
         Boost::context
         OpenMP::OpenMP_CXX
         Threads::Threads
-        OpenSSL::Crypto
-        OpenSSL::SSL
         Eigen3::Eigen
         )
 
