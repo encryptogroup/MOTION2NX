@@ -101,7 +101,18 @@ needs additionally be passed to CMake:
 
 This builds the library target `motion_onnx` and the `onnx2motion` executable.
 
-### Example
+
+
+### Examples
+
+
+#### Using the MOTION2NX Low-Level API
+
+See [here](src/examples/millionaires_problem) for an example solution of Yao's
+Millionaires' Problem.
+
+
+#### Using the `onnx2motion` Application
 
 ```
 $ ./bin/onnx2motion \
