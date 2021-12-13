@@ -512,7 +512,7 @@ void ArithmeticGMWInputGateSender<T>::evaluate_online() {
     auto logger = gmw_provider_.get_logger();
     if (logger) {
       logger->LogTrace(
-          fmt::format("Gate {}: BooleanGMWInputGateSender::evaluate_online end", gate_id_));
+          fmt::format("Gate {}: ArithmeticGMWInputGateSender::evaluate_online end", gate_id_));
     }
   }
 }
