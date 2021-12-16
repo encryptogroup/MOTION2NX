@@ -462,7 +462,7 @@ WireVector BEAVYProvider::make_xor_gate(const WireVector& in_a, const WireVector
 WireVector BEAVYProvider::make_and_gate(const WireVector& in_a, const WireVector& in_b) {
   // assume, at most one of the inputs is a plain wire
   if (in_a.at(0)->get_protocol() == MPCProtocol::BooleanPlain) {
-    return make_xor_gate(in_b, in_a);
+    return make_and_gate(in_b, in_a);
   }
   assert(in_a.at(0)->get_protocol() == MPCProtocol::BooleanBEAVY);
   if (in_b.at(0)->get_protocol() == MPCProtocol::BooleanPlain) {
