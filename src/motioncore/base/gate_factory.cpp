@@ -1,6 +1,6 @@
 // MIT License
 //
-// Copyright (c) 2020 Lennart Braun
+// Copyright (c) 2020-2021 Lennart Braun
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -114,6 +114,17 @@ GateFactory::make_arithmetic_64_output_gate_my(std::size_t, const WireVector&) {
 void GateFactory::make_arithmetic_output_gate_other(std::size_t, const WireVector&) {
   throw std::logic_error(
       fmt::format("{} does not support arithmetic outputs", get_provider_name()));
+}
+
+WireVector GateFactory::make_ternary_gate(ENCRYPTO::PrimitiveOperationType, const WireVector&,
+                                          const WireVector&, const WireVector&) {
+  throw std::logic_error(fmt::format("{} does not support ternary gates", get_provider_name()));
+}
+
+WireVector GateFactory::make_quarternary_gate(ENCRYPTO::PrimitiveOperationType, const WireVector&,
+                                              const WireVector&, const WireVector&,
+                                              const WireVector&) {
+  throw std::logic_error(fmt::format("{} does not support quarternary gates", get_provider_name()));
 }
 
 }  // namespace MOTION

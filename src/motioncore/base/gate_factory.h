@@ -1,6 +1,6 @@
 // MIT License
 //
-// Copyright (c) 2020 Lennart Braun
+// Copyright (c) 2020-2021 Lennart Braun
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -50,8 +50,7 @@ class GateFactory {
 
   // Boolean inputs
   virtual std::pair<ENCRYPTO::ReusableFiberPromise<BitValues>, WireVector>
-  make_boolean_input_gate_my(std::size_t input_owner, std::size_t num_wires,
-                             std::size_t num_simd);
+  make_boolean_input_gate_my(std::size_t input_owner, std::size_t num_wires, std::size_t num_simd);
 
   virtual WireVector make_boolean_input_gate_other(std::size_t input_owner, std::size_t num_wires,
                                                    std::size_t num_simd);
@@ -96,9 +95,12 @@ class GateFactory {
   // function gates
 
   virtual WireVector make_unary_gate(ENCRYPTO::PrimitiveOperationType op, const WireVector&) = 0;
-
   virtual WireVector make_binary_gate(ENCRYPTO::PrimitiveOperationType op, const WireVector&,
                                       const WireVector&) = 0;
+  virtual WireVector make_ternary_gate(ENCRYPTO::PrimitiveOperationType op, const WireVector&,
+                                       const WireVector&, const WireVector&);
+  virtual WireVector make_quarternary_gate(ENCRYPTO::PrimitiveOperationType op, const WireVector&,
+                                           const WireVector&, const WireVector&, const WireVector&);
 
   // conversions
   virtual WireVector convert(MPCProtocol dst_protocol, const WireVector&) = 0;
