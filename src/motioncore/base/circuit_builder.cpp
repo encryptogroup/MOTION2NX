@@ -1,6 +1,6 @@
 // MIT License
 //
-// Copyright (c) 2020 Lennart Braun
+// Copyright (c) 2020-2021 Lennart Braun
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -59,6 +59,43 @@ WireVector CircuitBuilder::make_binary_gate(ENCRYPTO::PrimitiveOperationType op,
   } else if (proto_b == MPCProtocol::ArithmeticPlain || proto_b == MPCProtocol::BooleanPlain) {
     auto& gate_factory = get_gate_factory(proto_a);
     return gate_factory.make_binary_gate(op, wires_a, wires_b);
+  } else {
+    throw std::logic_error("multi-protocol gates are not yet supported");
+  }
+}
+
+WireVector CircuitBuilder::make_ternary_gate(ENCRYPTO::PrimitiveOperationType op,
+                                             const WireVector& wires_a, const WireVector& wires_b,
+                                             const WireVector& wires_c) {
+  if (wires_a.empty() || wires_b.empty() || wires_c.empty()) {
+    throw std::logic_error("empty WireVector");
+  }
+  auto proto_a = wires_a[0]->get_protocol();
+  auto proto_b = wires_b[0]->get_protocol();
+  auto proto_c = wires_c[0]->get_protocol();
+  if (proto_a == proto_b && proto_a == proto_c) {
+    auto& gate_factory = get_gate_factory(proto_a);
+    return gate_factory.make_ternary_gate(op, wires_a, wires_b, wires_c);
+  } else {
+    throw std::logic_error("multi-protocol gates are not yet supported");
+  }
+}
+
+WireVector CircuitBuilder::make_quarternary_gate(ENCRYPTO::PrimitiveOperationType op,
+                                                 const WireVector& wires_a,
+                                                 const WireVector& wires_b,
+                                                 const WireVector& wires_c,
+                                                 const WireVector& wires_d) {
+  if (wires_a.empty() || wires_b.empty() || wires_c.empty() || wires_d.empty()) {
+    throw std::logic_error("empty WireVector");
+  }
+  auto proto_a = wires_a[0]->get_protocol();
+  auto proto_b = wires_b[0]->get_protocol();
+  auto proto_c = wires_c[0]->get_protocol();
+  auto proto_d = wires_c[0]->get_protocol();
+  if (proto_a == proto_b && proto_a == proto_c && proto_a == proto_d) {
+    auto& gate_factory = get_gate_factory(proto_a);
+    return gate_factory.make_quarternary_gate(op, wires_a, wires_b, wires_c, wires_d);
   } else {
     throw std::logic_error("multi-protocol gates are not yet supported");
   }

@@ -1,6 +1,6 @@
 // MIT License
 //
-// Copyright (c) 2020 Lennart Braun
+// Copyright (c) 2020-2021 Lennart Braun
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -44,6 +44,10 @@ class CircuitBuilder {
   WireVector make_unary_gate(ENCRYPTO::PrimitiveOperationType, const WireVector&);
   WireVector make_binary_gate(ENCRYPTO::PrimitiveOperationType, const WireVector&,
                               const WireVector&);
+  WireVector make_ternary_gate(ENCRYPTO::PrimitiveOperationType, const WireVector&,
+                               const WireVector&, const WireVector&);
+  WireVector make_quarternary_gate(ENCRYPTO::PrimitiveOperationType, const WireVector&,
+                                   const WireVector&, const WireVector&, const WireVector&);
   WireVector make_circuit(const ENCRYPTO::AlgorithmDescription&, const WireVector&,
                           const WireVector&);
   WireVector convert(MPCProtocol, const WireVector&);
