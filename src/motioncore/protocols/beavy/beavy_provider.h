@@ -1,6 +1,6 @@
 // MIT License
 //
-// Copyright (c) 2020 Lennart Braun
+// Copyright (c) 2020-2021 Lennart Braun
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -149,9 +149,13 @@ class BEAVYProvider : public GateFactory,
 
   // function gates
   WireVector make_unary_gate(ENCRYPTO::PrimitiveOperationType op, const WireVector&) override;
-
   WireVector make_binary_gate(ENCRYPTO::PrimitiveOperationType op, const WireVector&,
                               const WireVector&) override;
+  WireVector make_ternary_gate(ENCRYPTO::PrimitiveOperationType op, const WireVector&,
+                               const WireVector&, const WireVector&) override;
+  WireVector make_quarternary_gate(ENCRYPTO::PrimitiveOperationType op, const WireVector&,
+                                   const WireVector&, const WireVector&,
+                                   const WireVector&) override;
 
   std::pair<NewGateP, WireVector> construct_unary_gate(ENCRYPTO::PrimitiveOperationType op,
                                                        const WireVector&);
@@ -221,6 +225,10 @@ class BEAVYProvider : public GateFactory,
   WireVector make_inv_gate(const WireVector& in_a);
   WireVector make_xor_gate(const WireVector& in_a, const WireVector& in_b);
   WireVector make_and_gate(const WireVector& in_a, const WireVector& in_b);
+  WireVector make_and3_gate(const WireVector& in_a, const WireVector& in_b, const WireVector& in_c);
+  WireVector make_and4_gate(const WireVector& in_a, const WireVector& in_b, const WireVector& in_c,
+                            const WireVector& in_d);
+
   template <typename BinaryGate, bool plain = false>
   std::pair<NewGateP, WireVector> construct_boolean_binary_gate(const WireVector& in_a,
                                                                 const WireVector& in_b);

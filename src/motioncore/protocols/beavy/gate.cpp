@@ -1,6 +1,6 @@
 // MIT License
 //
-// Copyright (c) 2020 Lennart Braun
+// Copyright (c) 2020-2021 Lennart Braun
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -91,6 +91,66 @@ BasicBooleanBEAVYUnaryGate::BasicBooleanBEAVYUnaryGate(std::size_t gate_id,
     std::generate_n(std::back_inserter(outputs_), num_wires_,
                     [num_simd] { return std::make_shared<BooleanBEAVYWire>(num_simd); });
   }
+}
+
+BasicBooleanBEAVYTernaryGate::BasicBooleanBEAVYTernaryGate(std::size_t gate_id,
+                                                           BooleanBEAVYWireVector&& in_a,
+                                                           BooleanBEAVYWireVector&& in_b,
+                                                           BooleanBEAVYWireVector&& in_c)
+    : NewGate(gate_id),
+      num_wires_(in_a.size()),
+      inputs_a_(std::move(in_a)),
+      inputs_b_(std::move(in_b)),
+      inputs_c_(std::move(in_c)) {
+  if (num_wires_ == 0) {
+    throw std::logic_error("number of wires need to be positive");
+  }
+  if (num_wires_ != inputs_b_.size() || num_wires_ != inputs_c_.size()) {
+    throw std::logic_error("number of wires need to be the same for all inputs");
+  }
+  auto num_simd = inputs_a_[0]->get_num_simd();
+  for (std::size_t wire_i = 0; wire_i < num_wires_; ++wire_i) {
+    if (inputs_a_[wire_i]->get_num_simd() != num_simd ||
+        inputs_b_[wire_i]->get_num_simd() != num_simd ||
+        inputs_c_[wire_i]->get_num_simd() != num_simd) {
+      throw std::logic_error("number of SIMD values need to be the same for all wires");
+    }
+  }
+  outputs_.reserve(num_wires_);
+  std::generate_n(std::back_inserter(outputs_), num_wires_,
+                  [num_simd] { return std::make_shared<BooleanBEAVYWire>(num_simd); });
+}
+
+BasicBooleanBEAVYQuaternaryGate::BasicBooleanBEAVYQuaternaryGate(std::size_t gate_id,
+                                                                 BooleanBEAVYWireVector&& in_a,
+                                                                 BooleanBEAVYWireVector&& in_b,
+                                                                 BooleanBEAVYWireVector&& in_c,
+                                                                 BooleanBEAVYWireVector&& in_d)
+    : NewGate(gate_id),
+      num_wires_(in_a.size()),
+      inputs_a_(std::move(in_a)),
+      inputs_b_(std::move(in_b)),
+      inputs_c_(std::move(in_c)),
+      inputs_d_(std::move(in_d)) {
+  if (num_wires_ == 0) {
+    throw std::logic_error("number of wires need to be positive");
+  }
+  if (num_wires_ != inputs_b_.size() || num_wires_ != inputs_c_.size() ||
+      num_wires_ != inputs_d_.size()) {
+    throw std::logic_error("number of wires need to be the same for all inputs");
+  }
+  auto num_simd = inputs_a_[0]->get_num_simd();
+  for (std::size_t wire_i = 0; wire_i < num_wires_; ++wire_i) {
+    if (inputs_a_[wire_i]->get_num_simd() != num_simd ||
+        inputs_b_[wire_i]->get_num_simd() != num_simd ||
+        inputs_c_[wire_i]->get_num_simd() != num_simd ||
+        inputs_d_[wire_i]->get_num_simd() != num_simd) {
+      throw std::logic_error("number of SIMD values need to be the same for all wires");
+    }
+  }
+  outputs_.reserve(num_wires_);
+  std::generate_n(std::back_inserter(outputs_), num_wires_,
+                  [num_simd] { return std::make_shared<BooleanBEAVYWire>(num_simd); });
 }
 
 }  // namespace detail
@@ -512,6 +572,443 @@ void BooleanBEAVYANDGate::evaluate_online() {
     auto& wire_o = outputs_[wire_i];
     wire_o->get_public_share() = Delta_y_share_.Subset(wire_i * num_simd, (wire_i + 1) * num_simd);
     wire_o->set_online_ready();
+  }
+}
+
+BooleanBEAVYAND3Gate::BooleanBEAVYAND3Gate(std::size_t gate_id, BEAVYProvider& beavy_provider,
+                                           BooleanBEAVYWireVector&& in_a,
+                                           BooleanBEAVYWireVector&& in_b,
+                                           BooleanBEAVYWireVector&& in_c)
+    : detail::BasicBooleanBEAVYTernaryGate(gate_id, std::move(in_a), std::move(in_b),
+                                           std::move(in_c)),
+      beavy_provider_(beavy_provider) {
+  auto num_bits = count_bits(inputs_a_);
+  auto my_id = beavy_provider_.get_my_id();
+  share_future_ = beavy_provider_.register_for_bits_message(1 - my_id, gate_id_, num_bits);
+  auto& otp = beavy_provider_.get_ot_manager().get_provider(1 - my_id);
+  for (std::size_t i = 0; i < ot_senders_.size(); ++i) {
+    ot_senders_.at(i) = otp.RegisterSendXCOTBit(num_bits);
+    ot_receivers_.at(i) = otp.RegisterReceiveXCOTBit(num_bits);
+  }
+}
+
+BooleanBEAVYAND3Gate::~BooleanBEAVYAND3Gate() = default;
+
+void BooleanBEAVYAND3Gate::evaluate_setup() {
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = beavy_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(
+          fmt::format("Gate {}: BooleanBEAVYAND3Gate::evaluate_setup start", gate_id_));
+    }
+  }
+
+  for (auto& wire_o : outputs_) {
+    wire_o->get_secret_share() = ENCRYPTO::BitVector<>::Random(wire_o->get_num_simd());
+    wire_o->set_setup_ready();
+  }
+
+  auto num_simd = inputs_a_[0]->get_num_simd();
+  auto num_bytes = Helpers::Convert::BitsToBytes(num_wires_ * num_simd);
+
+  // TODO: optimize multiplications using two ot instances:
+  // - delta_ab <- delta_a * delta_b
+  // - delta_ac || delta_bc || delta_abc <- (delta_a || delta_b || delta_ab) * (delta_c)^3
+
+  delta_a_share_.Reserve(num_bytes);
+  delta_b_share_.Reserve(num_bytes);
+  delta_c_share_.Reserve(num_bytes);
+  Delta_y_share_.Reserve(num_bytes);
+
+  // load shares from all wires
+  for (std::size_t wire_i = 0; wire_i < num_wires_; ++wire_i) {
+    const auto& wire_a = inputs_a_[wire_i];
+    const auto& wire_b = inputs_b_[wire_i];
+    const auto& wire_c = inputs_c_[wire_i];
+    const auto& wire_o = outputs_[wire_i];
+    wire_a->wait_setup();
+    wire_b->wait_setup();
+    wire_c->wait_setup();
+    delta_a_share_.Append(wire_a->get_secret_share());
+    delta_b_share_.Append(wire_b->get_secret_share());
+    delta_c_share_.Append(wire_c->get_secret_share());
+    Delta_y_share_.Append(wire_o->get_secret_share());
+  }
+
+  delta_ab_share_ = delta_a_share_ & delta_b_share_;
+  delta_ac_share_ = delta_a_share_ & delta_c_share_;
+  delta_bc_share_ = delta_b_share_ & delta_c_share_;
+
+  // compute
+  // [0] delta_ab <- delta_a * delta_b
+  // [1] delta_ac <- delta_a * delta_c
+  // [2] delta_bc <- delta_b * delta_c
+  ot_receivers_[0]->SetChoices(delta_a_share_);
+  ot_receivers_[1]->SetChoices(delta_a_share_);
+  ot_receivers_[2]->SetChoices(delta_b_share_);
+  ot_receivers_[0]->SendCorrections();
+  ot_receivers_[1]->SendCorrections();
+  ot_receivers_[2]->SendCorrections();
+  ot_senders_[0]->SetCorrelations(delta_b_share_);
+  ot_senders_[1]->SetCorrelations(delta_c_share_);
+  ot_senders_[2]->SetCorrelations(delta_c_share_);
+  ot_senders_[0]->SendMessages();
+  ot_senders_[1]->SendMessages();
+  ot_senders_[2]->SendMessages();
+  ot_receivers_[0]->ComputeOutputs();
+  ot_receivers_[1]->ComputeOutputs();
+  ot_receivers_[2]->ComputeOutputs();
+  ot_senders_[0]->ComputeOutputs();
+  ot_senders_[1]->ComputeOutputs();
+  ot_senders_[2]->ComputeOutputs();
+  delta_ab_share_ ^= ot_senders_[0]->GetOutputs();
+  delta_ab_share_ ^= ot_receivers_[0]->GetOutputs();
+  delta_ac_share_ ^= ot_senders_[1]->GetOutputs();
+  delta_ac_share_ ^= ot_receivers_[1]->GetOutputs();
+  delta_bc_share_ ^= ot_senders_[2]->GetOutputs();
+  delta_bc_share_ ^= ot_receivers_[2]->GetOutputs();
+
+  // compute
+  // [3] delta_abc <- delta_ab * delta_c
+  auto delta_abc_share = delta_ab_share_ & delta_c_share_;
+  ot_receivers_[3]->SetChoices(delta_ab_share_);
+  ot_receivers_[3]->SendCorrections();
+  ot_senders_[3]->SetCorrelations(delta_c_share_);
+  ot_senders_[3]->SendMessages();
+  ot_receivers_[3]->ComputeOutputs();
+  ot_senders_[3]->ComputeOutputs();
+  delta_abc_share ^= ot_senders_[3]->GetOutputs();
+  delta_abc_share ^= ot_receivers_[3]->GetOutputs();
+
+  Delta_y_share_ ^= delta_abc_share;
+
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = beavy_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(fmt::format("Gate {}: BooleanBEAVYAND3Gate::evaluate_setup end", gate_id_));
+    }
+  }
+}
+
+void BooleanBEAVYAND3Gate::evaluate_online() {
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = beavy_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(
+          fmt::format("Gate {}: BooleanBEAVYAND3Gate::evaluate_online start", gate_id_));
+    }
+  }
+
+  auto num_simd = inputs_a_[0]->get_num_simd();
+  auto num_bits = num_wires_ * num_simd;
+  ENCRYPTO::BitVector<> Delta_a;
+  ENCRYPTO::BitVector<> Delta_b;
+  ENCRYPTO::BitVector<> Delta_c;
+  Delta_a.Reserve(Helpers::Convert::BitsToBytes(num_bits));
+  Delta_b.Reserve(Helpers::Convert::BitsToBytes(num_bits));
+  Delta_c.Reserve(Helpers::Convert::BitsToBytes(num_bits));
+
+  for (std::size_t wire_i = 0; wire_i < num_wires_; ++wire_i) {
+    const auto& wire_a = inputs_a_[wire_i];
+    wire_a->wait_online();
+    Delta_a.Append(wire_a->get_public_share());
+    const auto& wire_b = inputs_b_[wire_i];
+    wire_b->wait_online();
+    Delta_b.Append(wire_b->get_public_share());
+    const auto& wire_c = inputs_c_[wire_i];
+    wire_c->wait_online();
+    Delta_c.Append(wire_c->get_public_share());
+  }
+
+  Delta_y_share_ ^= (Delta_a & delta_bc_share_);
+  Delta_y_share_ ^= (Delta_b & delta_ac_share_);
+  Delta_y_share_ ^= (Delta_c & delta_ab_share_);
+  Delta_y_share_ ^= (Delta_a & Delta_b & delta_c_share_);
+  Delta_y_share_ ^= (Delta_a & Delta_c & delta_b_share_);
+  Delta_y_share_ ^= (Delta_b & Delta_c & delta_a_share_);
+
+  if (beavy_provider_.is_my_job(gate_id_)) {
+    Delta_y_share_ ^= (Delta_a & Delta_b & Delta_c);
+  }
+
+  beavy_provider_.broadcast_bits_message(gate_id_, Delta_y_share_);
+  Delta_y_share_ ^= share_future_.get();
+
+  // distribute data among wires
+  for (std::size_t wire_i = 0; wire_i < num_wires_; ++wire_i) {
+    auto& wire_o = outputs_[wire_i];
+    wire_o->get_public_share() = Delta_y_share_.Subset(wire_i * num_simd, (wire_i + 1) * num_simd);
+    wire_o->set_online_ready();
+  }
+
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = beavy_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(fmt::format("Gate {}: BooleanBEAVYAND3Gate::evaluate_online end", gate_id_));
+    }
+  }
+}
+
+BooleanBEAVYAND4Gate::BooleanBEAVYAND4Gate(std::size_t gate_id, BEAVYProvider& beavy_provider,
+                                           BooleanBEAVYWireVector&& in_a,
+                                           BooleanBEAVYWireVector&& in_b,
+                                           BooleanBEAVYWireVector&& in_c,
+                                           BooleanBEAVYWireVector&& in_d)
+    : detail::BasicBooleanBEAVYQuaternaryGate(gate_id, std::move(in_a), std::move(in_b),
+                                              std::move(in_c), std::move(in_d)),
+      beavy_provider_(beavy_provider) {
+  auto num_bits = count_bits(inputs_a_);
+  auto my_id = beavy_provider_.get_my_id();
+  share_future_ = beavy_provider_.register_for_bits_message(1 - my_id, gate_id_, num_bits);
+  auto& otp = beavy_provider_.get_ot_manager().get_provider(1 - my_id);
+  for (std::size_t i = 0; i < ot_senders_.size(); ++i) {
+    ot_senders_.at(i) = otp.RegisterSendXCOTBit(num_bits);
+    ot_receivers_.at(i) = otp.RegisterReceiveXCOTBit(num_bits);
+  }
+}
+
+BooleanBEAVYAND4Gate::~BooleanBEAVYAND4Gate() = default;
+
+void BooleanBEAVYAND4Gate::evaluate_setup() {
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = beavy_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(
+          fmt::format("Gate {}: BooleanBEAVYAND4Gate::evaluate_setup start", gate_id_));
+    }
+  }
+
+  for (auto& wire_o : outputs_) {
+    wire_o->get_secret_share() = ENCRYPTO::BitVector<>::Random(wire_o->get_num_simd());
+    wire_o->set_setup_ready();
+  }
+
+  auto num_simd = inputs_a_[0]->get_num_simd();
+  auto num_bytes = Helpers::Convert::BitsToBytes(num_wires_ * num_simd);
+
+  // TODO: optimize multiplications using less ot instances:
+
+  delta_a_share_.Reserve(num_bytes);
+  delta_b_share_.Reserve(num_bytes);
+  delta_c_share_.Reserve(num_bytes);
+  delta_d_share_.Reserve(num_bytes);
+  Delta_y_share_.Reserve(num_bytes);
+
+  // load shares from all wires
+  for (std::size_t wire_i = 0; wire_i < num_wires_; ++wire_i) {
+    const auto& wire_a = inputs_a_[wire_i];
+    const auto& wire_b = inputs_b_[wire_i];
+    const auto& wire_c = inputs_c_[wire_i];
+    const auto& wire_d = inputs_d_[wire_i];
+    const auto& wire_o = outputs_[wire_i];
+    wire_a->wait_setup();
+    wire_b->wait_setup();
+    wire_c->wait_setup();
+    wire_d->wait_setup();
+    delta_a_share_.Append(wire_a->get_secret_share());
+    delta_b_share_.Append(wire_b->get_secret_share());
+    delta_c_share_.Append(wire_c->get_secret_share());
+    delta_d_share_.Append(wire_d->get_secret_share());
+    Delta_y_share_.Append(wire_o->get_secret_share());
+  }
+
+  delta_ab_share_ = delta_a_share_ & delta_b_share_;
+  delta_ac_share_ = delta_a_share_ & delta_c_share_;
+  delta_ad_share_ = delta_a_share_ & delta_d_share_;
+  delta_bc_share_ = delta_b_share_ & delta_c_share_;
+  delta_bd_share_ = delta_b_share_ & delta_d_share_;
+  delta_cd_share_ = delta_c_share_ & delta_d_share_;
+
+  // compute
+  // [0] delta_ab <- delta_a * delta_b
+  // [1] delta_ac <- delta_a * delta_c
+  // [2] delta_ad <- delta_a * delta_d
+  // [3] delta_bc <- delta_b * delta_c
+  // [4] delta_bd <- delta_b * delta_d
+  // [5] delta_cd <- delta_c * delta_d
+  ot_receivers_[0]->SetChoices(delta_a_share_);
+  ot_receivers_[1]->SetChoices(delta_a_share_);
+  ot_receivers_[2]->SetChoices(delta_a_share_);
+  ot_receivers_[3]->SetChoices(delta_b_share_);
+  ot_receivers_[4]->SetChoices(delta_b_share_);
+  ot_receivers_[5]->SetChoices(delta_c_share_);
+  ot_receivers_[0]->SendCorrections();
+  ot_receivers_[1]->SendCorrections();
+  ot_receivers_[2]->SendCorrections();
+  ot_receivers_[3]->SendCorrections();
+  ot_receivers_[4]->SendCorrections();
+  ot_receivers_[5]->SendCorrections();
+  ot_senders_[0]->SetCorrelations(delta_b_share_);
+  ot_senders_[1]->SetCorrelations(delta_c_share_);
+  ot_senders_[2]->SetCorrelations(delta_d_share_);
+  ot_senders_[3]->SetCorrelations(delta_c_share_);
+  ot_senders_[4]->SetCorrelations(delta_d_share_);
+  ot_senders_[5]->SetCorrelations(delta_d_share_);
+  ot_senders_[0]->SendMessages();
+  ot_senders_[1]->SendMessages();
+  ot_senders_[2]->SendMessages();
+  ot_senders_[3]->SendMessages();
+  ot_senders_[4]->SendMessages();
+  ot_senders_[5]->SendMessages();
+  ot_receivers_[0]->ComputeOutputs();
+  ot_receivers_[1]->ComputeOutputs();
+  ot_receivers_[2]->ComputeOutputs();
+  ot_receivers_[3]->ComputeOutputs();
+  ot_receivers_[4]->ComputeOutputs();
+  ot_receivers_[5]->ComputeOutputs();
+  ot_senders_[0]->ComputeOutputs();
+  ot_senders_[1]->ComputeOutputs();
+  ot_senders_[2]->ComputeOutputs();
+  ot_senders_[3]->ComputeOutputs();
+  ot_senders_[4]->ComputeOutputs();
+  ot_senders_[5]->ComputeOutputs();
+  delta_ab_share_ ^= ot_senders_[0]->GetOutputs();
+  delta_ab_share_ ^= ot_receivers_[0]->GetOutputs();
+  delta_ac_share_ ^= ot_senders_[1]->GetOutputs();
+  delta_ac_share_ ^= ot_receivers_[1]->GetOutputs();
+  delta_ad_share_ ^= ot_senders_[2]->GetOutputs();
+  delta_ad_share_ ^= ot_receivers_[2]->GetOutputs();
+  delta_bc_share_ ^= ot_senders_[3]->GetOutputs();
+  delta_bc_share_ ^= ot_receivers_[3]->GetOutputs();
+  delta_bd_share_ ^= ot_senders_[4]->GetOutputs();
+  delta_bd_share_ ^= ot_receivers_[4]->GetOutputs();
+  delta_cd_share_ ^= ot_senders_[5]->GetOutputs();
+  delta_cd_share_ ^= ot_receivers_[5]->GetOutputs();
+
+  // compute
+  // [6] delta_abc <- delta_ab * delta_c
+  // [7] delta_abd <- delta_ab * delta_d
+  // [8] delta_acd <- delta_ac * delta_d
+  // [9] delta_bcd <- delta_bc * delta_d
+  delta_abc_share_ = delta_ab_share_ & delta_c_share_;
+  delta_abd_share_ = delta_ab_share_ & delta_d_share_;
+  delta_acd_share_ = delta_ac_share_ & delta_d_share_;
+  delta_bcd_share_ = delta_bc_share_ & delta_d_share_;
+  ot_receivers_[6]->SetChoices(delta_ab_share_);
+  ot_receivers_[7]->SetChoices(delta_ab_share_);
+  ot_receivers_[8]->SetChoices(delta_ac_share_);
+  ot_receivers_[9]->SetChoices(delta_bc_share_);
+  ot_receivers_[6]->SendCorrections();
+  ot_receivers_[7]->SendCorrections();
+  ot_receivers_[8]->SendCorrections();
+  ot_receivers_[9]->SendCorrections();
+  ot_senders_[6]->SetCorrelations(delta_c_share_);
+  ot_senders_[7]->SetCorrelations(delta_d_share_);
+  ot_senders_[8]->SetCorrelations(delta_d_share_);
+  ot_senders_[9]->SetCorrelations(delta_d_share_);
+  ot_senders_[6]->SendMessages();
+  ot_senders_[7]->SendMessages();
+  ot_senders_[8]->SendMessages();
+  ot_senders_[9]->SendMessages();
+  ot_receivers_[6]->ComputeOutputs();
+  ot_receivers_[7]->ComputeOutputs();
+  ot_receivers_[8]->ComputeOutputs();
+  ot_receivers_[9]->ComputeOutputs();
+  ot_senders_[6]->ComputeOutputs();
+  ot_senders_[7]->ComputeOutputs();
+  ot_senders_[8]->ComputeOutputs();
+  ot_senders_[9]->ComputeOutputs();
+  delta_abc_share_ ^= ot_senders_[6]->GetOutputs();
+  delta_abc_share_ ^= ot_receivers_[6]->GetOutputs();
+  delta_abd_share_ ^= ot_senders_[7]->GetOutputs();
+  delta_abd_share_ ^= ot_receivers_[7]->GetOutputs();
+  delta_acd_share_ ^= ot_senders_[8]->GetOutputs();
+  delta_acd_share_ ^= ot_receivers_[8]->GetOutputs();
+  delta_bcd_share_ ^= ot_senders_[9]->GetOutputs();
+  delta_bcd_share_ ^= ot_receivers_[9]->GetOutputs();
+
+  // compute
+  // [10] delta_abcd <- delta_abc * delta_d
+  auto delta_abcd_share = delta_abc_share_ & delta_d_share_;
+  ot_receivers_[10]->SetChoices(delta_abc_share_);
+  ot_receivers_[10]->SendCorrections();
+  ot_senders_[10]->SetCorrelations(delta_d_share_);
+  ot_senders_[10]->SendMessages();
+  ot_receivers_[10]->ComputeOutputs();
+  ot_senders_[10]->ComputeOutputs();
+  delta_abcd_share ^= ot_senders_[10]->GetOutputs();
+  delta_abcd_share ^= ot_receivers_[10]->GetOutputs();
+
+  Delta_y_share_ ^= delta_abcd_share;
+
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = beavy_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(fmt::format("Gate {}: BooleanBEAVYAND4Gate::evaluate_setup end", gate_id_));
+    }
+  }
+}
+
+void BooleanBEAVYAND4Gate::evaluate_online() {
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = beavy_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(
+          fmt::format("Gate {}: BooleanBEAVYAND4Gate::evaluate_online start", gate_id_));
+    }
+  }
+
+  auto num_simd = inputs_a_[0]->get_num_simd();
+  auto num_bits = num_wires_ * num_simd;
+  ENCRYPTO::BitVector<> Delta_a;
+  ENCRYPTO::BitVector<> Delta_b;
+  ENCRYPTO::BitVector<> Delta_c;
+  ENCRYPTO::BitVector<> Delta_d;
+  Delta_a.Reserve(Helpers::Convert::BitsToBytes(num_bits));
+  Delta_b.Reserve(Helpers::Convert::BitsToBytes(num_bits));
+  Delta_c.Reserve(Helpers::Convert::BitsToBytes(num_bits));
+  Delta_d.Reserve(Helpers::Convert::BitsToBytes(num_bits));
+
+  for (std::size_t wire_i = 0; wire_i < num_wires_; ++wire_i) {
+    const auto& wire_a = inputs_a_[wire_i];
+    wire_a->wait_online();
+    Delta_a.Append(wire_a->get_public_share());
+    const auto& wire_b = inputs_b_[wire_i];
+    wire_b->wait_online();
+    Delta_b.Append(wire_b->get_public_share());
+    const auto& wire_c = inputs_c_[wire_i];
+    wire_c->wait_online();
+    Delta_c.Append(wire_c->get_public_share());
+    const auto& wire_d = inputs_d_[wire_i];
+    wire_d->wait_online();
+    Delta_d.Append(wire_d->get_public_share());
+  }
+
+  // TODO: optimize implementation
+  Delta_y_share_ ^= (Delta_a & delta_bcd_share_);
+  Delta_y_share_ ^= (Delta_b & delta_acd_share_);
+  Delta_y_share_ ^= (Delta_c & delta_abd_share_);
+  Delta_y_share_ ^= (Delta_d & delta_abc_share_);
+  Delta_y_share_ ^= (Delta_a & Delta_b & delta_cd_share_);
+  Delta_y_share_ ^= (Delta_a & Delta_c & delta_bd_share_);
+  Delta_y_share_ ^= (Delta_a & Delta_d & delta_bc_share_);
+  Delta_y_share_ ^= (Delta_b & Delta_c & delta_ad_share_);
+  Delta_y_share_ ^= (Delta_b & Delta_d & delta_ac_share_);
+  Delta_y_share_ ^= (Delta_c & Delta_d & delta_ab_share_);
+  Delta_y_share_ ^= (Delta_a & Delta_b & Delta_c & delta_d_share_);
+  Delta_y_share_ ^= (Delta_a & Delta_b & Delta_d & delta_c_share_);
+  Delta_y_share_ ^= (Delta_a & Delta_c & Delta_d & delta_b_share_);
+  Delta_y_share_ ^= (Delta_b & Delta_c & Delta_d & delta_a_share_);
+
+  if (beavy_provider_.is_my_job(gate_id_)) {
+    Delta_y_share_ ^= (Delta_a & Delta_b & Delta_c & Delta_d);
+  }
+
+  beavy_provider_.broadcast_bits_message(gate_id_, Delta_y_share_);
+  Delta_y_share_ ^= share_future_.get();
+
+  // distribute data among wires
+  for (std::size_t wire_i = 0; wire_i < num_wires_; ++wire_i) {
+    auto& wire_o = outputs_[wire_i];
+    wire_o->get_public_share() = Delta_y_share_.Subset(wire_i * num_simd, (wire_i + 1) * num_simd);
+    wire_o->set_online_ready();
+  }
+
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = beavy_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(fmt::format("Gate {}: BooleanBEAVYAND4Gate::evaluate_online end", gate_id_));
+    }
   }
 }
 

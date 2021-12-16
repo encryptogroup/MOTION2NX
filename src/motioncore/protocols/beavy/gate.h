@@ -1,6 +1,6 @@
 // MIT License
 //
-// Copyright (c) 2020 Lennart Braun
+// Copyright (c) 2020-2021 Lennart Braun
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -71,6 +71,36 @@ class BasicBooleanBEAVYUnaryGate : public NewGate {
  protected:
   std::size_t num_wires_;
   const BooleanBEAVYWireVector inputs_;
+  BooleanBEAVYWireVector outputs_;
+};
+
+class BasicBooleanBEAVYTernaryGate : public NewGate {
+ public:
+  BasicBooleanBEAVYTernaryGate(std::size_t gate_id, BooleanBEAVYWireVector&&,
+                               BooleanBEAVYWireVector&&, BooleanBEAVYWireVector&&);
+  BooleanBEAVYWireVector& get_output_wires() noexcept { return outputs_; }
+
+ protected:
+  std::size_t num_wires_;
+  const BooleanBEAVYWireVector inputs_a_;
+  const BooleanBEAVYWireVector inputs_b_;
+  const BooleanBEAVYWireVector inputs_c_;
+  BooleanBEAVYWireVector outputs_;
+};
+
+class BasicBooleanBEAVYQuaternaryGate : public NewGate {
+ public:
+  BasicBooleanBEAVYQuaternaryGate(std::size_t gate_id, BooleanBEAVYWireVector&&,
+                                  BooleanBEAVYWireVector&&, BooleanBEAVYWireVector&&,
+                                  BooleanBEAVYWireVector&&);
+  BooleanBEAVYWireVector& get_output_wires() noexcept { return outputs_; }
+
+ protected:
+  std::size_t num_wires_;
+  const BooleanBEAVYWireVector inputs_a_;
+  const BooleanBEAVYWireVector inputs_b_;
+  const BooleanBEAVYWireVector inputs_c_;
+  const BooleanBEAVYWireVector inputs_d_;
   BooleanBEAVYWireVector outputs_;
 };
 
@@ -180,6 +210,63 @@ class BooleanBEAVYANDGate : public detail::BasicBooleanBEAVYBinaryGate {
   ENCRYPTO::BitVector<> Delta_y_share_;
   std::unique_ptr<ENCRYPTO::ObliviousTransfer::XCOTBitSender> ot_sender_;
   std::unique_ptr<ENCRYPTO::ObliviousTransfer::XCOTBitReceiver> ot_receiver_;
+};
+
+class BooleanBEAVYAND3Gate : public detail::BasicBooleanBEAVYTernaryGate {
+ public:
+  BooleanBEAVYAND3Gate(std::size_t gate_id, BEAVYProvider&, BooleanBEAVYWireVector&&,
+                       BooleanBEAVYWireVector&&, BooleanBEAVYWireVector&&);
+  ~BooleanBEAVYAND3Gate();
+  bool need_setup() const noexcept override { return true; }
+  bool need_online() const noexcept override { return true; }
+  void evaluate_setup() override;
+  void evaluate_online() override;
+
+ private:
+  BEAVYProvider& beavy_provider_;
+  ENCRYPTO::ReusableFiberFuture<ENCRYPTO::BitVector<>> share_future_;
+  ENCRYPTO::BitVector<> delta_a_share_;
+  ENCRYPTO::BitVector<> delta_b_share_;
+  ENCRYPTO::BitVector<> delta_c_share_;
+  ENCRYPTO::BitVector<> delta_ab_share_;
+  ENCRYPTO::BitVector<> delta_ac_share_;
+  ENCRYPTO::BitVector<> delta_bc_share_;
+  ENCRYPTO::BitVector<> Delta_y_share_;
+  std::array<std::unique_ptr<ENCRYPTO::ObliviousTransfer::XCOTBitSender>, 4> ot_senders_;
+  std::array<std::unique_ptr<ENCRYPTO::ObliviousTransfer::XCOTBitReceiver>, 4> ot_receivers_;
+};
+
+class BooleanBEAVYAND4Gate : public detail::BasicBooleanBEAVYQuaternaryGate {
+ public:
+  BooleanBEAVYAND4Gate(std::size_t gate_id, BEAVYProvider&, BooleanBEAVYWireVector&&,
+                       BooleanBEAVYWireVector&&, BooleanBEAVYWireVector&&,
+                       BooleanBEAVYWireVector&&);
+  ~BooleanBEAVYAND4Gate();
+  bool need_setup() const noexcept override { return true; }
+  bool need_online() const noexcept override { return true; }
+  void evaluate_setup() override;
+  void evaluate_online() override;
+
+ private:
+  BEAVYProvider& beavy_provider_;
+  ENCRYPTO::ReusableFiberFuture<ENCRYPTO::BitVector<>> share_future_;
+  ENCRYPTO::BitVector<> delta_a_share_;
+  ENCRYPTO::BitVector<> delta_b_share_;
+  ENCRYPTO::BitVector<> delta_c_share_;
+  ENCRYPTO::BitVector<> delta_d_share_;
+  ENCRYPTO::BitVector<> delta_ab_share_;
+  ENCRYPTO::BitVector<> delta_ac_share_;
+  ENCRYPTO::BitVector<> delta_ad_share_;
+  ENCRYPTO::BitVector<> delta_bc_share_;
+  ENCRYPTO::BitVector<> delta_bd_share_;
+  ENCRYPTO::BitVector<> delta_cd_share_;
+  ENCRYPTO::BitVector<> delta_abc_share_;
+  ENCRYPTO::BitVector<> delta_abd_share_;
+  ENCRYPTO::BitVector<> delta_acd_share_;
+  ENCRYPTO::BitVector<> delta_bcd_share_;
+  ENCRYPTO::BitVector<> Delta_y_share_;
+  std::array<std::unique_ptr<ENCRYPTO::ObliviousTransfer::XCOTBitSender>, 11> ot_senders_;
+  std::array<std::unique_ptr<ENCRYPTO::ObliviousTransfer::XCOTBitReceiver>, 11> ot_receivers_;
 };
 
 template <typename T>

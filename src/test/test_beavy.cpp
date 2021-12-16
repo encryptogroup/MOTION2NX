@@ -1,6 +1,6 @@
 // MIT License
 //
-// Copyright (c) 2020 Lennart Braun
+// Copyright (c) 2020-2021 Lennart Braun
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -527,6 +527,116 @@ TEST_F(BooleanBEAVYTest, ConstantAND) {
   run_setup();
   run_gates_setup();
   input_a_promise.set_value(inputs_a);
+  run_gates_online();
+
+  for (std::size_t wire_i = 0; wire_i < num_wires; ++wire_i) {
+    const auto& expected_output_bits = expected_output.at(wire_i);
+    const auto wire_0 = std::dynamic_pointer_cast<BooleanBEAVYWire>(wires_0_out.at(wire_i));
+    const auto wire_1 = std::dynamic_pointer_cast<BooleanBEAVYWire>(wires_1_out.at(wire_i));
+    wire_0->wait_online();
+    wire_1->wait_online();
+    const auto& pshare_0 = wire_0->get_public_share();
+    const auto& pshare_1 = wire_1->get_public_share();
+    const auto& sshare_0 = wire_0->get_secret_share();
+    const auto& sshare_1 = wire_1->get_secret_share();
+    ASSERT_EQ(pshare_0.GetSize(), num_simd);
+    ASSERT_EQ(pshare_1.GetSize(), num_simd);
+    ASSERT_EQ(sshare_0.GetSize(), num_simd);
+    ASSERT_EQ(sshare_1.GetSize(), num_simd);
+    ASSERT_EQ(pshare_0, pshare_1);
+    ASSERT_EQ(expected_output_bits, pshare_0 ^ sshare_0 ^ sshare_1);
+  }
+}
+
+TEST_F(BooleanBEAVYTest, AND3) {
+  std::size_t num_wires = 8;
+  std::size_t num_simd = 10;
+  const auto inputs_a = generate_inputs(num_wires, num_simd);
+  const auto inputs_b = generate_inputs(num_wires, num_simd);
+  const auto inputs_c = generate_inputs(num_wires, num_simd);
+  MOTION::BitValues expected_output;
+  for (std::size_t wire_i = 0; wire_i < num_wires; ++wire_i) {
+    expected_output.push_back(inputs_a.at(wire_i) & inputs_b.at(wire_i) & inputs_c.at(wire_i));
+  }
+
+  auto [input_a_promise, wires_0_in_a] =
+      beavy_providers_[0]->make_boolean_input_gate_my(0, num_wires, num_simd);
+  auto wires_1_in_a = beavy_providers_[1]->make_boolean_input_gate_other(0, num_wires, num_simd);
+  auto wires_0_in_b = beavy_providers_[0]->make_boolean_input_gate_other(1, num_wires, num_simd);
+  auto [input_b_promise, wires_1_in_b] =
+      beavy_providers_[1]->make_boolean_input_gate_my(1, num_wires, num_simd);
+  auto wires_0_in_c = beavy_providers_[0]->make_boolean_input_gate_other(1, num_wires, num_simd);
+  auto [input_c_promise, wires_1_in_c] =
+      beavy_providers_[1]->make_boolean_input_gate_my(1, num_wires, num_simd);
+  auto wires_0_out = beavy_providers_[0]->make_ternary_gate(
+      ENCRYPTO::PrimitiveOperationType::AND, wires_0_in_a, wires_0_in_b, wires_0_in_c);
+  auto wires_1_out = beavy_providers_[1]->make_ternary_gate(
+      ENCRYPTO::PrimitiveOperationType::AND, wires_1_in_a, wires_1_in_b, wires_1_in_c);
+
+  run_setup();
+  run_gates_setup();
+  input_a_promise.set_value(inputs_a);
+  input_b_promise.set_value(inputs_b);
+  input_c_promise.set_value(inputs_c);
+  run_gates_online();
+
+  for (std::size_t wire_i = 0; wire_i < num_wires; ++wire_i) {
+    const auto& expected_output_bits = expected_output.at(wire_i);
+    const auto wire_0 = std::dynamic_pointer_cast<BooleanBEAVYWire>(wires_0_out.at(wire_i));
+    const auto wire_1 = std::dynamic_pointer_cast<BooleanBEAVYWire>(wires_1_out.at(wire_i));
+    wire_0->wait_online();
+    wire_1->wait_online();
+    const auto& pshare_0 = wire_0->get_public_share();
+    const auto& pshare_1 = wire_1->get_public_share();
+    const auto& sshare_0 = wire_0->get_secret_share();
+    const auto& sshare_1 = wire_1->get_secret_share();
+    ASSERT_EQ(pshare_0.GetSize(), num_simd);
+    ASSERT_EQ(pshare_1.GetSize(), num_simd);
+    ASSERT_EQ(sshare_0.GetSize(), num_simd);
+    ASSERT_EQ(sshare_1.GetSize(), num_simd);
+    ASSERT_EQ(pshare_0, pshare_1);
+    ASSERT_EQ(expected_output_bits, pshare_0 ^ sshare_0 ^ sshare_1);
+  }
+}
+
+TEST_F(BooleanBEAVYTest, AND4) {
+  std::size_t num_wires = 8;
+  std::size_t num_simd = 10;
+  const auto inputs_a = generate_inputs(num_wires, num_simd);
+  const auto inputs_b = generate_inputs(num_wires, num_simd);
+  const auto inputs_c = generate_inputs(num_wires, num_simd);
+  const auto inputs_d = generate_inputs(num_wires, num_simd);
+  MOTION::BitValues expected_output;
+  for (std::size_t wire_i = 0; wire_i < num_wires; ++wire_i) {
+    expected_output.push_back(inputs_a.at(wire_i) & inputs_b.at(wire_i) & inputs_c.at(wire_i) &
+                              inputs_d.at(wire_i));
+  }
+
+  auto [input_a_promise, wires_0_in_a] =
+      beavy_providers_[0]->make_boolean_input_gate_my(0, num_wires, num_simd);
+  auto wires_1_in_a = beavy_providers_[1]->make_boolean_input_gate_other(0, num_wires, num_simd);
+  auto [input_b_promise, wires_0_in_b] =
+      beavy_providers_[0]->make_boolean_input_gate_my(0, num_wires, num_simd);
+  auto wires_1_in_b = beavy_providers_[1]->make_boolean_input_gate_other(0, num_wires, num_simd);
+  auto wires_0_in_c = beavy_providers_[0]->make_boolean_input_gate_other(1, num_wires, num_simd);
+  auto [input_c_promise, wires_1_in_c] =
+      beavy_providers_[1]->make_boolean_input_gate_my(1, num_wires, num_simd);
+  auto wires_0_in_d = beavy_providers_[0]->make_boolean_input_gate_other(1, num_wires, num_simd);
+  auto [input_d_promise, wires_1_in_d] =
+      beavy_providers_[1]->make_boolean_input_gate_my(1, num_wires, num_simd);
+  auto wires_0_out = beavy_providers_[0]->make_quarternary_gate(
+      ENCRYPTO::PrimitiveOperationType::AND, wires_0_in_a, wires_0_in_b, wires_0_in_c,
+      wires_0_in_d);
+  auto wires_1_out = beavy_providers_[1]->make_quarternary_gate(
+      ENCRYPTO::PrimitiveOperationType::AND, wires_1_in_a, wires_1_in_b, wires_1_in_c,
+      wires_1_in_d);
+
+  run_setup();
+  run_gates_setup();
+  input_a_promise.set_value(inputs_a);
+  input_b_promise.set_value(inputs_b);
+  input_c_promise.set_value(inputs_c);
+  input_d_promise.set_value(inputs_d);
   run_gates_online();
 
   for (std::size_t wire_i = 0; wire_i < num_wires; ++wire_i) {

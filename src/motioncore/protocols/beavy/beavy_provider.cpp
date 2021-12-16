@@ -1,6 +1,6 @@
 // MIT License
 //
-// Copyright (c) 2020 Lennart Braun
+// Copyright (c) 2020-2021 Lennart Braun
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -380,6 +380,33 @@ std::vector<std::shared_ptr<NewWire>> BEAVYProvider::make_binary_gate(
   }
 }
 
+std::vector<std::shared_ptr<NewWire>> BEAVYProvider::make_ternary_gate(
+    ENCRYPTO::PrimitiveOperationType op, const std::vector<std::shared_ptr<NewWire>>& in_a,
+    const std::vector<std::shared_ptr<NewWire>>& in_b,
+    const std::vector<std::shared_ptr<NewWire>>& in_c) {
+  switch (op) {
+    case ENCRYPTO::PrimitiveOperationType::AND:
+      return make_and3_gate(in_a, in_b, in_c);
+    default:
+      throw std::logic_error(
+          fmt::format("BEAVY does not support the ternary operation {}", ToString(op)));
+  }
+}
+
+std::vector<std::shared_ptr<NewWire>> BEAVYProvider::make_quarternary_gate(
+    ENCRYPTO::PrimitiveOperationType op, const std::vector<std::shared_ptr<NewWire>>& in_a,
+    const std::vector<std::shared_ptr<NewWire>>& in_b,
+    const std::vector<std::shared_ptr<NewWire>>& in_c,
+    const std::vector<std::shared_ptr<NewWire>>& in_d) {
+  switch (op) {
+    case ENCRYPTO::PrimitiveOperationType::AND:
+      return make_and4_gate(in_a, in_b, in_c, in_d);
+    default:
+      throw std::logic_error(
+          fmt::format("BEAVY does not support the quarternary operation {}", ToString(op)));
+  }
+}
+
 std::pair<std::unique_ptr<NewGate>, WireVector> BEAVYProvider::construct_inv_gate(
     const WireVector& in_a) {
   auto gate_id = gate_register_.get_next_gate_id();
@@ -470,6 +497,46 @@ WireVector BEAVYProvider::make_and_gate(const WireVector& in_a, const WireVector
   } else {
     return make_boolean_binary_gate<BooleanBEAVYANDGate>(in_a, in_b);
   }
+}
+
+WireVector BEAVYProvider::make_and3_gate(const WireVector& in_a, const WireVector& in_b,
+                                         const WireVector& in_c) {
+  if (in_a.at(0)->get_protocol() == MPCProtocol::BooleanPlain ||
+      in_b.at(0)->get_protocol() == MPCProtocol::BooleanPlain ||
+      in_c.at(0)->get_protocol() == MPCProtocol::BooleanPlain) {
+    throw std::logic_error("AND3 with constants not implemented");
+  }
+  assert(in_a.at(0)->get_protocol() == MPCProtocol::BooleanBEAVY &&
+         in_b.at(0)->get_protocol() == MPCProtocol::BooleanBEAVY &&
+         in_c.at(0)->get_protocol() == MPCProtocol::BooleanBEAVY);
+
+  auto gate_id = gate_register_.get_next_gate_id();
+  auto gate = std::make_unique<BooleanBEAVYAND3Gate>(gate_id, *this, cast_wires(in_a),
+                                                     cast_wires(in_b), cast_wires(in_c));
+  auto output = gate->get_output_wires();
+  gate_register_.register_gate(std::move(gate));
+  return cast_wires(std::move(output));
+}
+
+WireVector BEAVYProvider::make_and4_gate(const WireVector& in_a, const WireVector& in_b,
+                                         const WireVector& in_c, const WireVector& in_d) {
+  if (in_a.at(0)->get_protocol() == MPCProtocol::BooleanPlain ||
+      in_b.at(0)->get_protocol() == MPCProtocol::BooleanPlain ||
+      in_c.at(0)->get_protocol() == MPCProtocol::BooleanPlain ||
+      in_d.at(0)->get_protocol() == MPCProtocol::BooleanPlain) {
+    throw std::logic_error("AND4 with constants not implemented");
+  }
+  assert(in_a.at(0)->get_protocol() == MPCProtocol::BooleanBEAVY &&
+         in_b.at(0)->get_protocol() == MPCProtocol::BooleanBEAVY &&
+         in_c.at(0)->get_protocol() == MPCProtocol::BooleanBEAVY &&
+         in_d.at(0)->get_protocol() == MPCProtocol::BooleanBEAVY);
+
+  auto gate_id = gate_register_.get_next_gate_id();
+  auto gate = std::make_unique<BooleanBEAVYAND4Gate>(
+      gate_id, *this, cast_wires(in_a), cast_wires(in_b), cast_wires(in_c), cast_wires(in_d));
+  auto output = gate->get_output_wires();
+  gate_register_.register_gate(std::move(gate));
+  return cast_wires(std::move(output));
 }
 
 static std::size_t check_arithmetic_wire(const WireVector& in) {
