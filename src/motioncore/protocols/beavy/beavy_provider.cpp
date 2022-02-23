@@ -329,7 +329,8 @@ std::pair<NewGateP, WireVector> BEAVYProvider::construct_unary_gate(
     case ENCRYPTO::PrimitiveOperationType::INV:
       return construct_inv_gate(in_a);
     default:
-      throw std::logic_error(fmt::format("BEAVY does not support the unary operation {}", op));
+      throw std::logic_error(
+          fmt::format("BEAVY does not support the unary operation {}", ToString(op)));
   }
 }
 
@@ -343,7 +344,8 @@ std::vector<std::shared_ptr<NewWire>> BEAVYProvider::make_unary_gate(
     case ENCRYPTO::PrimitiveOperationType::SQR:
       return make_sqr_gate(in_a);
     default:
-      throw std::logic_error(fmt::format("BEAVY does not support the unary operation {}", op));
+      throw std::logic_error(
+          fmt::format("BEAVY does not support the unary operation {}", ToString(op)));
   }
 }
 
@@ -355,7 +357,8 @@ std::pair<NewGateP, WireVector> BEAVYProvider::construct_binary_gate(
     case ENCRYPTO::PrimitiveOperationType::AND:
       return construct_and_gate(in_a, in_b);
     default:
-      throw std::logic_error(fmt::format("BEAVY does not support the binary operation {}", op));
+      throw std::logic_error(
+          fmt::format("BEAVY does not support the binary operation {}", ToString(op)));
   }
 }
 
@@ -372,7 +375,8 @@ std::vector<std::shared_ptr<NewWire>> BEAVYProvider::make_binary_gate(
     case ENCRYPTO::PrimitiveOperationType::MUL:
       return make_mul_gate(in_a, in_b);
     default:
-      throw std::logic_error(fmt::format("BEAVY does not support the binary operation {}", op));
+      throw std::logic_error(
+          fmt::format("BEAVY does not support the binary operation {}", ToString(op)));
   }
 }
 

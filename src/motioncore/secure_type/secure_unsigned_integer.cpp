@@ -247,7 +247,8 @@ std::string SecureUnsignedInteger::ConstructPath(const ENCRYPTO::IntegerOperatio
       break;
     }
     default:
-      throw std::runtime_error(fmt::format("Invalid integer operation required: {}", type));
+      throw std::runtime_error(
+          fmt::format("Invalid integer operation required: {}", ToString(type)));
   }
   return fmt::format("{}/circuits/int/int_{}{}{}.bristol", MOTION_ROOT_DIR, type_str, bitlen,
                      suffix);

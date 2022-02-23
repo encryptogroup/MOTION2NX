@@ -330,7 +330,7 @@ std::pair<NewGateP, WireVector> GMWProvider::construct_unary_gate(
     case ENCRYPTO::PrimitiveOperationType::INV:
       return construct_inv_gate(in_a);
     default:
-      throw std::logic_error(fmt::format("GMW does not support the unary operation {}", op));
+      throw std::logic_error(fmt::format("GMW does not support the unary operation {}", ToString(op)));
   }
 }
 
@@ -344,7 +344,8 @@ WireVector GMWProvider::make_unary_gate(ENCRYPTO::PrimitiveOperationType op,
     case ENCRYPTO::PrimitiveOperationType::SQR:
       return make_sqr_gate(in_a);
     default:
-      throw std::logic_error(fmt::format("GMW does not support the unary operation {}", op));
+      throw std::logic_error(
+          fmt::format("GMW does not support the unary operation {}", ToString(op)));
   }
 }
 
@@ -356,7 +357,8 @@ std::pair<NewGateP, WireVector> GMWProvider::construct_binary_gate(
     case ENCRYPTO::PrimitiveOperationType::AND:
       return construct_and_gate(in_a, in_b);
     default:
-      throw std::logic_error(fmt::format("GMW does not support the binary operation {}", op));
+      throw std::logic_error(
+          fmt::format("GMW does not support the binary operation {}", ToString(op)));
   }
 }
 
@@ -372,7 +374,8 @@ WireVector GMWProvider::make_binary_gate(ENCRYPTO::PrimitiveOperationType op,
     case ENCRYPTO::PrimitiveOperationType::MUL:
       return make_mul_gate(in_a, in_b);
     default:
-      throw std::logic_error(fmt::format("GMW does not support the binary operation {}", op));
+      throw std::logic_error(
+          fmt::format("GMW does not support the binary operation {}", ToString(op)));
   }
 }
 

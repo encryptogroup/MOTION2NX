@@ -458,6 +458,7 @@ void CommunicationLayer::deregister_message_handler(const std::vector<MessageTyp
     }
   }
 }
+
 MessageHandler& CommunicationLayer::get_message_handler(std::size_t party_id,
                                                         MessageType message_type) {
   if (party_id == my_id_ || party_id >= num_parties_) {
@@ -467,8 +468,9 @@ MessageHandler& CommunicationLayer::get_message_handler(std::size_t party_id,
   const auto& map = impl_->message_handlers_.at(party_id);
   auto it = map.find(message_type);
   if (it == map.end()) {
-    throw std::logic_error(fmt::format(
-        "no message_handler registered for message_type {} and party {}", message_type, party_id));
+    throw std::logic_error(
+        fmt::format("no message_handler registered for message_type {} and party {}",
+                    EnumNameMessageType(message_type), party_id));
   }
   return *it->second;
 }

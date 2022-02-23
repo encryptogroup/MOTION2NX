@@ -362,7 +362,7 @@ void HyCCAdapter::HyCCAdapterImpl::create_input_gate(std::size_t input_owner,
       }
     }
   } else {
-    throw hycc_error(fmt::format("unexpected protocol {}", protocol));
+    throw hycc_error(fmt::format("unexpected protocol {}", ToString(protocol)));
   }
   store_wires(primary_output(const_cast<simple_circuitt::gatet*>(gate)), protocol,
               std::move(wires));
@@ -450,7 +450,7 @@ void HyCCAdapter::HyCCAdapterImpl::create_output_gate(std::size_t output_owner,
       }
     }
   } else {
-    throw hycc_error(fmt::format("unexpected protocol {}", protocol));
+    throw hycc_error(fmt::format("unexpected protocol {}", ToString(protocol)));
   }
 }
 
