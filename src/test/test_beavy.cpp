@@ -1164,6 +1164,117 @@ TYPED_TEST(ArithmeticBEAVYTest, ConstantMUL) {
   }
 }
 
+TYPED_TEST(ArithmeticBEAVYTest, MUL3) {
+  std::size_t num_simd = 10;
+  const auto inputs_a = this->generate_inputs(num_simd);
+  const auto inputs_b = this->generate_inputs(num_simd);
+  const auto inputs_c = this->generate_inputs(num_simd);
+  std::vector<TypeParam> expected_output;
+  for (std::size_t simd_j = 0; simd_j < num_simd; ++simd_j) {
+    expected_output.push_back(inputs_a.at(simd_j) * inputs_b.at(simd_j) * inputs_c.at(simd_j));
+  }
+
+  // input of party 0
+  auto [input_a_promise, wires_a_in_0] = this->make_arithmetic_T_input_gate_my(0, 0, num_simd);
+  auto wires_a_in_1 = this->make_arithmetic_T_input_gate_other(1, 0, num_simd);
+
+  // input of party 1
+  auto wires_b_in_0 = this->make_arithmetic_T_input_gate_other(0, 1, num_simd);
+  auto [input_b_promise, wires_b_in_1] = this->make_arithmetic_T_input_gate_my(1, 1, num_simd);
+  auto wires_c_in_0 = this->make_arithmetic_T_input_gate_other(0, 1, num_simd);
+  auto [input_c_promise, wires_c_in_1] = this->make_arithmetic_T_input_gate_my(1, 1, num_simd);
+
+  auto wires_out_0 = this->beavy_providers_[0]->make_ternary_gate(
+      ENCRYPTO::PrimitiveOperationType::MUL, wires_a_in_0, wires_b_in_0, wires_c_in_0);
+  auto wires_out_1 = this->beavy_providers_[1]->make_ternary_gate(
+      ENCRYPTO::PrimitiveOperationType::MUL, wires_a_in_1, wires_b_in_1, wires_c_in_1);
+
+  this->run_setup();
+  this->run_gates_setup();
+  input_a_promise.set_value(inputs_a);
+  input_b_promise.set_value(inputs_b);
+  input_c_promise.set_value(inputs_c);
+  this->run_gates_online();
+
+  // check wire values
+  const auto wire_0 = std::dynamic_pointer_cast<ArithmeticBEAVYWire<TypeParam>>(wires_out_0.at(0));
+  const auto wire_1 = std::dynamic_pointer_cast<ArithmeticBEAVYWire<TypeParam>>(wires_out_1.at(0));
+  wire_0->wait_online();
+  wire_1->wait_online();
+  const auto& pshare_0 = wire_0->get_public_share();
+  const auto& pshare_1 = wire_1->get_public_share();
+  const auto& sshare_0 = wire_0->get_secret_share();
+  const auto& sshare_1 = wire_1->get_secret_share();
+  ASSERT_EQ(pshare_0.size(), num_simd);
+  ASSERT_EQ(pshare_1.size(), num_simd);
+  ASSERT_EQ(sshare_0.size(), num_simd);
+  ASSERT_EQ(sshare_1.size(), num_simd);
+  ASSERT_EQ(pshare_0, pshare_1);
+  for (std::size_t simd_j = 0; simd_j < num_simd; ++simd_j) {
+    ASSERT_EQ(expected_output.at(simd_j),
+              TypeParam(pshare_0.at(simd_j) - sshare_0.at(simd_j) - sshare_1.at(simd_j)));
+  }
+}
+
+TYPED_TEST(ArithmeticBEAVYTest, MUL4) {
+  std::size_t num_simd = 10;
+  const auto inputs_a = this->generate_inputs(num_simd);
+  const auto inputs_b = this->generate_inputs(num_simd);
+  const auto inputs_c = this->generate_inputs(num_simd);
+  const auto inputs_d = this->generate_inputs(num_simd);
+  std::vector<TypeParam> expected_output;
+  for (std::size_t simd_j = 0; simd_j < num_simd; ++simd_j) {
+    expected_output.push_back(inputs_a.at(simd_j) * inputs_b.at(simd_j) * inputs_c.at(simd_j) *
+                              inputs_d.at(simd_j));
+  }
+
+  // input of party 0
+  auto [input_a_promise, wires_a_in_0] = this->make_arithmetic_T_input_gate_my(0, 0, num_simd);
+  auto wires_a_in_1 = this->make_arithmetic_T_input_gate_other(1, 0, num_simd);
+  auto [input_b_promise, wires_b_in_0] = this->make_arithmetic_T_input_gate_my(0, 0, num_simd);
+  auto wires_b_in_1 = this->make_arithmetic_T_input_gate_other(1, 0, num_simd);
+
+  // input of party 1
+  auto wires_c_in_0 = this->make_arithmetic_T_input_gate_other(0, 1, num_simd);
+  auto [input_c_promise, wires_c_in_1] = this->make_arithmetic_T_input_gate_my(1, 1, num_simd);
+  auto wires_d_in_0 = this->make_arithmetic_T_input_gate_other(0, 1, num_simd);
+  auto [input_d_promise, wires_d_in_1] = this->make_arithmetic_T_input_gate_my(1, 1, num_simd);
+
+  auto wires_out_0 = this->beavy_providers_[0]->make_quarternary_gate(
+      ENCRYPTO::PrimitiveOperationType::MUL, wires_a_in_0, wires_b_in_0, wires_c_in_0,
+      wires_d_in_0);
+  auto wires_out_1 = this->beavy_providers_[1]->make_quarternary_gate(
+      ENCRYPTO::PrimitiveOperationType::MUL, wires_a_in_1, wires_b_in_1, wires_c_in_1,
+      wires_d_in_1);
+
+  this->run_setup();
+  this->run_gates_setup();
+  input_a_promise.set_value(inputs_a);
+  input_b_promise.set_value(inputs_b);
+  input_c_promise.set_value(inputs_c);
+  input_d_promise.set_value(inputs_d);
+  this->run_gates_online();
+
+  // check wire values
+  const auto wire_0 = std::dynamic_pointer_cast<ArithmeticBEAVYWire<TypeParam>>(wires_out_0.at(0));
+  const auto wire_1 = std::dynamic_pointer_cast<ArithmeticBEAVYWire<TypeParam>>(wires_out_1.at(0));
+  wire_0->wait_online();
+  wire_1->wait_online();
+  const auto& pshare_0 = wire_0->get_public_share();
+  const auto& pshare_1 = wire_1->get_public_share();
+  const auto& sshare_0 = wire_0->get_secret_share();
+  const auto& sshare_1 = wire_1->get_secret_share();
+  ASSERT_EQ(pshare_0.size(), num_simd);
+  ASSERT_EQ(pshare_1.size(), num_simd);
+  ASSERT_EQ(sshare_0.size(), num_simd);
+  ASSERT_EQ(sshare_1.size(), num_simd);
+  ASSERT_EQ(pshare_0, pshare_1);
+  for (std::size_t simd_j = 0; simd_j < num_simd; ++simd_j) {
+    ASSERT_EQ(expected_output.at(simd_j),
+              TypeParam(pshare_0.at(simd_j) - sshare_0.at(simd_j) - sshare_1.at(simd_j)));
+  }
+}
+
 TYPED_TEST(ArithmeticBEAVYTest, SQR) {
   std::size_t num_simd = 10;
   const auto inputs = this->generate_inputs(num_simd);

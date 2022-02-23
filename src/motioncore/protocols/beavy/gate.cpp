@@ -20,11 +20,11 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+#include "gate.h"
 #include <openssl/bn.h>
 #include <algorithm>
 #include <functional>
 #include <stdexcept>
-#include "gate.h"
 
 #include "base/gate_factory.h"
 #include "beavy_provider.h"
@@ -1260,18 +1260,18 @@ template class ArithmeticBEAVYOutputGate<std::uint64_t>;
 
 template <typename T>
 ArithmeticBEAVYOutputShareGate<T>::ArithmeticBEAVYOutputShareGate(std::size_t gate_id,
-                                                    ArithmeticBEAVYWireP<T>&& input)
-    : NewGate(gate_id),
-      input_(std::move(input)) {
-}
+                                                                  ArithmeticBEAVYWireP<T>&& input)
+    : NewGate(gate_id), input_(std::move(input)) {}
 
 template <typename T>
-ENCRYPTO::ReusableFiberFuture<std::vector<T>> ArithmeticBEAVYOutputShareGate<T>::get_public_share_future() {
+ENCRYPTO::ReusableFiberFuture<std::vector<T>>
+ArithmeticBEAVYOutputShareGate<T>::get_public_share_future() {
   return public_share_promise_.get_future();
 }
 
 template <typename T>
-ENCRYPTO::ReusableFiberFuture<std::vector<T>> ArithmeticBEAVYOutputShareGate<T>::get_secret_share_future() {
+ENCRYPTO::ReusableFiberFuture<std::vector<T>>
+ArithmeticBEAVYOutputShareGate<T>::get_secret_share_future() {
   return secret_share_promise_.get_future();
 }
 
@@ -1324,6 +1324,50 @@ template class BasicArithmeticBEAVYUnaryGate<std::uint8_t>;
 template class BasicArithmeticBEAVYUnaryGate<std::uint16_t>;
 template class BasicArithmeticBEAVYUnaryGate<std::uint32_t>;
 template class BasicArithmeticBEAVYUnaryGate<std::uint64_t>;
+
+template <typename T>
+BasicArithmeticBEAVYTernaryGate<T>::BasicArithmeticBEAVYTernaryGate(std::size_t gate_id,
+                                                                    BEAVYProvider&,
+                                                                    ArithmeticBEAVYWireP<T>&& in_a,
+                                                                    ArithmeticBEAVYWireP<T>&& in_b,
+                                                                    ArithmeticBEAVYWireP<T>&& in_c)
+    : NewGate(gate_id),
+      input_a_(std::move(in_a)),
+      input_b_(std::move(in_b)),
+      input_c_(std::move(in_c)),
+      output_(std::make_shared<ArithmeticBEAVYWire<T>>(input_a_->get_num_simd())) {
+  if (input_a_->get_num_simd() != input_b_->get_num_simd() ||
+      input_a_->get_num_simd() != input_c_->get_num_simd()) {
+    throw std::logic_error("number of SIMD values need to be the same for all wires");
+  }
+}
+
+template class BasicArithmeticBEAVYTernaryGate<std::uint8_t>;
+template class BasicArithmeticBEAVYTernaryGate<std::uint16_t>;
+template class BasicArithmeticBEAVYTernaryGate<std::uint32_t>;
+template class BasicArithmeticBEAVYTernaryGate<std::uint64_t>;
+
+template <typename T>
+BasicArithmeticBEAVYQuarternaryGate<T>::BasicArithmeticBEAVYQuarternaryGate(
+    std::size_t gate_id, BEAVYProvider&, ArithmeticBEAVYWireP<T>&& in_a,
+    ArithmeticBEAVYWireP<T>&& in_b, ArithmeticBEAVYWireP<T>&& in_c, ArithmeticBEAVYWireP<T>&& in_d)
+    : NewGate(gate_id),
+      input_a_(std::move(in_a)),
+      input_b_(std::move(in_b)),
+      input_c_(std::move(in_c)),
+      input_d_(std::move(in_d)),
+      output_(std::make_shared<ArithmeticBEAVYWire<T>>(input_a_->get_num_simd())) {
+  if (input_a_->get_num_simd() != input_b_->get_num_simd() ||
+      input_a_->get_num_simd() != input_c_->get_num_simd() ||
+      input_a_->get_num_simd() != input_d_->get_num_simd()) {
+    throw std::logic_error("number of SIMD values need to be the same for all wires");
+  }
+}
+
+template class BasicArithmeticBEAVYQuarternaryGate<std::uint8_t>;
+template class BasicArithmeticBEAVYQuarternaryGate<std::uint16_t>;
+template class BasicArithmeticBEAVYQuarternaryGate<std::uint32_t>;
+template class BasicArithmeticBEAVYQuarternaryGate<std::uint64_t>;
 
 template <typename T>
 BasicBooleanXArithmeticBEAVYBinaryGate<T>::BasicBooleanXArithmeticBEAVYBinaryGate(
@@ -1554,6 +1598,404 @@ template class ArithmeticBEAVYMULGate<std::uint8_t>;
 template class ArithmeticBEAVYMULGate<std::uint16_t>;
 template class ArithmeticBEAVYMULGate<std::uint32_t>;
 template class ArithmeticBEAVYMULGate<std::uint64_t>;
+
+template <typename T>
+ArithmeticBEAVYMUL3Gate<T>::ArithmeticBEAVYMUL3Gate(std::size_t gate_id,
+                                                    BEAVYProvider& beavy_provider,
+                                                    ArithmeticBEAVYWireP<T>&& in_a,
+                                                    ArithmeticBEAVYWireP<T>&& in_b,
+                                                    ArithmeticBEAVYWireP<T>&& in_c)
+    : detail::BasicArithmeticBEAVYTernaryGate<T>(gate_id, beavy_provider, std::move(in_a),
+                                                 std::move(in_b), std::move(in_c)),
+      beavy_provider_(beavy_provider) {
+  auto my_id = beavy_provider_.get_my_id();
+  auto num_simd = this->input_a_->get_num_simd();
+  share_future_ = beavy_provider_.register_for_ints_message<T>(1 - my_id, this->gate_id_,
+                                                               this->input_a_->get_num_simd());
+  auto& ap = beavy_provider_.get_arith_manager().get_provider(1 - my_id);
+  mult_senders_[0] = ap.template register_integer_multiplication_send<T>(num_simd);
+  mult_receivers_[0] = ap.template register_integer_multiplication_receive<T>(num_simd);
+  mult_senders_[1] = ap.template register_integer_multiplication_send<T>(num_simd, 3);
+  mult_receivers_[1] = ap.template register_integer_multiplication_receive<T>(num_simd, 3);
+}
+
+template <typename T>
+ArithmeticBEAVYMUL3Gate<T>::~ArithmeticBEAVYMUL3Gate() = default;
+
+template <typename T>
+void ArithmeticBEAVYMUL3Gate<T>::evaluate_setup() {
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = beavy_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(
+          fmt::format("Gate {}: ArithmeticBEAVYMUL3Gate<T>::evaluate_setup start", this->gate_id_));
+    }
+  }
+
+  auto num_simd = this->input_a_->get_num_simd();
+
+  this->output_->get_secret_share() = Helpers::RandomVector<T>(num_simd);
+  this->output_->set_setup_ready();
+
+  this->input_a_->wait_setup();
+  this->input_b_->wait_setup();
+  this->input_c_->wait_setup();
+  const auto& delta_a_share = this->input_a_->get_secret_share();
+  const auto& delta_b_share = this->input_b_->get_secret_share();
+  const auto& delta_c_share = this->input_c_->get_secret_share();
+  const auto& delta_y_share = this->output_->get_secret_share();
+
+  mult_receivers_[0]->set_inputs(delta_a_share);
+  mult_senders_[0]->set_inputs(delta_b_share);
+
+  delta_ab_share_.resize(num_simd);
+  delta_ac_share_.resize(num_simd);
+  delta_bc_share_.resize(num_simd);
+  Delta_y_share_ = delta_y_share;
+
+  // compute
+  // [0] delta_ab <- delta_a * delta_b
+  for (std::size_t simd_j = 0; simd_j < num_simd; ++simd_j) {
+    delta_ab_share_[simd_j] = delta_a_share[simd_j] * delta_b_share[simd_j];
+  }
+  mult_receivers_[0]->compute_outputs();
+  mult_senders_[0]->compute_outputs();
+  auto delta_ab_share1 = mult_receivers_[0]->get_outputs();
+  auto delta_ab_share2 = mult_senders_[0]->get_outputs();
+  for (std::size_t simd_j = 0; simd_j < num_simd; ++simd_j) {
+    delta_ab_share_[simd_j] += delta_ab_share1[simd_j] + delta_ab_share2[simd_j];
+  }
+
+  std::vector<T> delta_a_b_ab_share(3 * num_simd);
+  for (std::size_t simd_j = 0; simd_j < num_simd; ++simd_j) {
+    delta_a_b_ab_share[3 * simd_j] = delta_a_share[simd_j];
+    delta_a_b_ab_share[3 * simd_j + 1] = delta_b_share[simd_j];
+    delta_a_b_ab_share[3 * simd_j + 2] = delta_ab_share_[simd_j];
+  }
+
+  mult_receivers_[1]->set_inputs(delta_c_share);
+  mult_senders_[1]->set_inputs(std::move(delta_a_b_ab_share));
+  for (std::size_t simd_j = 0; simd_j < num_simd; ++simd_j) {
+    delta_ac_share_[simd_j] = delta_a_share[simd_j] * delta_c_share[simd_j];
+    delta_bc_share_[simd_j] = delta_b_share[simd_j] * delta_c_share[simd_j];
+    Delta_y_share_[simd_j] -= delta_ab_share_[simd_j] * delta_c_share[simd_j];
+  }
+  mult_receivers_[1]->compute_outputs();
+  mult_senders_[1]->compute_outputs();
+  auto delta_ac_bc_abc_share1 = mult_receivers_[1]->get_outputs();
+  auto delta_ac_bc_abc_share2 = mult_senders_[1]->get_outputs();
+  assert(delta_ac_bc_abc_share1.size() == 3 * num_simd);
+  assert(delta_ac_bc_abc_share2.size() == 3 * num_simd);
+  for (std::size_t simd_j = 0; simd_j < num_simd; ++simd_j) {
+    delta_ac_share_[simd_j] +=
+        delta_ac_bc_abc_share1[3 * simd_j] + delta_ac_bc_abc_share2[3 * simd_j];
+    delta_bc_share_[simd_j] +=
+        delta_ac_bc_abc_share1[3 * simd_j + 1] + delta_ac_bc_abc_share2[3 * simd_j + 1];
+    Delta_y_share_[simd_j] -=
+        delta_ac_bc_abc_share1[3 * simd_j + 2] + delta_ac_bc_abc_share2[3 * simd_j + 2];
+  }
+
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = beavy_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(
+          fmt::format("Gate {}: ArithmeticBEAVYMUL3Gate::evaluate_setup end", this->gate_id_));
+    }
+  }
+}
+
+template <typename T>
+void ArithmeticBEAVYMUL3Gate<T>::evaluate_online() {
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = beavy_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(fmt::format("Gate {}: ArithmeticBEAVYMUL3Gate<T>::evaluate_online start",
+                                   this->gate_id_));
+    }
+  }
+
+  auto num_simd = this->input_a_->get_num_simd();
+  this->input_a_->wait_online();
+  this->input_b_->wait_online();
+  this->input_c_->wait_online();
+  const auto& Delta_a = this->input_a_->get_public_share();
+  const auto& Delta_b = this->input_b_->get_public_share();
+  const auto& Delta_c = this->input_c_->get_public_share();
+  const auto& delta_a_share = this->input_a_->get_secret_share();
+  const auto& delta_b_share = this->input_b_->get_secret_share();
+  const auto& delta_c_share = this->input_c_->get_secret_share();
+
+  for (std::size_t simd_j = 0; simd_j < num_simd; ++simd_j) {
+    Delta_y_share_[simd_j] += Delta_a[simd_j] * delta_bc_share_[simd_j];
+    Delta_y_share_[simd_j] += Delta_b[simd_j] * delta_ac_share_[simd_j];
+    Delta_y_share_[simd_j] += Delta_c[simd_j] * delta_ab_share_[simd_j];
+    Delta_y_share_[simd_j] -= Delta_a[simd_j] * Delta_b[simd_j] * delta_c_share[simd_j];
+    Delta_y_share_[simd_j] -= Delta_a[simd_j] * Delta_c[simd_j] * delta_b_share[simd_j];
+    Delta_y_share_[simd_j] -= Delta_b[simd_j] * Delta_c[simd_j] * delta_a_share[simd_j];
+  }
+
+  if (beavy_provider_.is_my_job(this->gate_id_)) {
+    for (std::size_t simd_j = 0; simd_j < num_simd; ++simd_j) {
+      Delta_y_share_[simd_j] += Delta_a[simd_j] * Delta_b[simd_j] * Delta_c[simd_j];
+    }
+  }
+
+  beavy_provider_.broadcast_ints_message(this->gate_id_, Delta_y_share_);
+  std::transform(std::begin(Delta_y_share_), std::end(Delta_y_share_),
+                 std::begin(share_future_.get()), std::begin(Delta_y_share_), std::plus{});
+  this->output_->get_public_share() = std::move(Delta_y_share_);
+  this->output_->set_online_ready();
+
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = beavy_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(
+          fmt::format("Gate {}: ArithmeticBEAVYMUL3Gate<T>::evaluate_online end", this->gate_id_));
+    }
+  }
+}
+
+template class ArithmeticBEAVYMUL3Gate<std::uint8_t>;
+template class ArithmeticBEAVYMUL3Gate<std::uint16_t>;
+template class ArithmeticBEAVYMUL3Gate<std::uint32_t>;
+template class ArithmeticBEAVYMUL3Gate<std::uint64_t>;
+
+template <typename T>
+ArithmeticBEAVYMUL4Gate<T>::ArithmeticBEAVYMUL4Gate(
+    std::size_t gate_id, BEAVYProvider& beavy_provider, ArithmeticBEAVYWireP<T>&& in_a,
+    ArithmeticBEAVYWireP<T>&& in_b, ArithmeticBEAVYWireP<T>&& in_c, ArithmeticBEAVYWireP<T>&& in_d)
+    : detail::BasicArithmeticBEAVYQuarternaryGate<T>(gate_id, beavy_provider, std::move(in_a),
+                                                     std::move(in_b), std::move(in_c),
+                                                     std::move(in_d)),
+      beavy_provider_(beavy_provider) {
+  auto my_id = beavy_provider_.get_my_id();
+  auto num_simd = this->input_a_->get_num_simd();
+  share_future_ = beavy_provider_.register_for_ints_message<T>(1 - my_id, this->gate_id_,
+                                                               this->input_a_->get_num_simd());
+  auto& ap = beavy_provider_.get_arith_manager().get_provider(1 - my_id);
+  mult_senders_[0] = ap.template register_integer_multiplication_send<T>(num_simd);
+  mult_receivers_[0] = ap.template register_integer_multiplication_receive<T>(num_simd);
+  mult_senders_[1] = ap.template register_integer_multiplication_send<T>(num_simd, 3);
+  mult_receivers_[1] = ap.template register_integer_multiplication_receive<T>(num_simd, 3);
+  mult_senders_[2] = ap.template register_integer_multiplication_send<T>(num_simd, 7);
+  mult_receivers_[2] = ap.template register_integer_multiplication_receive<T>(num_simd, 7);
+}
+
+template <typename T>
+ArithmeticBEAVYMUL4Gate<T>::~ArithmeticBEAVYMUL4Gate() = default;
+
+template <typename T>
+void ArithmeticBEAVYMUL4Gate<T>::evaluate_setup() {
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = beavy_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(
+          fmt::format("Gate {}: ArithmeticBEAVYMUL4Gate<T>::evaluate_setup start", this->gate_id_));
+    }
+  }
+
+  auto num_simd = this->input_a_->get_num_simd();
+
+  this->output_->get_secret_share() = Helpers::RandomVector<T>(num_simd);
+  this->output_->set_setup_ready();
+
+  this->input_a_->wait_setup();
+  this->input_b_->wait_setup();
+  this->input_c_->wait_setup();
+  this->input_d_->wait_setup();
+  const auto& delta_a_share = this->input_a_->get_secret_share();
+  const auto& delta_b_share = this->input_b_->get_secret_share();
+  const auto& delta_c_share = this->input_c_->get_secret_share();
+  const auto& delta_d_share = this->input_d_->get_secret_share();
+  const auto& delta_y_share = this->output_->get_secret_share();
+
+  // [0] a * b
+  // [1] (a | b | ab) * c
+  // [2] (a | b | c | ab | ac | bc | abc) * d
+
+  mult_receivers_[0]->set_inputs(delta_a_share);
+  mult_senders_[0]->set_inputs(delta_b_share);
+
+  delta_ab_share_.resize(num_simd);
+  delta_ac_share_.resize(num_simd);
+  delta_ad_share_.resize(num_simd);
+  delta_bc_share_.resize(num_simd);
+  delta_bd_share_.resize(num_simd);
+  delta_cd_share_.resize(num_simd);
+  delta_abc_share_.resize(num_simd);
+  delta_abd_share_.resize(num_simd);
+  delta_acd_share_.resize(num_simd);
+  delta_bcd_share_.resize(num_simd);
+  Delta_y_share_ = delta_y_share;
+
+  // compute [0] delta_ab <- delta_a * delta_b
+  for (std::size_t simd_j = 0; simd_j < num_simd; ++simd_j) {
+    delta_ab_share_[simd_j] = delta_a_share[simd_j] * delta_b_share[simd_j];
+  }
+  mult_receivers_[0]->compute_outputs();
+  mult_senders_[0]->compute_outputs();
+  auto delta_ab_share1 = mult_receivers_[0]->get_outputs();
+  auto delta_ab_share2 = mult_senders_[0]->get_outputs();
+  for (std::size_t simd_j = 0; simd_j < num_simd; ++simd_j) {
+    delta_ab_share_[simd_j] += delta_ab_share1[simd_j] + delta_ab_share2[simd_j];
+  }
+
+  // compute [1] (delta_ac, delta_bc, delta_abc) <- (delta_a, delta_b, delta_ab) * delta_c
+  std::vector<T> delta_a_b_ab_share(3 * num_simd);
+  for (std::size_t simd_j = 0; simd_j < num_simd; ++simd_j) {
+    delta_a_b_ab_share[3 * simd_j] = delta_a_share[simd_j];
+    delta_a_b_ab_share[3 * simd_j + 1] = delta_b_share[simd_j];
+    delta_a_b_ab_share[3 * simd_j + 2] = delta_ab_share_[simd_j];
+  }
+  mult_receivers_[1]->set_inputs(delta_c_share);
+  mult_senders_[1]->set_inputs(std::move(delta_a_b_ab_share));
+  for (std::size_t simd_j = 0; simd_j < num_simd; ++simd_j) {
+    delta_ac_share_[simd_j] = delta_a_share[simd_j] * delta_c_share[simd_j];
+    delta_bc_share_[simd_j] = delta_b_share[simd_j] * delta_c_share[simd_j];
+    delta_abc_share_[simd_j] = delta_ab_share_[simd_j] * delta_c_share[simd_j];
+  }
+  mult_receivers_[1]->compute_outputs();
+  mult_senders_[1]->compute_outputs();
+  auto delta_ac_bc_abc_share1 = mult_receivers_[1]->get_outputs();
+  auto delta_ac_bc_abc_share2 = mult_senders_[1]->get_outputs();
+  assert(delta_ac_bc_abc_share1.size() == 3 * num_simd);
+  assert(delta_ac_bc_abc_share2.size() == 3 * num_simd);
+  for (std::size_t simd_j = 0; simd_j < num_simd; ++simd_j) {
+    delta_ac_share_[simd_j] +=
+        delta_ac_bc_abc_share1[3 * simd_j] + delta_ac_bc_abc_share2[3 * simd_j];
+    delta_bc_share_[simd_j] +=
+        delta_ac_bc_abc_share1[3 * simd_j + 1] + delta_ac_bc_abc_share2[3 * simd_j + 1];
+    delta_abc_share_[simd_j] +=
+        delta_ac_bc_abc_share1[3 * simd_j + 2] + delta_ac_bc_abc_share2[3 * simd_j + 2];
+  }
+
+  // compute [2] (a | b | c | ab | ac | bc | abc) * d
+  std::vector<T> delta_a_b_c_ab_ac_bc_abc_share(7 * num_simd);
+  for (std::size_t simd_j = 0; simd_j < num_simd; ++simd_j) {
+    delta_a_b_c_ab_ac_bc_abc_share[7 * simd_j] = delta_a_share[simd_j];
+    delta_a_b_c_ab_ac_bc_abc_share[7 * simd_j + 1] = delta_b_share[simd_j];
+    delta_a_b_c_ab_ac_bc_abc_share[7 * simd_j + 2] = delta_c_share[simd_j];
+    delta_a_b_c_ab_ac_bc_abc_share[7 * simd_j + 3] = delta_ab_share_[simd_j];
+    delta_a_b_c_ab_ac_bc_abc_share[7 * simd_j + 4] = delta_ac_share_[simd_j];
+    delta_a_b_c_ab_ac_bc_abc_share[7 * simd_j + 5] = delta_bc_share_[simd_j];
+    delta_a_b_c_ab_ac_bc_abc_share[7 * simd_j + 6] = delta_abc_share_[simd_j];
+  }
+  mult_receivers_[2]->set_inputs(delta_d_share);
+  mult_senders_[2]->set_inputs(std::move(delta_a_b_c_ab_ac_bc_abc_share));
+  for (std::size_t simd_j = 0; simd_j < num_simd; ++simd_j) {
+    delta_ad_share_[simd_j] = delta_a_share[simd_j] * delta_d_share[simd_j];
+    delta_bd_share_[simd_j] = delta_b_share[simd_j] * delta_d_share[simd_j];
+    delta_cd_share_[simd_j] = delta_c_share[simd_j] * delta_d_share[simd_j];
+    delta_abd_share_[simd_j] = delta_ab_share_[simd_j] * delta_d_share[simd_j];
+    delta_acd_share_[simd_j] = delta_ac_share_[simd_j] * delta_d_share[simd_j];
+    delta_bcd_share_[simd_j] = delta_bc_share_[simd_j] * delta_d_share[simd_j];
+    Delta_y_share_[simd_j] += delta_abc_share_[simd_j] * delta_d_share[simd_j];
+  }
+  mult_receivers_[2]->compute_outputs();
+  mult_senders_[2]->compute_outputs();
+  auto delta_ad_bd_cd_abd_acd_bcd_abcd_share1 = mult_receivers_[2]->get_outputs();
+  auto delta_ad_bd_cd_abd_acd_bcd_abcd_share2 = mult_senders_[2]->get_outputs();
+  assert(delta_ad_bd_cd_abd_acd_bcd_abcd_share1.size() == 7 * num_simd);
+  assert(delta_ad_bd_cd_abd_acd_bcd_abcd_share2.size() == 7 * num_simd);
+  for (std::size_t simd_j = 0; simd_j < num_simd; ++simd_j) {
+    delta_ad_share_[simd_j] += delta_ad_bd_cd_abd_acd_bcd_abcd_share1[7 * simd_j] +
+                               delta_ad_bd_cd_abd_acd_bcd_abcd_share2[7 * simd_j];
+    delta_bd_share_[simd_j] += delta_ad_bd_cd_abd_acd_bcd_abcd_share1[7 * simd_j + 1] +
+                               delta_ad_bd_cd_abd_acd_bcd_abcd_share2[7 * simd_j + 1];
+    delta_cd_share_[simd_j] += delta_ad_bd_cd_abd_acd_bcd_abcd_share1[7 * simd_j + 2] +
+                               delta_ad_bd_cd_abd_acd_bcd_abcd_share2[7 * simd_j + 2];
+    delta_abd_share_[simd_j] += delta_ad_bd_cd_abd_acd_bcd_abcd_share1[7 * simd_j + 3] +
+                                delta_ad_bd_cd_abd_acd_bcd_abcd_share2[7 * simd_j + 3];
+    delta_acd_share_[simd_j] += delta_ad_bd_cd_abd_acd_bcd_abcd_share1[7 * simd_j + 4] +
+                                delta_ad_bd_cd_abd_acd_bcd_abcd_share2[7 * simd_j + 4];
+    delta_bcd_share_[simd_j] += delta_ad_bd_cd_abd_acd_bcd_abcd_share1[7 * simd_j + 5] +
+                                delta_ad_bd_cd_abd_acd_bcd_abcd_share2[7 * simd_j + 5];
+    Delta_y_share_[simd_j] += delta_ad_bd_cd_abd_acd_bcd_abcd_share1[7 * simd_j + 6] +
+                              delta_ad_bd_cd_abd_acd_bcd_abcd_share2[7 * simd_j + 6];
+  }
+
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = beavy_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(
+          fmt::format("Gate {}: ArithmeticBEAVYMUL4Gate::evaluate_setup end", this->gate_id_));
+    }
+  }
+}
+
+template <typename T>
+void ArithmeticBEAVYMUL4Gate<T>::evaluate_online() {
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = beavy_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(fmt::format("Gate {}: ArithmeticBEAVYMUL4Gate<T>::evaluate_online start",
+                                   this->gate_id_));
+    }
+  }
+
+  auto num_simd = this->input_a_->get_num_simd();
+  this->input_a_->wait_online();
+  this->input_b_->wait_online();
+  this->input_c_->wait_online();
+  this->input_d_->wait_online();
+  const auto& Delta_a = this->input_a_->get_public_share();
+  const auto& Delta_b = this->input_b_->get_public_share();
+  const auto& Delta_c = this->input_c_->get_public_share();
+  const auto& Delta_d = this->input_d_->get_public_share();
+  const auto& delta_a_share = this->input_a_->get_secret_share();
+  const auto& delta_b_share = this->input_b_->get_secret_share();
+  const auto& delta_c_share = this->input_c_->get_secret_share();
+  const auto& delta_d_share = this->input_d_->get_secret_share();
+
+  for (std::size_t simd_j = 0; simd_j < num_simd; ++simd_j) {
+    Delta_y_share_[simd_j] -= Delta_a[simd_j] * delta_bcd_share_[simd_j];
+    Delta_y_share_[simd_j] -= Delta_b[simd_j] * delta_acd_share_[simd_j];
+    Delta_y_share_[simd_j] -= Delta_c[simd_j] * delta_abd_share_[simd_j];
+    Delta_y_share_[simd_j] -= Delta_d[simd_j] * delta_abc_share_[simd_j];
+
+    Delta_y_share_[simd_j] += Delta_a[simd_j] * Delta_b[simd_j] * delta_cd_share_[simd_j];
+    Delta_y_share_[simd_j] += Delta_a[simd_j] * Delta_c[simd_j] * delta_bd_share_[simd_j];
+    Delta_y_share_[simd_j] += Delta_a[simd_j] * Delta_d[simd_j] * delta_bc_share_[simd_j];
+    Delta_y_share_[simd_j] += Delta_b[simd_j] * Delta_c[simd_j] * delta_ad_share_[simd_j];
+    Delta_y_share_[simd_j] += Delta_b[simd_j] * Delta_d[simd_j] * delta_ac_share_[simd_j];
+    Delta_y_share_[simd_j] += Delta_c[simd_j] * Delta_d[simd_j] * delta_ab_share_[simd_j];
+
+    Delta_y_share_[simd_j] -=
+        Delta_a[simd_j] * Delta_b[simd_j] * Delta_c[simd_j] * delta_d_share[simd_j];
+    Delta_y_share_[simd_j] -=
+        Delta_a[simd_j] * Delta_b[simd_j] * Delta_d[simd_j] * delta_c_share[simd_j];
+    Delta_y_share_[simd_j] -=
+        Delta_a[simd_j] * Delta_c[simd_j] * Delta_d[simd_j] * delta_b_share[simd_j];
+    Delta_y_share_[simd_j] -=
+        Delta_b[simd_j] * Delta_c[simd_j] * Delta_d[simd_j] * delta_a_share[simd_j];
+  }
+
+  if (beavy_provider_.is_my_job(this->gate_id_)) {
+    for (std::size_t simd_j = 0; simd_j < num_simd; ++simd_j) {
+      Delta_y_share_[simd_j] +=
+          Delta_a[simd_j] * Delta_b[simd_j] * Delta_c[simd_j] * Delta_d[simd_j];
+    }
+  }
+
+  beavy_provider_.broadcast_ints_message(this->gate_id_, Delta_y_share_);
+  std::transform(std::begin(Delta_y_share_), std::end(Delta_y_share_),
+                 std::begin(share_future_.get()), std::begin(Delta_y_share_), std::plus{});
+  this->output_->get_public_share() = std::move(Delta_y_share_);
+  this->output_->set_online_ready();
+
+  if constexpr (MOTION_VERBOSE_DEBUG) {
+    auto logger = beavy_provider_.get_logger();
+    if (logger) {
+      logger->LogTrace(
+          fmt::format("Gate {}: ArithmeticBEAVYMUL4Gate<T>::evaluate_online end", this->gate_id_));
+    }
+  }
+}
+
+template class ArithmeticBEAVYMUL4Gate<std::uint8_t>;
+template class ArithmeticBEAVYMUL4Gate<std::uint16_t>;
+template class ArithmeticBEAVYMUL4Gate<std::uint32_t>;
+template class ArithmeticBEAVYMUL4Gate<std::uint64_t>;
 
 template <typename T>
 ArithmeticBEAVYSQRGate<T>::ArithmeticBEAVYSQRGate(std::size_t gate_id,
@@ -1814,8 +2256,8 @@ void BooleanXArithmeticBEAVYMULGate<T>::evaluate_online() {
     T Delta_b = bit_pshare.Get(simd_j);
     auto Delta_n = int_pshare[simd_j];
     pshare[simd_j] = delta_b_share_[simd_j] * (Delta_n - 2 * Delta_b * Delta_n) -
-                    Delta_b * int_sshare[simd_j] -
-                    delta_b_x_delta_n_share_[simd_j] * (1 - 2 * Delta_b) + sshare[simd_j];
+                     Delta_b * int_sshare[simd_j] -
+                     delta_b_x_delta_n_share_[simd_j] * (1 - 2 * Delta_b) + sshare[simd_j];
     if (beavy_provider_.is_my_job(this->gate_id_)) {
       pshare[simd_j] += Delta_b * Delta_n;
     }

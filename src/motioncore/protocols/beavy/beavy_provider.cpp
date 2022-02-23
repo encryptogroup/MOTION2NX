@@ -387,6 +387,8 @@ std::vector<std::shared_ptr<NewWire>> BEAVYProvider::make_ternary_gate(
   switch (op) {
     case ENCRYPTO::PrimitiveOperationType::AND:
       return make_and3_gate(in_a, in_b, in_c);
+    case ENCRYPTO::PrimitiveOperationType::MUL:
+      return make_mul3_gate(in_a, in_b, in_c);
     default:
       throw std::logic_error(
           fmt::format("BEAVY does not support the ternary operation {}", ToString(op)));
@@ -401,6 +403,8 @@ std::vector<std::shared_ptr<NewWire>> BEAVYProvider::make_quarternary_gate(
   switch (op) {
     case ENCRYPTO::PrimitiveOperationType::AND:
       return make_and4_gate(in_a, in_b, in_c, in_d);
+    case ENCRYPTO::PrimitiveOperationType::MUL:
+      return make_mul4_gate(in_a, in_b, in_c, in_d);
     default:
       throw std::logic_error(
           fmt::format("BEAVY does not support the quarternary operation {}", ToString(op)));
@@ -665,6 +669,120 @@ WireVector BEAVYProvider::make_mul_gate(const WireVector& in_a, const WireVector
   } else {
     return make_arithmetic_binary_gate<ArithmeticBEAVYMULGate>(in_a, in_b);
   }
+}
+
+WireVector BEAVYProvider::make_mul3_gate(const WireVector& in_a, const WireVector& in_b,
+                                         const WireVector& in_c) {
+  if (in_a.at(0)->get_protocol() == MPCProtocol::ArithmeticPlain ||
+      in_b.at(0)->get_protocol() == MPCProtocol::ArithmeticPlain ||
+      in_c.at(0)->get_protocol() == MPCProtocol::ArithmeticPlain) {
+    throw std::logic_error("MUL3 with constants not implemented");
+  }
+  assert(in_a.at(0)->get_protocol() == MPCProtocol::ArithmeticBEAVY &&
+         in_b.at(0)->get_protocol() == MPCProtocol::ArithmeticBEAVY &&
+         in_c.at(0)->get_protocol() == MPCProtocol::ArithmeticBEAVY);
+
+  auto gate_id = gate_register_.get_next_gate_id();
+  std::unique_ptr<NewGate> gate;
+  WireVector output;
+  auto bit_size = check_arithmetic_wires(in_a, in_b);
+  assert(bit_size == check_arithmetic_wires(in_a, in_c));
+  switch (bit_size) {
+    case 8: {
+      auto a_gate = std::make_unique<ArithmeticBEAVYMUL3Gate<uint8_t>>(
+          gate_id, *this, cast_arith_wire<uint8_t>(in_a[0]), cast_arith_wire<uint8_t>(in_b[0]),
+          cast_arith_wire<uint8_t>(in_c[0]));
+      output = {a_gate->get_output_wire()};
+      gate = std::move(a_gate);
+      break;
+    }
+    case 16: {
+      auto a_gate = std::make_unique<ArithmeticBEAVYMUL3Gate<uint16_t>>(
+          gate_id, *this, cast_arith_wire<uint16_t>(in_a[0]), cast_arith_wire<uint16_t>(in_b[0]),
+          cast_arith_wire<uint16_t>(in_c[0]));
+      output = {a_gate->get_output_wire()};
+      gate = std::move(a_gate);
+      break;
+    }
+    case 32: {
+      auto a_gate = std::make_unique<ArithmeticBEAVYMUL3Gate<uint32_t>>(
+          gate_id, *this, cast_arith_wire<uint32_t>(in_a[0]), cast_arith_wire<uint32_t>(in_b[0]),
+          cast_arith_wire<uint32_t>(in_c[0]));
+      output = {a_gate->get_output_wire()};
+      gate = std::move(a_gate);
+      break;
+    }
+    case 64: {
+      auto a_gate = std::make_unique<ArithmeticBEAVYMUL3Gate<uint64_t>>(
+          gate_id, *this, cast_arith_wire<uint64_t>(in_a[0]), cast_arith_wire<uint64_t>(in_b[0]),
+          cast_arith_wire<uint64_t>(in_c[0]));
+      output = {a_gate->get_output_wire()};
+      gate = std::move(a_gate);
+      break;
+    }
+    default:
+      throw std::logic_error(fmt::format("unexpected bit size {}", bit_size));
+  }
+  gate_register_.register_gate(std::move(gate));
+  return output;
+}
+
+WireVector BEAVYProvider::make_mul4_gate(const WireVector& in_a, const WireVector& in_b,
+                                         const WireVector& in_c, const WireVector& in_d) {
+  if (in_a.at(0)->get_protocol() == MPCProtocol::ArithmeticPlain ||
+      in_b.at(0)->get_protocol() == MPCProtocol::ArithmeticPlain ||
+      in_c.at(0)->get_protocol() == MPCProtocol::ArithmeticPlain ||
+      in_d.at(0)->get_protocol() == MPCProtocol::ArithmeticPlain) {
+    throw std::logic_error("MUL4 with constants not implemented");
+  }
+  assert(in_a.at(0)->get_protocol() == MPCProtocol::ArithmeticBEAVY &&
+         in_b.at(0)->get_protocol() == MPCProtocol::ArithmeticBEAVY &&
+         in_c.at(0)->get_protocol() == MPCProtocol::ArithmeticBEAVY &&
+         in_d.at(0)->get_protocol() == MPCProtocol::ArithmeticBEAVY);
+
+  auto gate_id = gate_register_.get_next_gate_id();
+  std::unique_ptr<NewGate> gate;
+  WireVector output;
+  auto bit_size = check_arithmetic_wires(in_a, in_b);
+  assert(bit_size == check_arithmetic_wires(in_a, in_c));
+  switch (bit_size) {
+    case 8: {
+      auto a_gate = std::make_unique<ArithmeticBEAVYMUL4Gate<uint8_t>>(
+          gate_id, *this, cast_arith_wire<uint8_t>(in_a[0]), cast_arith_wire<uint8_t>(in_b[0]),
+          cast_arith_wire<uint8_t>(in_c[0]), cast_arith_wire<uint8_t>(in_d[0]));
+      output = {a_gate->get_output_wire()};
+      gate = std::move(a_gate);
+      break;
+    }
+    case 16: {
+      auto a_gate = std::make_unique<ArithmeticBEAVYMUL4Gate<uint16_t>>(
+          gate_id, *this, cast_arith_wire<uint16_t>(in_a[0]), cast_arith_wire<uint16_t>(in_b[0]),
+          cast_arith_wire<uint16_t>(in_c[0]), cast_arith_wire<uint16_t>(in_d[0]));
+      output = {a_gate->get_output_wire()};
+      gate = std::move(a_gate);
+      break;
+    }
+    case 32: {
+      auto a_gate = std::make_unique<ArithmeticBEAVYMUL4Gate<uint32_t>>(
+          gate_id, *this, cast_arith_wire<uint32_t>(in_a[0]), cast_arith_wire<uint32_t>(in_b[0]),
+          cast_arith_wire<uint32_t>(in_c[0]), cast_arith_wire<uint32_t>(in_d[0]));
+      output = {a_gate->get_output_wire()};
+      gate = std::move(a_gate);
+      break;
+    }
+    case 64: {
+      auto a_gate = std::make_unique<ArithmeticBEAVYMUL4Gate<uint64_t>>(
+          gate_id, *this, cast_arith_wire<uint64_t>(in_a[0]), cast_arith_wire<uint64_t>(in_b[0]),
+          cast_arith_wire<uint64_t>(in_c[0]), cast_arith_wire<uint64_t>(in_d[0]));
+      output = {a_gate->get_output_wire()};
+      gate = std::move(a_gate);
+      break;
+    }
+    default:
+      throw std::logic_error(fmt::format("unexpected bit size {}", bit_size));
+  }
+  gate_register_.register_gate(std::move(gate));
+  return output;
 }
 
 WireVector BEAVYProvider::make_sqr_gate(const WireVector& in) {

@@ -376,6 +376,38 @@ class BasicArithmeticBEAVYUnaryGate : public NewGate {
 };
 
 template <typename T>
+class BasicArithmeticBEAVYTernaryGate : public NewGate {
+ public:
+  BasicArithmeticBEAVYTernaryGate(std::size_t gate_id, BEAVYProvider&, ArithmeticBEAVYWireP<T>&&,
+                                  ArithmeticBEAVYWireP<T>&&, ArithmeticBEAVYWireP<T>&&);
+  ArithmeticBEAVYWireP<T>& get_output_wire() noexcept { return output_; }
+
+ protected:
+  std::size_t num_wires_;
+  const ArithmeticBEAVYWireP<T> input_a_;
+  const ArithmeticBEAVYWireP<T> input_b_;
+  const ArithmeticBEAVYWireP<T> input_c_;
+  ArithmeticBEAVYWireP<T> output_;
+};
+
+template <typename T>
+class BasicArithmeticBEAVYQuarternaryGate : public NewGate {
+ public:
+  BasicArithmeticBEAVYQuarternaryGate(std::size_t gate_id, BEAVYProvider&,
+                                      ArithmeticBEAVYWireP<T>&&, ArithmeticBEAVYWireP<T>&&,
+                                      ArithmeticBEAVYWireP<T>&&, ArithmeticBEAVYWireP<T>&&);
+  ArithmeticBEAVYWireP<T>& get_output_wire() noexcept { return output_; }
+
+ protected:
+  std::size_t num_wires_;
+  const ArithmeticBEAVYWireP<T> input_a_;
+  const ArithmeticBEAVYWireP<T> input_b_;
+  const ArithmeticBEAVYWireP<T> input_c_;
+  const ArithmeticBEAVYWireP<T> input_d_;
+  ArithmeticBEAVYWireP<T> output_;
+};
+
+template <typename T>
 class BasicBooleanXArithmeticBEAVYBinaryGate : public NewGate {
  public:
   BasicBooleanXArithmeticBEAVYBinaryGate(std::size_t gate_id, BEAVYProvider&, BooleanBEAVYWireP&&,
@@ -431,6 +463,58 @@ class ArithmeticBEAVYMULGate : public detail::BasicArithmeticBEAVYBinaryGate<T> 
   std::vector<T> Delta_y_share_;
   std::unique_ptr<MOTION::IntegerMultiplicationSender<T>> mult_sender_;
   std::unique_ptr<MOTION::IntegerMultiplicationReceiver<T>> mult_receiver_;
+};
+
+template <typename T>
+class ArithmeticBEAVYMUL3Gate : public detail::BasicArithmeticBEAVYTernaryGate<T> {
+ public:
+  ArithmeticBEAVYMUL3Gate(std::size_t gate_id, BEAVYProvider&, ArithmeticBEAVYWireP<T>&&,
+                          ArithmeticBEAVYWireP<T>&&, ArithmeticBEAVYWireP<T>&&);
+  ~ArithmeticBEAVYMUL3Gate();
+  bool need_setup() const noexcept override { return true; }
+  bool need_online() const noexcept override { return true; }
+  void evaluate_setup() override;
+  void evaluate_online() override;
+
+ private:
+  BEAVYProvider& beavy_provider_;
+  ENCRYPTO::ReusableFiberFuture<std::vector<T>> share_future_;
+  std::vector<T> delta_ab_share_;
+  std::vector<T> delta_ac_share_;
+  std::vector<T> delta_bc_share_;
+  std::vector<T> Delta_y_share_;
+  std::array<std::unique_ptr<MOTION::IntegerMultiplicationSender<T>>, 2> mult_senders_;
+  std::array<std::unique_ptr<MOTION::IntegerMultiplicationReceiver<T>>, 2> mult_receivers_;
+};
+
+template <typename T>
+class ArithmeticBEAVYMUL4Gate : public detail::BasicArithmeticBEAVYQuarternaryGate<T> {
+ public:
+  ArithmeticBEAVYMUL4Gate(std::size_t gate_id, BEAVYProvider&, ArithmeticBEAVYWireP<T>&&,
+                          ArithmeticBEAVYWireP<T>&&, ArithmeticBEAVYWireP<T>&&,
+                          ArithmeticBEAVYWireP<T>&&);
+  ~ArithmeticBEAVYMUL4Gate();
+  bool need_setup() const noexcept override { return true; }
+  bool need_online() const noexcept override { return true; }
+  void evaluate_setup() override;
+  void evaluate_online() override;
+
+ private:
+  BEAVYProvider& beavy_provider_;
+  ENCRYPTO::ReusableFiberFuture<std::vector<T>> share_future_;
+  std::vector<T> delta_ab_share_;
+  std::vector<T> delta_ac_share_;
+  std::vector<T> delta_ad_share_;
+  std::vector<T> delta_bc_share_;
+  std::vector<T> delta_bd_share_;
+  std::vector<T> delta_cd_share_;
+  std::vector<T> delta_abc_share_;
+  std::vector<T> delta_abd_share_;
+  std::vector<T> delta_acd_share_;
+  std::vector<T> delta_bcd_share_;
+  std::vector<T> Delta_y_share_;
+  std::array<std::unique_ptr<MOTION::IntegerMultiplicationSender<T>>, 3> mult_senders_;
+  std::array<std::unique_ptr<MOTION::IntegerMultiplicationReceiver<T>>, 3> mult_receivers_;
 };
 
 template <typename T>
