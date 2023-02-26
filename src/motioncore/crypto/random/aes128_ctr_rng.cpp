@@ -20,6 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+#include <array>
 #include <fstream>
 #include "aes128_ctr_rng.h"
 #include "crypto/aes/aesni_primitives.h"
